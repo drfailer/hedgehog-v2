@@ -19,6 +19,7 @@
 #ifndef HEDGEHOG_TASK_H
 #define HEDGEHOG_TASK_H
 
+#include <string>
 #include <unistd.h>
 
 //
@@ -36,7 +37,7 @@ namespace hh {
 //
 
 struct GraphInfo {
-    // TODO: name
+    std::string name;
     int rank;
     int graph_id;
 };
@@ -49,7 +50,7 @@ struct GraphInfo {
 
 struct NodeInfo {
     GraphInfo graph_infos;
-    // TODO: name
+    std::string name;
     size_t number_threads;
 };
 
