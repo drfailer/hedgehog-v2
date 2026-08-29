@@ -52,7 +52,6 @@ struct Task : hh::Task<Task> {
 };
 
 TEST(compile_test, compile_test) {
-    auto task = std::make_shared<Task>();
-    hh::TaskNode<Task> node(task, hh::NodeInfo{});
+    auto node = hh::make_task<Task>(2, "task");
     ASSERT_EQ(1, 2) << "this should to fail";
 }

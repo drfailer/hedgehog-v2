@@ -19,6 +19,9 @@
 #ifndef HEDGEHOG_GRAPH_TASK_NODE
 #define HEDGEHOG_GRAPH_TASK_NODE
 
+#include <string>
+#include <memory>
+
 #include "helpers.hpp"
 #include "node.hpp"
 
@@ -83,7 +86,15 @@ struct TaskNode : Node {
 
 // functions ///////////////////////////////////////////////////////////////////
 
-// std::shared_ptr<> make_task
+template <typename Core>
+std::shared_ptr<TaskNode<Core>> make_task(std::shared_ptr<Core> core, size_t number_threads = 1, std::string const &name = "Task") {
+    return std::make_shared<TaskNode<Core>>(core, NodeInfo{GraphInfo{}, name, number_threads});
+}
+
+template <typename Core>
+std::shared_ptr<TaskNode<Core>> make_task(size_t number_threads = 1, std::string const &name = "Task") {
+    return make_task<Core>(std::make_shared<Core>(), number_threads, name);
+}
 
 } // end namespace hh
 
