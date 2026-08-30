@@ -26,6 +26,10 @@
 
 namespace hh {
 
+//
+// Configurable task node implementation.
+//
+
 // helper functions ////////////////////////////////////////////////////////////
 
 template <typename Task>
