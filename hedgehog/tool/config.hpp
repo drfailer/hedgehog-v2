@@ -23,16 +23,27 @@
 #include "../tool/type_list.hpp"
 #include "../impl/task/lock_queue_input.hpp"
 #include "../impl/task/direct_output.hpp"
+#include "../impl/graph/thread_executor.hpp"
+#include "../impl/graph/graph_input.hpp"
+#include "../impl/graph/graph_output.hpp"
 
 namespace hh {
 
 // Defaults ////////////////////////////////////////////////////////////////////
 
 template <typename InputList>
-using DefaulNodeInput = type_list_dispatch<LockQueueNodeInput, InputList>;
+using DefaultNodeInput = type_list_dispatch<LockQueueNodeInput, InputList>;
 
 template <typename OutputList>
-using DefaulNodeOutput = type_list_dispatch<DirectNodeOutput, OutputList>;
+using DefaultNodeOutput = type_list_dispatch<DirectNodeOutput, OutputList>;
+
+template <typename InputList>
+using DefaultGraphInput = type_list_dispatch<GraphInput, InputList>;
+
+template <typename OutputList>
+using DefaultGraphOutput = type_list_dispatch<GraphOutput, OutputList>;
+
+using DefaultGraphExecutor = ThreadExecutor;
 
 // Fields deducers /////////////////////////////////////////////////////////////
 
@@ -41,13 +52,13 @@ using DefaulNodeOutput = type_list_dispatch<DirectNodeOutput, OutputList>;
 template <typename Impl>
 concept HasNodeInput = requires { typename Impl::node_input; };
 
-template <typename Impl>
+template <typename Impl, typename Default>
 struct deduce_node_input_type {
-    using type = DefaulNodeInput<typename Impl::inputs>;
+    using type = Default;
 };
 
-template <HasNodeInput Impl>
-struct deduce_node_input_type<Impl> {
+template <HasNodeInput Impl, typename Default>
+struct deduce_node_input_type<Impl, Default> {
     using type = typename Impl::node_input;
 };
 
@@ -56,14 +67,29 @@ struct deduce_node_input_type<Impl> {
 template <typename Impl>
 concept HasNodeOutput = requires { typename Impl::node_output; };
 
-template <typename Impl>
+template <typename Impl, typename Default>
 struct deduce_node_output_type {
-    using type =DefaulNodeOutput<typename Impl::outputs>;
+    using type = Default;
 };
 
-template <HasNodeOutput Impl>
-struct deduce_node_output_type<Impl> {
+template <HasNodeOutput Impl, typename Default>
+struct deduce_node_output_type<Impl, Default> {
     using type = typename Impl::node_output;
+};
+
+// Graph Executor //////////////////////
+
+template <typename Impl>
+concept HasExecutor = requires { typename Impl::executor; };
+
+template <typename Impl, typename Default>
+struct deduce_executor_type {
+    using type = Default;
+};
+
+template <HasNodeOutput Impl, typename Default>
+struct deduce_executor_type<Impl, Default> {
+    using type = typename Impl::executor;
 };
 
 // Configs /////////////////////////////////////////////////////////////////////
@@ -72,8 +98,8 @@ template <typename Impl>
 struct make_task_config {
     using InputTypes = Impl::inputs;
     using OutputTypes = Impl::outputs;
-    using Input =  typename deduce_node_input_type<Impl>::type;
-    using Output = typename deduce_node_output_type<Impl>::type;
+    using Input =  typename deduce_node_input_type<Impl, DefaultNodeInput<typename Impl::inputs>>::type;
+    using Output = typename deduce_node_output_type<Impl, DefaultNodeOutput<typename Impl::outputs>>::type;
     using Task = Impl;
 };
 
@@ -81,9 +107,9 @@ template <typename Impl>
 struct make_graph_config {
     using InputTypes = Impl::inputs;
     using OutputTypes = Impl::outputs;
-    using Input =  typename deduce_node_input_type<Impl>::type;
-    using Output = typename deduce_node_output_type<Impl>::type;
-    using Executor = Impl;
+    using Input =  typename deduce_node_input_type<Impl, DefaultGraphInput<typename Impl::inputs>>::type;
+    using Output = typename deduce_node_output_type<Impl, DefaultGraphOutput<typename Impl::outputs>>::type;
+    using Executor = typename deduce_executor_type<Impl, DefaultGraphExecutor>::type;
 };
 
 } // end namespace hh

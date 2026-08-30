@@ -16,44 +16,41 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
+#ifndef HEDGEHOG_IMPL_GRAPH_THREAD_EXECUTOR
+#define HEDGEHOG_IMPL_GRAPH_THREAD_EXECUTOR
 
-#include <gtest/gtest.h>
-#include "../hedgehog/hedgehog.h"
+#include <vector>
+#include <thread>
 
-// struct TaskV2 : hh::Task<TaskV2> {
-//     using inputs  = hh::type_list<int>;
-//     using outputs = hh::type_list<int>;
-//
-//     // we will support both getters (function) and members (static and non static).
-//     static constexpr char * name = "Task";
-//     const size_t number_threads = 0;
-//
-//     TaskV2(size_t number_threads) : number_threads(number_threads) {}
-//
-//     void execute(std::shared_ptr<int> data) {
-//         // ...
-//         this->add_result(data); // ???
-//     }
-//
-//     auto copy() {
-//         return std::make_shared<TaskV2>(this->number_threads);
-//     }
-// };
+namespace hh {
 
-static_assert(hh::NodeInputTrait<hh::LockQueueNodeInput<int, float>, int, float>);
-static_assert(hh::NodeOutputTrait<hh::DirectNodeOutput<int, float>, int, float>);
+struct ThreadExecutor {
+    std::vector<std::thread> threads = {};
 
-struct Task : hh::Task<Task> {
-    using inputs = hh::type_list<int, float>;
-    using outputs = hh::type_list<int, float>;
+    void initialize() {}
 
-    void execute(std::shared_ptr<int>) {}
+    void execute(Node *node) {
+        if (node->info().number_threads == 0) {
+            // the node is run serialy
+            node->execute(ExecutionInfo{0});
+        } else {
+            for (size_t i = 0; i < node->info().number_threads; ++i) {
+                threads.push_back(
+                    std::thread([node, i]() {
+                        node->execute(ExecutionInfo{i});
+                    })
+                );
+            }
+        }
+    }
 
-    void execute(std::shared_ptr<float>) {}
+    void finalize() {
+        for (auto &thread : threads) {
+            thread.join();
+        }
+    }
 };
 
-TEST(compile_test, compile_test) {
-    auto node = hh::make_task<Task>(2, "task");
-    // auto graph = hh::make_graph<hh::ThreadGraph>();
-    ASSERT_EQ(1, 2) << "this should to fail";
-}
+} // end namespace hh
+
+#endif

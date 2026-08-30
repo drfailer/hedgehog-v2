@@ -16,44 +16,25 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
+#ifndef HEDGEHOG_IMPL_GRAPH_GRAPH_OUTPUT
+#define HEDGEHOG_IMPL_GRAPH_GRAPH_OUTPUT
 
-#include <gtest/gtest.h>
-#include "../hedgehog/hedgehog.h"
+#include <vector>
+#include "../../graph/node.hpp"
+#include "../../graph/edge.hpp"
 
-// struct TaskV2 : hh::Task<TaskV2> {
-//     using inputs  = hh::type_list<int>;
-//     using outputs = hh::type_list<int>;
-//
-//     // we will support both getters (function) and members (static and non static).
-//     static constexpr char * name = "Task";
-//     const size_t number_threads = 0;
-//
-//     TaskV2(size_t number_threads) : number_threads(number_threads) {}
-//
-//     void execute(std::shared_ptr<int> data) {
-//         // ...
-//         this->add_result(data); // ???
-//     }
-//
-//     auto copy() {
-//         return std::make_shared<TaskV2>(this->number_threads);
-//     }
-// };
+namespace hh {
 
-static_assert(hh::NodeInputTrait<hh::LockQueueNodeInput<int, float>, int, float>);
-static_assert(hh::NodeOutputTrait<hh::DirectNodeOutput<int, float>, int, float>);
-
-struct Task : hh::Task<Task> {
-    using inputs = hh::type_list<int, float>;
-    using outputs = hh::type_list<int, float>;
-
-    void execute(std::shared_ptr<int>) {}
-
-    void execute(std::shared_ptr<float>) {}
+template <typename T>
+struct GraphOutputPort {
+    // TODO
 };
 
-TEST(compile_test, compile_test) {
-    auto node = hh::make_task<Task>(2, "task");
-    // auto graph = hh::make_graph<hh::ThreadGraph>();
-    ASSERT_EQ(1, 2) << "this should to fail";
-}
+template <typename ...Outputs>
+struct GraphOutput : NodePorts<GraphOutputPort, Outputs...> {
+    // TODO
+};
+
+} // end namespace
+
+#endif
