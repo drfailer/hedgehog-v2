@@ -82,9 +82,9 @@ struct TaskNode : Node, NodeIO<Config> {
 
         thread_task->set_execution_info(info);
         for (;;) {
-            auto wait_result = IO::input.wait(info);
+            auto wait_result = IO::wait(info);
             if (wait_result.terminate) break;
-            IO::input.execute_consumers(thread_task, info);
+            IO::execute_consumers(thread_task, info);
         }
     }
 

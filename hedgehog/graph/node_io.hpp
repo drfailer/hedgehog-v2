@@ -119,6 +119,14 @@ struct NodeIO {
     void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
         output.push_result(data, info);
     }
+
+    auto wait(auto &&...args) {
+        return input.wait(std::forward<decltype(args)>(args)...);
+    }
+
+    void execute_consumers(auto &&...args) {
+        input.execute_consumers(std::forward<decltype(args)>(args)...);
+    }
 };
 
 // Node ports //////////////////////////////////////////////////////////////////
