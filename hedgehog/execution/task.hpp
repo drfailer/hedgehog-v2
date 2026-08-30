@@ -9,10 +9,10 @@
 namespace hh {
 
 template <typename Impl>
-struct Task {
+class Task {
     using NodeType = TaskNode<Impl>;
-    NodeType *node;
-    ExecutionInfo info;
+    NodeType *node_;
+    ExecutionInfo info_;
 
   public:
     using config = make_task_config<Impl>;
@@ -24,8 +24,8 @@ struct Task {
         } else if constexpr (requires { impl->initialize(); }) {
             impl->initialize();
         }
-        this->node = node;
-        this->info = info;
+        this->node_ = node;
+        this->info_ = info;
     }
 
     void task_finalize(NodeType *node, ExecutionInfo const &info) {
@@ -35,6 +35,14 @@ struct Task {
         } else if constexpr (requires { impl->finalize(); }) {
             impl->finalize();
         }
+    }
+
+    NodeType *node() {
+        return this->node_;
+    }
+
+    ExecutionInfo info() {
+        return this->info_;
     }
 
     template <typename T>
