@@ -21,8 +21,8 @@
 
 #include <type_traits>
 #include "../tool/type_list.hpp"
-#include "../graph/nodeio/lock_queue_input.hpp"
-#include "../graph/nodeio/direct_output.hpp"
+#include "../impl/task/lock_queue_input.hpp"
+#include "../impl/task/direct_output.hpp"
 
 namespace hh {
 
@@ -78,7 +78,13 @@ struct make_task_config {
 };
 
 template <typename Impl>
-using make_graph_config = make_task_config<Impl>;
+struct make_graph_config {
+    using InputTypes = Impl::inputs;
+    using OutputTypes = Impl::outputs;
+    using Input =  typename deduce_node_input_type<Impl>::type;
+    using Output = typename deduce_node_output_type<Impl>::type;
+    using Executor = Impl;
+};
 
 } // end namespace hh
 

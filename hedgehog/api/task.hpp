@@ -16,41 +16,39 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_GRAPH_NODEIO_DIRECT_OUTPUT
-#define HEDGEHOG_GRAPH_NODEIO_DIRECT_OUTPUT
+#ifndef HEDGEHOG_API_TASK
+#define HEDGEHOG_API_TASK
 
-#include <vector>
-#include "../node.hpp"
-#include "../edge.hpp"
+#include "../graph/task_node.hpp"
+#include "../tool/config.hpp"
 
 namespace hh {
 
-template <typename T>
-struct DirectOutputPort {
-    std::vector<Edge<T>> edges = {};
+template <typename Impl>
+class Task {
+  public:
+    using Config = make_task_config<Impl>;
+    using NodeType = TaskNode<Config>;
 
-    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
-        for (auto &edge : edges) {
-            edge(data, info);
-        }
-    }
+  private:
+    NodeType *node_;
+    ExecutionInfo info_;
 
-    void connect_edge(Edge<T> edge) {
-        edges.push_back(std::move(edge));
-    }
-};
+    friend NodeType;
+    void set_node(NodeType *node) { node_ = node; }
+    void set_execution_info(ExecutionInfo const &info) { info_ = info; }
 
-template <typename ...Outputs>
-struct DirectNodeOutput : NodePorts<DirectOutputPort, Outputs...> {
+  public:
+    std::string const &name() { return node_->info().name; }
+    size_t number_thread() { return node_->info().number_thread; }
+    size_t thread_index() { return info_.thread_index; }
+
     template <typename T>
-    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
-        DirectOutputPort<T>::push_result(data, info);
+    void push_result(std::shared_ptr<T> data) {
+        node_->push_result(data, info_);
     }
-
-    void initialize(NodeInfo const &) {}
-    void finalize(NodeInfo const &) {}
 };
 
-} // end namespace
+}
 
 #endif

@@ -16,34 +16,41 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_GRAPH_HELPERS_H
-#define HEDGEHOG_GRAPH_HELPERS_H
+#ifndef HEDGEHOG_IMPL_TASK_DIRECT_OUTPUT
+#define HEDGEHOG_IMPL_TASK_DIRECT_OUTPUT
 
-#include <type_traits>
-#include <memory>
+#include <vector>
+#include "../../graph/node.hpp"
+#include "../../graph/edge.hpp"
 
 namespace hh {
 
-// task operations /////////////////////////////////////////////////////////////
+template <typename T>
+struct DirectOutputPort {
+    std::vector<Edge<T>> edges = {};
 
-template <typename Task>
-std::shared_ptr<Task> copy_task(std::shared_ptr<Task> task) {
-    if constexpr (requires { task->copy(); }) {
-        return task->copy();
+    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
+        for (auto &edge : edges) {
+            edge(data, info);
+        }
     }
-    return std::make_shared<Task>();
-}
 
-template <typename Iterator, typename Task>
-void create_task_copies(Iterator begin, Iterator end, std::shared_ptr<Task> task) {
-    *begin = task;
-    begin++;
-    for (; begin != end; begin++) {
-        *begin = copy_task(task);
+    void connect_edge(Edge<T> edge) {
+        edges.push_back(std::move(edge));
     }
-}
+};
 
-} // end namespace hh
+template <typename ...Outputs>
+struct DirectNodeOutput : NodePorts<DirectOutputPort, Outputs...> {
+    template <typename T>
+    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
+        DirectOutputPort<T>::push_result(data, info);
+    }
 
+    void initialize(NodeInfo const &) {}
+    void finalize(NodeInfo const &) {}
+};
+
+} // end namespace
 
 #endif

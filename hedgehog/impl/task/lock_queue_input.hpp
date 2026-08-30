@@ -16,14 +16,14 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_GRAPH_NODEIO_LOCK_QUEUE_INPUT
-#define HEDGEHOG_GRAPH_NODEIO_LOCK_QUEUE_INPUT
+#ifndef HEDGEHOG_IMPL_TASK_LOCK_QUEUE_INPUT
+#define HEDGEHOG_IMPL_TASK_LOCK_QUEUE_INPUT
 
 #include <vector>
 #include <mutex>
 #include <queue>
 #include <condition_variable>
-#include "../node.hpp"
+#include "../../graph/node.hpp"
 
 namespace hh {
 

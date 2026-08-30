@@ -50,6 +50,46 @@ class Node {
 // Node I/O ////////////////////////////////////////////////////////////////////
 
 //
+// Helper for building node (input + output + default api).
+//
+
+template <typename Input, typename Output>
+struct NodeIO {
+    Input input;
+    Output output;
+
+    void initialize(NodeInfo const &info) {
+        input.initialize(info);
+        output.initialize(info);
+    }
+
+    void finalize(NodeInfo const &info) {
+        input.finalize(info);
+        output.finalize(info);
+    }
+
+    template <typename T>
+    void connect_input_edge(Edge<T> edge) {
+        input.connect_edge(std::move(edge));
+    }
+
+    template <typename T>
+    void connect_output_edge(Edge<T> edge) {
+        output.connect_edge(std::move(edge));
+    }
+
+    template <typename T>
+    void push_data(std::shared_ptr<T> data, ExecutionInfo const &info) {
+        input.push_data(data, info);
+    }
+
+    template <typename T>
+    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
+        output.push_result(data, info);
+    }
+};
+
+//
 // Helper for dispatching ports.
 //
 

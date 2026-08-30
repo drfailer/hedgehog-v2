@@ -20,17 +20,23 @@
 #define HEDGEHOG_H
 
 
-#include "graph/info.hpp"
-#include "graph/node.hpp"
-#include "graph/edge.hpp"
-#include "graph/helpers.hpp"
+#include "graph/graph_node.hpp"
 #include "graph/task_node.hpp"
+#include "graph/node.hpp"
+#include "graph/info.hpp"
+#include "graph/edge.hpp"
 
-#include "execution/task.hpp"
+#include "api/task.hpp"
+#include "api/graph.hpp"
 
-#include "graph/nodeio/lock_queue_input.hpp"
-#include "graph/nodeio/direct_output.hpp"
+#include "impl/graph/default_graph.hpp"
+#include "impl/graph/graph_output.hpp"
+#include "impl/graph/thread_executor.hpp"
+#include "impl/graph/graph_input.hpp"
+#include "impl/task/lock_queue_input.hpp"
+#include "impl/task/direct_output.hpp"
 
+#include "tool/config.hpp"
 #include "tool/type_list.hpp"
 
 #endif

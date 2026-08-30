@@ -22,23 +22,40 @@
 #include <string>
 #include <memory>
 
-#include "helpers.hpp"
 #include "node.hpp"
 
 namespace hh {
 
+// helper functions ////////////////////////////////////////////////////////////
+
+template <typename Task>
+std::shared_ptr<Task> copy_task(std::shared_ptr<Task> task) {
+    if constexpr (requires { task->copy(); }) {
+        return task->copy();
+    }
+    return std::make_shared<Task>();
+}
+
+template <typename Iterator, typename Task>
+void create_task_copies(Iterator begin, Iterator end, std::shared_ptr<Task> task) {
+    *begin = task;
+    begin++;
+    for (; begin != end; begin++) {
+        *begin = copy_task(task);
+    }
+}
+
+// Task Node ///////////////////////////////////////////////////////////////////
+
 template <typename Config>
-struct TaskNode : Node {
+struct TaskNode : Node, NodeIO<typename Config::Input, typename Config::Output> {
     using InputTypes = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
-    using Input = Config::Input;
-    using Output = Config::Output;
+    using IO = NodeIO<typename Config::Input, typename Config::Output>;
     using Task = Config::Task;
     // TODO: using Profiler = Config::Profiler;
 
     GraphInfo graph_info;
-    Input input;
-    Output output;
     std::vector<std::shared_ptr<Task>> tasks;
 
     TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), tasks(info.number_threads) {
@@ -47,8 +64,7 @@ struct TaskNode : Node {
 
     void initialize(GraphInfo const &info) override {
         graph_info = info;
-        input.initialize(Node::info());
-        output.initialize(Node::info());
+        IO::initialize(Node::info());
         for (auto &task : tasks) {
             task->set_node(this);
             if constexpr (requires { task->initialize(); }) {
@@ -62,15 +78,14 @@ struct TaskNode : Node {
 
         thread_task->set_execution_info(info);
         for (;;) {
-            auto wait_result = input.wait(info);
+            auto wait_result = IO::input.wait(info);
             if (wait_result.terminate) break;
-            input.execute_consumers(thread_task, info);
+            IO::input.execute_consumers(thread_task, info);
         }
     }
 
     void finalize(GraphInfo const &info) override {
-        input.finalize(Node::info());
-        output.finalize(Node::info());
+        IO::initialize(Node::info());
         for (auto &task : tasks) {
             if constexpr (requires { task->finalize(); }) {
                 task->finalize();
@@ -80,26 +95,6 @@ struct TaskNode : Node {
 
     std::shared_ptr<Node> copy() override {
         return std::make_shared<TaskNode<Config>>(copy_task(tasks[0]), Node::info());
-    }
-
-    template <typename T>
-    void connect_input_edge(Edge<T> edge) {
-        input.connect_edge(std::move(edge));
-    }
-
-    template <typename T>
-    void connect_output_edge(Edge<T> edge) {
-        output.connect_edge(std::move(edge));
-    }
-
-    template <typename T>
-    void push_data(std::shared_ptr<T> data, ExecutionInfo const &info) {
-        input.push_data(data, info);
-    }
-
-    template <typename T>
-    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
-        output.push_result(data, info);
     }
 };
 
