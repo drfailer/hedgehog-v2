@@ -35,11 +35,10 @@ namespace hh {
 
 struct Node {
     NodeInfo info;
-    Node(NodeInfo const &info) : info(info) {}
-    virtual std::shared_ptr<Node> copy() = 0;
-    virtual void initialize() = 0;
+    virtual void initialize(NodeInfo const &info) = 0;
     virtual void execute(ExecutionInfo const &info) = 0;
-    virtual void finalize() = 0;
+    virtual void finalize(NodeInfo const &info) = 0;
+    virtual std::shared_ptr<Node> copy() = 0;
 };
 
 // Node I/O ////////////////////////////////////////////////////////////////////
