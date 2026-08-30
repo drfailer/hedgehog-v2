@@ -28,10 +28,10 @@
 namespace hh {
 
 template <typename Config>
-struct GraphNode : Node, NodeIO<typename Config::Input, typename Config::Output> {
+struct GraphNode : Node, NodeIO<Config> {
     using InputTypes = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
-    using IO = NodeIO<typename Config::Input, typename Config::Output>;
+    using IO = NodeIO<Config>;
     using Executor = Config::Executor;
 
     std::set<std::shared_ptr<Node>> nodes;

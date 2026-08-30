@@ -52,10 +52,10 @@ void create_task_copies(Iterator begin, Iterator end, std::shared_ptr<Task> task
 // Task Node ///////////////////////////////////////////////////////////////////
 
 template <typename Config>
-struct TaskNode : Node, NodeIO<typename Config::Input, typename Config::Output> {
+struct TaskNode : Node, NodeIO<Config> {
     using InputTypes = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
-    using IO = NodeIO<typename Config::Input, typename Config::Output>;
+    using IO = NodeIO<Config>;
     using Task = Config::Task;
     // TODO: using Profiler = Config::Profiler;
 
