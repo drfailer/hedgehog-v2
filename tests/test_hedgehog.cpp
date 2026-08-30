@@ -54,6 +54,6 @@ struct Task : hh::Task<Task> {
 
 TEST(compile_test, compile_test) {
     auto node = hh::make_task<Task>(2, "task");
-    // auto graph = hh::make_graph<hh::ThreadGraph>();
+    auto graph = hh::make_graph<hh::type_list<int, float>, hh::type_list<int, float>>();
     ASSERT_EQ(1, 2) << "this should to fail";
 }

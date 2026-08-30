@@ -29,7 +29,7 @@ struct ThreadExecutor {
 
     void initialize() {}
 
-    void execute(Node *node) {
+    void execute(std::shared_ptr<Node> node) {
         if (node->info().number_threads == 0) {
             // the node is run serialy
             node->execute(ExecutionInfo{0});

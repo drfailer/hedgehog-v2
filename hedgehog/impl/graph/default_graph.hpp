@@ -34,7 +34,7 @@ struct DefaultGraph : Graph<DefaultGraph<InputTypes, OutputTypes>> {
 
 template <typename InputTypes, typename OutputTypes>
 auto make_graph(std::string const &name = "Graph") {
-    return make_graph(std::make_shared<DefaultGraph<InputTypes, OutputTypes>>(), name);
+    return make_graph<DefaultGraph<InputTypes, OutputTypes>>(name);
 }
 
 } // end namespace hh

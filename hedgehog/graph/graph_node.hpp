@@ -83,7 +83,10 @@ struct GraphNode : Node, NodeIO<Config> {
     // TODO: get_result
 
     std::shared_ptr<Node> copy() override {
-        return std::make_shared<GraphNode<Config>>(executor->copy(), Node::info());
+        if constexpr (requires { executor->copy(); }) {
+            std::make_shared<GraphNode<Config>>(executor->copy(), Node::info());
+        }
+        return std::make_shared<GraphNode<Config>>(executor, Node::info());
     }
 
     // TODO: push_data
@@ -96,14 +99,16 @@ struct GraphNode : Node, NodeIO<Config> {
 // functions ///////////////////////////////////////////////////////////////////
 
 template <typename Graph>
-auto make_graph(std::shared_ptr<Graph> graph, std::string const &name = "Graph") {
-    return std::make_shared<GraphNode<typename Graph::Config>>(graph, NodeInfo{name, 0});
+auto make_graph(std::shared_ptr<typename Graph::Config::Executor> executor, std::string const &name = "Graph") {
+    return std::make_shared<GraphNode<typename Graph::Config>>(executor, NodeInfo{name, 0});
 }
 
 template <typename Graph>
 auto make_graph(std::string const &name = "Graph") {
-    return make_graph(std::make_shared<Graph>(), name);
+    return make_graph<Graph>(std::make_shared<typename Graph::Config::Executor>(), name);
 }
+
+// TODO: build make the graph directly from the config?
 
 } // end namespace hh
 
