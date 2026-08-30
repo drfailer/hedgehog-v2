@@ -130,3 +130,27 @@ opinion.
 The node API is just extra functions that give access to the node and execution
 information. Instead, we could pass the node and the execution info to the
 execution functions, or force the user to implement `set_ctx(node, info)`.
+
+```cpp
+struct MyTask {
+    using inputs = hh::type_list<int, float>;
+    using outputs = hh::type_list<int, float>;
+
+    void execute(auto ctx, std::shared_ptr<int> data) {
+        auto name = ctx.name();
+        auto tc   = ctx.number_threads();
+        auto ti   = ctx.thread_index();
+        ctx.push_result(data);
+    }
+
+    // would also allow writing different version of an execute
+
+    void execute(hh::TaskNodeContext<MyTask> ctx, std::shared_ptr<double> data) {
+        // ...
+    }
+
+    void execute(hh::CustomTaskNodeContext<MyTask> ctx, std::shared_ptr<double> data) {
+        // ...
+    }
+};
+```
