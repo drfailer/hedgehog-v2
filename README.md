@@ -124,3 +124,9 @@ opinion.
   problematic later.
 - The concepts for the input/output/nodes need to be refined.
 - The info structs may be augmented/refined.
+
+## Removing the node API
+
+The node API is just extra functions that give access to the node and execution
+information. Instead, we could pass the node and the execution info to the
+execution functions, or force the user to implement `set_ctx(node, info)`.
