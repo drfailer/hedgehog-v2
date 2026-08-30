@@ -67,16 +67,23 @@ struct MyTaks : hh::Task<MyTask> {
     // node input/output (receiver/sender implementations) are optional (hh
     // will pick default types if unspecified).
     using node_input = MyCustomReceiver<inputs>;
-    static_assert(hh::NodeInputTrait<MyCustomReceiver<inputs>, int, float>, "The receiver must be valid =D");
-
     // using node_output = ???;
 
     // no override, everything is static
 
-    void execute(std::shared_ptr<int> data) { add_result(std::make_shared<double>((double)*data)); }
-    void execute(std::shared_ptr<float> data) { add_result(std::make_shared<double>((double)*data)); }
+    void execute(std::shared_ptr<int> data) {
+        add_result(std::make_shared<double>((double)*data));
+    }
+
+    void execute(std::shared_ptr<float> data) {
+        add_result(std::make_shared<double>((double)*data));
+    }
+
     std::shared_ptr<MyTask> copy() { return std::make_shared<MyTask>(); }
 };
+
+static_assert(hh::NodeInputTrait<MyCustomReceiver<inputs>, int, float>,
+              "The receiver must be valid =D");
 ```
 
 Using `hh::Task<MyTask>` is not an obligation if the `MyTask` provides the
@@ -96,10 +103,11 @@ implementation (equivalent to original `hh::Graph<...>`).
 ```cpp
 auto graph = hh::make_graph<hh::type_list<int, float>, hh::type_list<double>>("MyGraph");
 graph->edge<int>(my_task_node, my_other_task_node);
-graph->edge<float>(my_task_node, my_other_task_node, [&](std::shared_ptr<float> data, ExecutionInfo const &info) {
-    // fancy edge implementation!!!
-    my_other_task_node->push_data(data, info);
-});
+graph->edge<float>(my_task_node, my_other_task_node,
+                   [&](std::shared_ptr<float> data, ExecutionInfo const &info) {
+                        // fancy edge implementation!!!
+                        my_other_task_node->push_data(data, info);
+                    });
 // edges will also be implemented
 
 // Graph node implements the Node interface and is reusable in a bigger graph.
@@ -107,9 +115,14 @@ graph->edge<float>(my_task_node, my_other_task_node, [&](std::shared_ptr<float> 
 // uses API helper functions implemented by the graph node (this is not implemented
 // yet)
 
-graph->start(); // initialize the nodes (including sub-graphs), and run the executor (spawn threads)
-auto data_variant = graph->get_reuslt(); // get (blocking depending on the implementation) result
-graph->stop(); // finalize the nodes and join the threads (you have to use `get_result` to block)
+// initialize the nodes (including sub-graphs), and run the executor (spawn threads)
+graph->start();
+
+// get (blocking depending on the implementation) result
+auto data_variant = graph->get_reuslt();
+
+// finalize the nodes and join the threads (you have to use `get_result` to block)
+graph->stop();
 ```
 
 The `get_result` function is used to wait for the graph execution. When the
