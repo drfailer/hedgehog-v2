@@ -39,10 +39,14 @@ struct GraphNode : Node, NodeIO<Config> {
 
     GraphNode(std::shared_ptr<Executor> executor, NodeInfo const &info): Node(info), executor(executor) {}
 
-    // TODO: run = initialize + execute
-    // TODO: terminate = finalize
+    void start() {
+        initialize(GraphInfo{Node::info().name, 0, 0});
+        execute(ExecutionInfo{0});
+    }
 
-    // TODO: those should be private?
+    void stop() {
+        finalize(GraphInfo{Node::info().name, 0, 0});
+    }
 
     void initialize(GraphInfo const &info) override {
         for (auto &node : nodes) {
@@ -80,16 +84,12 @@ struct GraphNode : Node, NodeIO<Config> {
 
     // TODO: inputs/outputs
 
-    // TODO: get_result
-
     std::shared_ptr<Node> copy() override {
         if constexpr (requires { executor->copy(); }) {
             std::make_shared<GraphNode<Config>>(executor->copy(), Node::info());
         }
         return std::make_shared<GraphNode<Config>>(executor, Node::info());
     }
-
-    // TODO: push_data
 
     auto get_result() {
         return IO::output.get_result();
