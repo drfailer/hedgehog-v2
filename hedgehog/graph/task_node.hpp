@@ -27,52 +27,59 @@
 
 namespace hh {
 
-//
-// The task core executes on data and contains the node configuration.
-//
-
-// TODO: profiling
-template <typename Core>
+template <typename Config>
 struct TaskNode : Node {
-    using inputs = Core::inputs;
-    using outputs = Core::outputs;
+    using InputTypes = Config::InputTypes;
+    using OutputTypes = Config::OutputTypes;
+    using Input = Config::Input;
+    using Output = Config::Output;
+    using Task = Config::Task;
+    // TODO: using Profiler = Config::Profiler;
 
-    using Input = Core::config::node_input;
-    using Output = Core::config::node_output;
-    // using Profiler = Core::Profiler;
-
+    GraphInfo graph_info;
     Input input;
     Output output;
-    std::shared_ptr<Core> core;
-    std::vector<std::shared_ptr<Core>> cores;
+    std::vector<std::shared_ptr<Task>> tasks;
 
-    TaskNode(std::shared_ptr<Core> core): core(core) {}
+    TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), tasks(info.number_threads) {
+        create_task_copies(tasks.begin(), tasks.end(), task);
+    }
 
-    void initialize(NodeInfo const &info) override {
-        create_core_copies(cores.begin(), cores.end(), core);
-        input.initialize(info);
-        output.initialize(info);
+    void initialize(GraphInfo const &info) override {
+        graph_info = info;
+        input.initialize(Node::info());
+        output.initialize(Node::info());
+        for (auto &task : tasks) {
+            task->set_node(this);
+            if constexpr (requires { task->initialize(); }) {
+                task->initialize();
+            }
+        }
     }
 
     void execute(ExecutionInfo const &info) override {
-        auto thread_core = cores[info.thread_index];
+        auto thread_task = tasks[info.thread_index];
 
-        thread_core->task_initialize(this, info);
+        thread_task->set_execution_info(info);
         for (;;) {
             auto wait_result = input.wait(info);
             if (wait_result.terminate) break;
-            input.execute_consumers(thread_core, info);
+            input.execute_consumers(thread_task, info);
         }
-        thread_core->task_finalize(this, info);
     }
 
-    void finalize(NodeInfo const &info) override {
-        input.finalize(info);
-        output.finalize(info);
+    void finalize(GraphInfo const &info) override {
+        input.finalize(Node::info());
+        output.finalize(Node::info());
+        for (auto &task : tasks) {
+            if constexpr (requires { task->finalize(); }) {
+                task->finalize();
+            }
+        }
     }
 
     std::shared_ptr<Node> copy() override {
-        return std::make_shared<TaskNode<Core>>(copy_core(core));
+        return std::make_shared<TaskNode<Config>>(copy_task(tasks[0]), Node::info());
     }
 
     template <typename T>
@@ -98,17 +105,14 @@ struct TaskNode : Node {
 
 // functions ///////////////////////////////////////////////////////////////////
 
-template <typename Core>
-std::shared_ptr<TaskNode<Core>> make_task(std::shared_ptr<Core> core, size_t number_threads = 1, std::string const &name = "Task") {
-    auto node = std::make_shared<TaskNode<Core>>(core);
-    node->info.name = name;
-    node->info.number_threads = number_threads;
-    return node;
+template <typename Task>
+auto make_task(std::shared_ptr<Task> task, size_t number_threads = 1, std::string const &name = "Task") {
+    return std::make_shared<TaskNode<typename Task::Config>>(task, NodeInfo{name, number_threads});
 }
 
-template <typename Core>
-std::shared_ptr<TaskNode<Core>> make_task(size_t number_threads = 1, std::string const &name = "Task") {
-    return make_task<Core>(std::make_shared<Core>(), number_threads, name);
+template <typename Task>
+auto make_task(size_t number_threads = 1, std::string const &name = "Task") {
+    return make_task(std::make_shared<Task>(), number_threads, name);
 }
 
 } // end namespace hh

@@ -24,22 +24,22 @@
 
 namespace hh {
 
-// core operations /////////////////////////////////////////////////////////////
+// task operations /////////////////////////////////////////////////////////////
 
-template <typename Core>
-std::shared_ptr<Core> copy_core(std::shared_ptr<Core> core) {
-    if constexpr (requires { core->copy(); }) {
-        return core->copy();
+template <typename Task>
+std::shared_ptr<Task> copy_task(std::shared_ptr<Task> task) {
+    if constexpr (requires { task->copy(); }) {
+        return task->copy();
     }
-    return std::make_shared<Core>();
+    return std::make_shared<Task>();
 }
 
-template <typename Iterator, typename Core>
-void create_core_copies(Iterator begin, Iterator end, std::shared_ptr<Core> core) {
-    *begin = core;
+template <typename Iterator, typename Task>
+void create_task_copies(Iterator begin, Iterator end, std::shared_ptr<Task> task) {
+    *begin = task;
     begin++;
     for (; begin != end; begin++) {
-        *begin = copy_core(core);
+        *begin = copy_task(task);
     }
 }
 

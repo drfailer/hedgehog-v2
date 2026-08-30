@@ -33,11 +33,17 @@ namespace hh {
 // Node interface used in the graph: things that the graph needs the node to do.
 //
 
-struct Node {
-    NodeInfo info;
-    virtual void initialize(NodeInfo const &info) = 0;
+class Node {
+    NodeInfo info_;
+
+  public:
+    Node(NodeInfo info) : info_(info) {}
+
+    NodeInfo const &info() { return info_; }
+
+    virtual void initialize(GraphInfo const &info) = 0;
     virtual void execute(ExecutionInfo const &info) = 0;
-    virtual void finalize(NodeInfo const &info) = 0;
+    virtual void finalize(GraphInfo const &info) = 0;
     virtual std::shared_ptr<Node> copy() = 0;
 };
 

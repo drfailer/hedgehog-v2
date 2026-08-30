@@ -26,15 +26,17 @@
 
 namespace hh {
 
+// Defaults ////////////////////////////////////////////////////////////////////
+
 template <typename InputList>
 using DefaulNodeInput = type_list_dispatch<LockQueueNodeInput, InputList>;
 
 template <typename OutputList>
 using DefaulNodeOutput = type_list_dispatch<DirectNodeOutput, OutputList>;
 
-/////////////////////////////
+// Fields deducers /////////////////////////////////////////////////////////////
 
-// TODO: wrap this in a macro
+// Node Input //////////////////////////
 
 template <typename Impl>
 concept HasNodeInput = requires { typename Impl::node_input; };
@@ -49,7 +51,7 @@ struct deduce_node_input_type<Impl> {
     using type = typename Impl::node_input;
 };
 
-/////////////////////////////
+// Node Output /////////////////////////
 
 template <typename Impl>
 concept HasNodeOutput = requires { typename Impl::node_output; };
@@ -64,11 +66,19 @@ struct deduce_node_output_type<Impl> {
     using type = typename Impl::node_output;
 };
 
+// Configs /////////////////////////////////////////////////////////////////////
+
 template <typename Impl>
 struct make_task_config {
-    using node_input = typename deduce_node_input_type<Impl>::type;
-    using node_output = typename deduce_node_output_type<Impl>::type;
+    using InputTypes = Impl::inputs;
+    using OutputTypes = Impl::outputs;
+    using Input =  typename deduce_node_input_type<Impl>::type;
+    using Output = typename deduce_node_output_type<Impl>::type;
+    using Task = Impl;
 };
+
+template <typename Impl>
+using make_graph_config = make_task_config<Impl>;
 
 } // end namespace hh
 

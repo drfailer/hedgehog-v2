@@ -49,7 +49,6 @@ struct GraphInfo {
 //
 
 struct NodeInfo {
-    GraphInfo graph_info;
     std::string name;
     size_t number_threads;
 };
@@ -61,7 +60,6 @@ struct NodeInfo {
 //
 
 struct ExecutionInfo {
-    NodeInfo node_info;
     size_t thread_index;
 };
 
