@@ -26,6 +26,19 @@ namespace hh {
 template <typename ...Ts>
 struct type_list {};
 
+// size ////////////////////////////////////////////////////////////////////////
+
+template <typename L>
+struct type_list_size_impl;
+
+template <typename ...Ts>
+struct type_list_size_impl<type_list<Ts...>> {
+    static constexpr size_t value = sizeof...(Ts);
+};
+
+template <typename L>
+constexpr size_t type_list_size = type_list_size_impl<L>::value;
+
 // append //////////////////////////////////////////////////////////////////////
 
 template <typename L, typename ...Types>
@@ -90,6 +103,21 @@ struct type_list_contains_impl<type_list<Ts...>, T> {
 
 template <typename L, typename T>
 constexpr bool type_list_contains = type_list_contains_impl<L, T>::value;
+
+// map /////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename ...Ts>
+constexpr void type_list_map(type_list<T, Ts...>, auto function) {
+    function.template operator()<T>();
+    if constexpr (sizeof...(Ts) > 0) {
+        type_list_map(type_list<Ts...>(), function);
+    }
+}
+
+template <typename L>
+constexpr void type_list_map(auto function) {
+    type_list_map(L(), function);
+}
 
 } // end namespace hh
 
