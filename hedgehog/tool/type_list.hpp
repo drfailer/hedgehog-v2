@@ -28,29 +28,29 @@ struct type_list {};
 
 // append //////////////////////////////////////////////////////////////////////
 
-template <typename L, typename T>
+template <typename L, typename ...Types>
 struct type_list_append_impl;
 
-template <typename T, typename ...Ts>
-struct type_list_append_impl<type_list<Ts...>, T> {
-    using type = type_list<Ts..., T>;
+template <typename ...Types, typename ...Ts>
+struct type_list_append_impl<type_list<Ts...>, Types...> {
+    using type = type_list<Ts..., Types...>;
 };
 
-template <typename L, typename T>
-using type_list_append = typename type_list_append_impl<L, T>::type;
+template <typename L, typename ...Types>
+using type_list_append = typename type_list_append_impl<L, Types...>::type;
 
 // prepend /////////////////////////////////////////////////////////////////////
 
-template <typename L, typename T>
+template <typename L, typename ...Types>
 struct type_list_prepend_impl;
 
-template <typename T, typename ...Ts>
-struct type_list_prepend_impl<type_list<Ts...>, T> {
-    using type = type_list<T, Ts...>;
+template <typename ...Types, typename ...Ts>
+struct type_list_prepend_impl<type_list<Ts...>, Types...> {
+    using type = type_list<Types..., Ts...>;
 };
 
-template <typename L, typename T>
-using type_list_prepend = typename type_list_prepend_impl<L, T>::type;
+template <typename L, typename ...Types>
+using type_list_prepend = typename type_list_prepend_impl<L, Types...>::type;
 
 // dispatch ////////////////////////////////////////////////////////////////////
 
@@ -68,10 +68,7 @@ using type_list_dispatch = typename type_list_dispatch_impl<L, T>::type;
 // contains ////////////////////////////////////////////////////////////////////
 
 template <typename T, typename ...Ts>
-struct types_contain_impl;
-
-template <typename T>
-struct types_contain_impl<T> {
+struct types_contain_impl {
     static constexpr bool value = false;
 };
 
