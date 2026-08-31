@@ -51,9 +51,9 @@ concept NodeInputTrait = std::default_initializable<T> && requires(T *t) {
     {t->wait(ExecutionInfo{})} -> std::same_as<WaitResult>;
     t->signal(SignalOpts{});
     // execution
-    []<typename Core>(std::shared_ptr<Core> core) { t->execute_consumers(core, ExecutionInfo{}); };
+    []<typename Core>(T *t, std::shared_ptr<Core> core) { t->execute_consumers(core, ExecutionInfo{}); };
     // data reception
-    ([](std::shared_ptr<Inputs> data) { t->push_data(data, ExecutionInfo{}); }, ...);
+    ([](T *t, std::shared_ptr<Inputs> data) { t->push_data(data, ExecutionInfo{}); }, ...);
     // edges: since edges are directional, they are optional for the inputs
     // ([](Edge<T> edge) { t->connect_edge(edge); }, ...);
 };
@@ -71,9 +71,9 @@ concept NodeOutputTrait = std::default_initializable<T> && requires(T *t) {
     t->initialize(NodeInfo{});
     t->finalize(NodeInfo{});
     // result transmission
-    ([](std::shared_ptr<Outputs> data) { t->push_result(data, ExecutionInfo{}); }, ...);
+    ([](T *t, std::shared_ptr<Outputs> data) { t->push_result(data, ExecutionInfo{}); }, ...);
     // edges
-    ([](Edge<Outputs> edge) { t->connect_edge(edge); }, ...);
+    ([](T *t, Edge<Outputs> edge) { t->connect_edge(edge); }, ...);
 };
 
 // Node I/O ////////////////////////////////////////////////////////////////////
