@@ -42,7 +42,9 @@ struct GraphNode : Node, NodeIO<Config> {
     void start() {
         initialize(GraphInfo{Node::info().name, 0, 0});
         execute(ExecutionInfo{0});
-        // TODO: connect the sink (only the top graph starts)
+        if (IO::output.edge_count()) {
+            // TODO: connect the sink (only the top graph starts)
+        }
     }
 
     void stop() {
@@ -88,7 +90,7 @@ struct GraphNode : Node, NodeIO<Config> {
 
     template <typename T>
     void edge(auto sender, auto receiver) {
-        edge(sender, receiver, make_direct_edge<T>(sender, receiver));
+        edge(sender, receiver, make_direct_edge<T>(receiver));
     }
 
     //
@@ -115,7 +117,7 @@ struct GraphNode : Node, NodeIO<Config> {
 
     void edges(auto sender, auto receiver) {
         edges(sender, receiver, []<typename T>(auto sender, auto receiver) {
-            return make_direct_edge<T>(sender, receiver);
+            return make_direct_edge<T>(receiver);
         });
     }
 
@@ -123,25 +125,45 @@ struct GraphNode : Node, NodeIO<Config> {
     // Set graph inputs.
     //
 
-    // template <typename T>
-    // void input(auto node) {
-    // }
+    template <typename T>
+    void input(auto node) {
+        IO::connect_input_edge(make_direct_edge<T>(node));
+    }
 
-    // template <typename T>
-    // void inputs(auto node) {
-    // }
+    template <typename Node>
+    void inputs(std::shared_ptr<Node> node) {
+        using node_inputs = Node::InputTypes;
+        auto &input = IO::input; // can't capture this in generic lambda
+        type_list_map<InputTypes>([&]<typename T>() {
+            if constexpr (type_list_contains<node_inputs, T>) {
+                input.connect_edge(make_direct_edge<T>(node));
+            }
+        });
+    }
 
     //
     // Set graph outputs.
     //
 
-    // template <typename T>
-    // void outputs(auto node) {
-    // }
+    template <typename T>
+    void output(auto node) {
+        auto &output = IO::output;
+        node->connect_output_edge([&](std::shared_ptr<T> data, ExecutionInfo const &info) {
+            output.push_result(data, info);
+        });
+    }
 
-    // template <typename T>
-    // void outputs(auto node) {
-    // }
+    template <typename Node>
+    void outputs(std::shared_ptr<Node> node, auto create_edge) {
+        // TODO
+    }
+
+    template <typename Node>
+    void outputs(std::shared_ptr<Node> node) {
+        outputs(node, []<typename T>(auto node) {
+            return make_direct_edge<T>(node);
+        });
+    }
 
     // template <typename T>
     // void push_data(std::shared_ptr<T> data) {

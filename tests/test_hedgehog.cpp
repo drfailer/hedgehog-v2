@@ -71,8 +71,11 @@ TEST(compile_test, compile_test) {
     auto node2 = hh::make_task<Task>(2, "task2");
     auto graph = hh::make_graph<hh::type_list<int, float>, hh::type_list<int, float>>();
 
+    // graph->input<float>(node1);
+    graph->inputs(node1);
     graph->edge<float>(node1, node2);
     graph->edges(node1, node2);
+    graph->outputs(node2);
     // graph->push_data(std::make_shared<float>(3.14));
     ASSERT_EQ(1, 2) << "this should to fail";
 }

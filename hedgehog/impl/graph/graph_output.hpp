@@ -25,14 +25,34 @@
 
 namespace hh {
 
+//
+// The graph output is the exact same as direct output for now.
+//
+
 template <typename T>
 struct GraphOutputPort {
-    // TODO
+    std::vector<Edge<T>> edges = {};
+
+    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
+        for (auto &edge : edges) {
+            edge(data, info);
+        }
+    }
+
+    void connect_edge(Edge<T> edge) {
+        edges.push_back(std::move(edge));
+    }
 };
 
 template <typename ...Outputs>
 struct GraphOutput : NodePorts<GraphOutputPort, Outputs...> {
-    // TODO
+    template <typename T>
+    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
+        GraphOutputPort<T>::push_result(data, info);
+    }
+
+    void initialize(NodeInfo const &) {}
+    void finalize(NodeInfo const &) {}
 };
 
 } // end namespace

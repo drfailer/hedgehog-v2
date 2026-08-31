@@ -27,12 +27,28 @@ namespace hh {
 
 template <typename T>
 struct GraphInputPort {
-    // TODO
+    std::vector<Edge<T>> edges;
+
+    void push_data(std::shared_ptr<T> data, ExecutionInfo const &info) {
+        for (auto &edge : edges) {
+            edge(data, info);
+        }
+    }
+
+    void connect_edge(Edge<T> edge) {
+        GraphInputPort<T>::edges.push_back(std::move(edge));
+    }
 };
 
 template <typename ...Outputs>
 struct GraphInput : NodePorts<GraphInputPort, Outputs...> {
-    // TODO
+    template <typename T>
+    void push_data(std::shared_ptr<T> data, ExecutionInfo const &info) {
+        GraphInputPort<T>::push_data(data, info);
+    }
+
+    void initialize(NodeInfo const &) {}
+    void finalize(NodeInfo const &) {}
 };
 
 } // end namespace
