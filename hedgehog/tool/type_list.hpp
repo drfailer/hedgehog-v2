@@ -54,16 +54,16 @@ using type_list_prepend = typename type_list_prepend_impl<L, Types...>::type;
 
 // dispatch ////////////////////////////////////////////////////////////////////
 
-template <typename L, template <typename ...> class T>
+template <typename L, template <typename ...> class T, typename ...Types>
 struct type_list_dispatch_impl;
 
-template <template <typename ...> class T, typename ...Ts>
-struct type_list_dispatch_impl<type_list<Ts...>, T> {
-    using type = T<Ts...>;
+template <template <typename ...> class T, typename ...Ts, typename ...Types>
+struct type_list_dispatch_impl<type_list<Ts...>, T, Types...> {
+    using type = T<Types..., Ts...>;
 };
 
-template <typename L, template <typename ...> class T>
-using type_list_dispatch = typename type_list_dispatch_impl<L, T>::type;
+template <typename L, template <typename ...> class T, typename ...Types>
+using type_list_dispatch = typename type_list_dispatch_impl<L, T, Types...>::type;
 
 // contains ////////////////////////////////////////////////////////////////////
 
