@@ -31,9 +31,11 @@ template <typename Config>
 struct GraphNode : Node, NodeIO<Config> {
     using InputTypes  = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
+    using Sink        = Config::Sink;
     using Executor    = Config::Executor;
     using IO          = NodeIO<Config>;
 
+    Sink sink;
     std::set<std::shared_ptr<Node>> nodes;
     std::shared_ptr<Executor> executor;
 
@@ -43,7 +45,11 @@ struct GraphNode : Node, NodeIO<Config> {
         initialize(GraphInfo{Node::info().name, 0, 0});
         execute(ExecutionInfo{0});
         if (IO::output.edge_count()) {
-            // TODO: connect the sink (only the top graph starts)
+            auto &output = IO::output;
+            auto &graph_sink = sink;
+            type_list_map<OutputTypes>([&]<typename T>() {
+                output.connect_edge(make_direct_edge<T>(&graph_sink));
+            });
         }
     }
 
@@ -52,6 +58,8 @@ struct GraphNode : Node, NodeIO<Config> {
     }
 
     void initialize(GraphInfo const &info) override {
+        IO::initialize(Node::info());
+        initialize_component(&sink, Node::info());
         for (auto &node : nodes) {
             node->initialize(info);
         }
@@ -67,6 +75,8 @@ struct GraphNode : Node, NodeIO<Config> {
         for (auto &node : nodes) {
             node->finalize(info);
         }
+        finalize_component(&sink, Node::info());
+        IO::finalize(Node::info());
     }
 
     //
@@ -155,7 +165,13 @@ struct GraphNode : Node, NodeIO<Config> {
 
     template <typename Node>
     void outputs(std::shared_ptr<Node> node, auto create_edge) {
-        // TODO
+        using node_outputs = Node::OutputTypes;
+        auto &output = IO::output; // can't capture this in generic lambda
+        type_list_map<OutputTypes>([&]<typename T>() {
+            if constexpr (type_list_contains<node_outputs, T>) {
+                output.connect_edge(make_direct_edge<T>(node));
+            }
+        });
     }
 
     template <typename Node>
@@ -165,15 +181,14 @@ struct GraphNode : Node, NodeIO<Config> {
         });
     }
 
-    // template <typename T>
-    // void push_data(std::shared_ptr<T> data) {
-    //     IO::push_data(data, {});
-    // }
+    template <typename T>
+    void push_data(std::shared_ptr<T> data) {
+        IO::push_data(data, {});
+    }
 
-    // TODO
-    // auto get_result() {
-    //     return sink.get_result();
-    // }
+    auto get_result() {
+        return sink.get_result();
+    }
 
     //
     // Copy the graph for pipelines.

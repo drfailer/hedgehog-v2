@@ -16,49 +16,42 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_IMPL_GRAPH_GRAPH_OUTPUT
-#define HEDGEHOG_IMPL_GRAPH_GRAPH_OUTPUT
-
-#include <vector>
-#include "../../graph/node.hpp"
-#include "../../graph/edge.hpp"
+#ifndef HEDGEHOG_IMPL_GRAPH_GRAPH_SINK_H
+#define HEDGEHOG_IMPL_GRAPH_GRAPH_SINK_H
 
 namespace hh {
 
-//
-// The graph output is the exact same as direct output for now.
-//
-
-template <typename T>
-struct GraphOutputPort {
-    std::vector<Edge<T>> edges = {};
-
-    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
-        for (auto &edge : edges) {
-            edge(data, info);
-        }
-    }
-
-    void connect_edge(Edge<T> edge) {
-        edges.push_back(std::move(edge));
-    }
-};
+#include <queue>
+#include <variant>
+#include <mutex>
+#include <semaphore>
+#include <cassert>
 
 template <typename ...Outputs>
-struct GraphOutput : NodePorts<GraphOutputPort, Outputs...> {
+struct GraphSink {
+    using VariantType = std::variant<std::shared_ptr<Outputs>...>;
+    std::mutex mutex;
+    std::queue<VariantType> results;
+    std::counting_semaphore<1024> sem{0}; // TODO: max size?
+
     template <typename T>
-    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
-        GraphOutputPort<T>::push_result(data, info);
+    void push_data(std::shared_ptr<T> data, ExecutionInfo const &) {
+        std::lock_guard<std::mutex> lock(mutex);
+        results.push(data);
+        sem.release();
     }
 
-    size_t edge_count() {
-        return (GraphOutputPort<Outputs>::edges.size() + ...);
+    VariantType get_result() {
+        sem.acquire();
+        mutex.lock();
+        assert(results.size() > 0);
+        auto data = results.back();
+        results.pop();
+        mutex.unlock();
+        return data;
     }
-
-    void initialize(NodeInfo const &) {}
-    void finalize(NodeInfo const &) {}
 };
 
-} // end namespace
+} // end namespace hh
 
 #endif

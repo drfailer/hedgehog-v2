@@ -39,6 +39,25 @@ void create_component_copies(Iterator begin, Iterator end, std::shared_ptr<Compo
         *begin = copy_component(component);
     }
 }
+
+template <typename Component>
+void initialize_component(Component component, NodeInfo const &info) {
+    if constexpr (requires { component->initialize(info); }) {
+        component->initialize(info);
+    } else if constexpr (requires { component->initialize(); }) {
+        component->initialize();
+    }
+}
+
+template <typename Component>
+void finalize_component(Component component, NodeInfo const &info) {
+    if constexpr (requires { component->finalize(info); }) {
+        component->finalize(info);
+    } else if constexpr (requires { component->finalize(); }) {
+        component->finalize();
+    }
+}
+
 } // end namespace hh
 
 #endif

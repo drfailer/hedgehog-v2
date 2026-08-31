@@ -26,6 +26,7 @@
 #include "../impl/graph/thread_executor.hpp"
 #include "../impl/graph/graph_input.hpp"
 #include "../impl/graph/graph_output.hpp"
+#include "../impl/graph/graph_sink.hpp"
 
 namespace hh {
 
@@ -125,6 +126,7 @@ auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph
     struct Config {
         using InputTypes = Inputs;
         using OutputTypes = Outputs;
+        using Sink = type_list_dispatch<Outputs, GraphSink>; // TODO: how to specify this?
         using Input =  typename deduce_node_input_type<Impl, DefaultGraphInput<InputTypes>>::type;
         using Output = typename deduce_node_output_type<Impl, DefaultGraphOutput<OutputTypes>>::type;
         using Executor = Impl;

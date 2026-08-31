@@ -20,6 +20,7 @@
 #define HEDGEHOG_GRAPH_NODE_IO
 
 #include <type_traits>
+#include "../tool/helpers.hpp"
 
 namespace hh {
 
@@ -42,6 +43,8 @@ struct WaitResult {
     bool terminate; // used to leave the thread loop
     bool skip;      // used to skip execution in the thread loop (no data, or defered)
 };
+
+// TODO: this is badly defined!
 
 template <typename T, typename ...Inputs>
 concept NodeInputTrait = std::default_initializable<T> && requires(T *t) {
@@ -97,13 +100,13 @@ struct NodeIO {
     Output output;
 
     void initialize(NodeInfo const &info) {
-        input.initialize(info);
-        output.initialize(info);
+        initialize_component(&input, info);
+        initialize_component(&output, info);
     }
 
     void finalize(NodeInfo const &info) {
-        input.finalize(info);
-        output.finalize(info);
+        finalize_component(&input, info);
+        finalize_component(&output, info);
     }
 
     template <typename T>
