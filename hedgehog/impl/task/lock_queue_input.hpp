@@ -50,7 +50,7 @@ struct LockQueueInputPort {
         return queue.size();
     }
 
-    void connect_edge(std::shared_ptr<Edge<T>>) {}
+    void connect_edge(Edge<T>) {}
 };
 
 template <typename ...Inputs>
