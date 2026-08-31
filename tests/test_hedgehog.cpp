@@ -42,10 +42,14 @@
 // };
 
 using test_list = hh::type_list<int, float>;
+
+// append prepend
 static_assert(std::is_same_v<hh::type_list_append<test_list, double>,
                              hh::type_list<int, float, double>>);
 static_assert(std::is_same_v<hh::type_list_prepend<test_list, double>,
                              hh::type_list<double, int, float>>);
+
+// contains
 static_assert(hh::type_list_contains<test_list, int>);
 static_assert(hh::type_list_contains<test_list, float>);
 static_assert(!hh::type_list_contains<test_list, double>);
@@ -63,7 +67,11 @@ struct Task : hh::Task<Task> {
 };
 
 TEST(compile_test, compile_test) {
-    auto node = hh::make_task<Task>(2, "task");
+    auto node1 = hh::make_task<Task>(2, "task1");
+    auto node2 = hh::make_task<Task>(2, "task2");
     auto graph = hh::make_graph<hh::type_list<int, float>, hh::type_list<int, float>>();
+
+    graph->edge<float>(node1, node2);
+    graph->edges(node1, node2);
     ASSERT_EQ(1, 2) << "this should to fail";
 }

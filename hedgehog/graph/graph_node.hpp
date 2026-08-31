@@ -67,19 +67,36 @@ struct GraphNode : Node, NodeIO<Config> {
     }
 
     template <typename T>
-    void edge(auto sender, auto receiver) {
-        edge(sender, receiver, [receiver](std::shared_ptr<T> data, ExecutionInfo const &info) {
-            receiver->push_data(data, info);
-        });
-    }
-
-    template <typename T>
     void edge(auto sender, auto receiver, Edge<T> edge) {
         // TODO: check that the node does not belong to another graph
         nodes.insert(sender);
         nodes.insert(receiver);
         sender->connect_output_edge(edge);
         receiver->connect_input_edge(edge);
+    }
+
+    template <typename T>
+    void edge(auto sender, auto receiver) {
+        edge(sender, receiver, make_direct_edge<T>(sender, receiver));
+    }
+
+    template <typename Sender, typename Receiver>
+    void edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver, auto create_edge) {
+        using sender_outputs = Sender::OutputTypes;
+        using receiver_inputs = Sender::InputTypes;
+        type_list_map<sender_outputs>([&]<typename T>() {
+            if constexpr (type_list_contains<receiver_inputs, T>) {
+                auto edge = create_edge.template operator()<T>(sender, receiver);
+                sender->connect_output_edge(edge);
+                receiver->connect_input_edge(edge);
+            }
+        });
+    }
+
+    void edges(auto sender, auto receiver) {
+        edges(sender, receiver, []<typename T>(auto sender, auto receiver) {
+            return make_direct_edge<T>(sender, receiver);
+        });
     }
 
     // TODO: inputs/outputs
