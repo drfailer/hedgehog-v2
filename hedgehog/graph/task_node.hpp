@@ -84,6 +84,7 @@ struct TaskNode : Node, NodeIO<Config> {
         for (;;) {
             auto wait_result = IO::wait(info);
             if (wait_result.terminate) break;
+            if (wait_result.skip) continue;
             IO::execute_consumers(thread_task, info);
         }
     }

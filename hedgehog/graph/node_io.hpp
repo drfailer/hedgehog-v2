@@ -39,7 +39,8 @@ struct SignalOpts {
 };
 
 struct WaitResult {
-    bool terminate;
+    bool terminate; // used to leave the thread loop
+    bool skip;      // used to skip execution in the thread loop (no data, or defered)
 };
 
 template <typename T, typename ...Inputs>

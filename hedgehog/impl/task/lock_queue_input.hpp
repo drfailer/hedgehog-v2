@@ -73,7 +73,7 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
         cond.wait(lock, [this]{
             return has_data() || terminated.load(std::memory_order_acquire);
         });
-        return WaitResult{terminated.load(std::memory_order_relaxed)};
+        return WaitResult{terminated.load(std::memory_order_relaxed), false};
     }
 
     bool has_data() {
