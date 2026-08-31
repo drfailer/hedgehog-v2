@@ -32,16 +32,16 @@ namespace hh {
 // Defaults ////////////////////////////////////////////////////////////////////
 
 template <typename InputList>
-using DefaultNodeInput = type_list_dispatch<LockQueueNodeInput, InputList>;
+using DefaultNodeInput = type_list_dispatch<InputList, LockQueueNodeInput>;
 
 template <typename OutputList>
-using DefaultNodeOutput = type_list_dispatch<DirectNodeOutput, OutputList>;
+using DefaultNodeOutput = type_list_dispatch<OutputList, DirectNodeOutput>;
 
 template <typename InputList>
-using DefaultGraphInput = type_list_dispatch<GraphInput, InputList>;
+using DefaultGraphInput = type_list_dispatch<InputList, GraphInput>;
 
 template <typename OutputList>
-using DefaultGraphOutput = type_list_dispatch<GraphOutput, OutputList>;
+using DefaultGraphOutput = type_list_dispatch<OutputList, GraphOutput>;
 
 using DefaultGraphExecutor = ThreadExecutor;
 
