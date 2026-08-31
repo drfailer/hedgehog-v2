@@ -17,6 +17,7 @@
 // United States.
 
 
+#include <type_traits>
 #include <gtest/gtest.h>
 #include "../hedgehog/hedgehog.h"
 
@@ -39,6 +40,15 @@
 //         return std::make_shared<TaskV2>(this->number_threads);
 //     }
 // };
+
+using test_list = hh::type_list<int, float>;
+static_assert(std::is_same_v<hh::type_list_append<test_list, double>,
+                             hh::type_list<int, float, double>>);
+static_assert(std::is_same_v<hh::type_list_prepend<test_list, double>,
+                             hh::type_list<double, int, float>>);
+static_assert(hh::type_list_contains<test_list, int>);
+static_assert(hh::type_list_contains<test_list, float>);
+static_assert(!hh::type_list_contains<test_list, double>);
 
 static_assert(hh::NodeInputTrait<hh::LockQueueNodeInput<int, float>, int, float>);
 static_assert(hh::NodeOutputTrait<hh::DirectNodeOutput<int, float>, int, float>);

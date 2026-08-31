@@ -26,6 +26,34 @@ namespace hh {
 template <typename ...Ts>
 struct type_list {};
 
+// append //////////////////////////////////////////////////////////////////////
+
+template <typename L, typename T>
+struct type_list_append_impl;
+
+template <typename T, typename ...Ts>
+struct type_list_append_impl<type_list<Ts...>, T> {
+    using type = type_list<Ts..., T>;
+};
+
+template <typename L, typename T>
+using type_list_append = typename type_list_append_impl<L, T>::type;
+
+// prepend /////////////////////////////////////////////////////////////////////
+
+template <typename L, typename T>
+struct type_list_prepend_impl;
+
+template <typename T, typename ...Ts>
+struct type_list_prepend_impl<type_list<Ts...>, T> {
+    using type = type_list<T, Ts...>;
+};
+
+template <typename L, typename T>
+using type_list_prepend = typename type_list_prepend_impl<L, T>::type;
+
+// dispatch ////////////////////////////////////////////////////////////////////
+
 template <template <typename ...> class T, typename L>
 struct type_list_dispatch_impl;
 
@@ -36,6 +64,35 @@ struct type_list_dispatch_impl<T, type_list<Ts...>> {
 
 template <template <typename ...> class T, typename L>
 using type_list_dispatch = typename type_list_dispatch_impl<T, L>::type;
+
+// contains ////////////////////////////////////////////////////////////////////
+
+template <typename T, typename ...Ts>
+struct types_contain_impl;
+
+template <typename T>
+struct types_contain_impl<T> {
+    static constexpr bool value = false;
+};
+
+template <typename T, typename H, typename ...Ts>
+struct types_contain_impl<T, H, Ts...> {
+    static constexpr bool value = std::is_same_v<T, H> || types_contain_impl<T, Ts...>::value;
+};
+
+template <typename T, typename ...Ts>
+constexpr bool types_contain = types_contain_impl<T, Ts...>::value;
+
+template <typename L, typename T>
+struct type_list_contains_impl;
+
+template <typename T, typename ...Ts>
+struct type_list_contains_impl<type_list<Ts...>, T> {
+    static constexpr bool value = types_contain_impl<T, Ts...>::value;
+};
+
+template <typename L, typename T>
+constexpr bool type_list_contains = type_list_contains_impl<L, T>::value;
 
 } // end namespace hh
 
