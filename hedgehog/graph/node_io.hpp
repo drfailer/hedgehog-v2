@@ -52,7 +52,7 @@ concept NodeInputTrait = std::default_initializable<T> && requires(T *t) {
     {t->wait(ExecutionInfo{})} -> std::same_as<WaitResult>;
     t->signal(SignalOpts{});
     // execution
-    []<typename Core>(T *t, std::shared_ptr<Core> core) { t->execute_consumers(core, ExecutionInfo{}); };
+    []<typename Executor>(T *t, std::shared_ptr<Executor> exec) { t->execute_consumers(exec, ExecutionInfo{}); };
     // data reception
     ([](T *t, std::shared_ptr<Inputs> data) { t->push_data(data, ExecutionInfo{}); }, ...);
     // edges: since edges are directional, they are optional for the inputs
@@ -83,9 +83,14 @@ concept NodeOutputTrait = std::default_initializable<T> && requires(T *t) {
 // Helper for building node (input + output + default api).
 //
 
+
+// QUESTION: TaskIO vs GraphIO?
+
 // WARN: we avoid concepts here on purpose to reduce compile time (may change later).
 template <typename Config>
 struct NodeIO {
+    // QUESTION: composition vs inheritance
+    // QUESTION: raw types vs pointers (dereferencing cost? allow user side construction?)
     using Input = typename Config::Input;
     using Output = typename Config::Output;
     Input input;
@@ -121,8 +126,8 @@ struct NodeIO {
         output.push_result(data, info);
     }
 
-    auto wait(auto &&...args) {
-        return input.wait(std::forward<decltype(args)>(args)...);
+    WaitResult wait(ExecutionInfo const &info) {
+        return input.wait(info);
     }
 
     void execute_consumers(auto &&...args) {

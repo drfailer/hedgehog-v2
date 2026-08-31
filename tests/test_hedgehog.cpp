@@ -73,5 +73,6 @@ TEST(compile_test, compile_test) {
 
     graph->edge<float>(node1, node2);
     graph->edges(node1, node2);
+    // graph->push_data(std::make_shared<float>(3.14));
     ASSERT_EQ(1, 2) << "this should to fail";
 }

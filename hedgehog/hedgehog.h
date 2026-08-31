@@ -27,9 +27,7 @@
 #include "graph/edge.hpp"
 
 #include "api/task.hpp"
-#include "api/graph.hpp"
 
-#include "impl/graph/default_graph.hpp"
 #include "impl/graph/graph_output.hpp"
 #include "impl/graph/thread_executor.hpp"
 #include "impl/graph/graph_input.hpp"

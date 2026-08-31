@@ -16,32 +16,29 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_API_GRAPH
-#define HEDGEHOG_API_GRAPH
-
-#include "../graph/graph_node.hpp"
-#include "../tool/config.hpp"
+#ifndef HEDGEHOG_TOOL_HELPERS_H
+#define HEDGEHOG_TOOL_HELPERS_H
 
 namespace hh {
 
-template <typename Impl>
-class Graph {
-  public:
-    using Config = make_graph_config<Impl>;
-    using NodeType = GraphNode<Config>;
+// helper functions ////////////////////////////////////////////////////////////
 
-  private:
-    NodeType *node_;
-
-    friend NodeType;
-    void set_node(NodeType *node) { node_ = node; }
-
-  public:
-    std::string const &name() { return node_->info().name; }
-
-    // TODO: edge interface
-};
-
+template <typename Component>
+std::shared_ptr<Component> copy_component(std::shared_ptr<Component> component) {
+    if constexpr (requires { component->copy(); }) {
+        return component->copy();
+    }
+    return std::make_shared<Component>();
 }
+
+template <typename Iterator, typename Component>
+void create_component_copies(Iterator begin, Iterator end, std::shared_ptr<Component> component) {
+    *begin = component;
+    begin++;
+    for (; begin != end; begin++) {
+        *begin = copy_component(component);
+    }
+}
+} // end namespace hh
 
 #endif

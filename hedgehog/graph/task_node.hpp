@@ -23,6 +23,7 @@
 #include <memory>
 
 #include "node.hpp"
+#include "../tool/helpers.hpp"
 
 namespace hh {
 
@@ -30,40 +31,19 @@ namespace hh {
 // Configurable task node implementation.
 //
 
-// helper functions ////////////////////////////////////////////////////////////
-
-template <typename Task>
-std::shared_ptr<Task> copy_task(std::shared_ptr<Task> task) {
-    if constexpr (requires { task->copy(); }) {
-        return task->copy();
-    }
-    return std::make_shared<Task>();
-}
-
-template <typename Iterator, typename Task>
-void create_task_copies(Iterator begin, Iterator end, std::shared_ptr<Task> task) {
-    *begin = task;
-    begin++;
-    for (; begin != end; begin++) {
-        *begin = copy_task(task);
-    }
-}
-
-// Task Node ///////////////////////////////////////////////////////////////////
-
 template <typename Config>
 struct TaskNode : Node, NodeIO<Config> {
-    using InputTypes = Config::InputTypes;
+    using InputTypes  = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
-    using IO = NodeIO<Config>;
-    using Task = Config::Task;
+    using Task        = Config::Task;
+    using IO          = NodeIO<Config>;
     // TODO: using Profiler = Config::Profiler;
 
     GraphInfo graph_info;
-    std::vector<std::shared_ptr<Task>> tasks;
+    std::vector<std::shared_ptr<Task>> tasks; // QUESTION: do we want pointers for the task?
 
     TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), tasks(info.number_threads) {
-        create_task_copies(tasks.begin(), tasks.end(), task);
+        create_component_copies(tasks.begin(), tasks.end(), task);
     }
 
     void initialize(GraphInfo const &info) override {
@@ -99,21 +79,9 @@ struct TaskNode : Node, NodeIO<Config> {
     }
 
     std::shared_ptr<Node> copy() override {
-        return std::make_shared<TaskNode<Config>>(copy_task(tasks[0]), Node::info());
+        return std::make_shared<TaskNode<Config>>(copy_component(tasks[0]), Node::info());
     }
 };
-
-// functions ///////////////////////////////////////////////////////////////////
-
-template <typename Task>
-auto make_task(std::shared_ptr<Task> task, size_t number_threads = 1, std::string const &name = "Task") {
-    return std::make_shared<TaskNode<typename Task::Config>>(task, NodeInfo{name, number_threads});
-}
-
-template <typename Task>
-auto make_task(size_t number_threads = 1, std::string const &name = "Task") {
-    return make_task(std::make_shared<Task>(), number_threads, name);
-}
 
 } // end namespace hh
 

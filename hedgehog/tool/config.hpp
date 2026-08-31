@@ -92,25 +92,50 @@ struct deduce_executor_type<Impl, Default> {
     using type = typename Impl::executor;
 };
 
-// Configs /////////////////////////////////////////////////////////////////////
+// make_task ///////////////////////////////////////////////////////////////////
 
+//
+// Helper to create the task config based on the task implementation (which is
+// used to determin the config fields).
+//
 template <typename Impl>
 struct make_task_config {
-    using InputTypes = Impl::inputs;
+    using InputTypes  = Impl::inputs;
     using OutputTypes = Impl::outputs;
-    using Input =  typename deduce_node_input_type<Impl, DefaultNodeInput<typename Impl::inputs>>::type;
-    using Output = typename deduce_node_output_type<Impl, DefaultNodeOutput<typename Impl::outputs>>::type;
+    using Input  = typename deduce_node_input_type<Impl, DefaultNodeInput<InputTypes>>::type;
+    using Output = typename deduce_node_output_type<Impl, DefaultNodeOutput<OutputTypes>>::type;
     using Task = Impl;
 };
 
 template <typename Impl>
-struct make_graph_config {
-    using InputTypes = Impl::inputs;
-    using OutputTypes = Impl::outputs;
-    using Input =  typename deduce_node_input_type<Impl, DefaultGraphInput<typename Impl::inputs>>::type;
-    using Output = typename deduce_node_output_type<Impl, DefaultGraphOutput<typename Impl::outputs>>::type;
-    using Executor = typename deduce_executor_type<Impl, DefaultGraphExecutor>::type;
-};
+auto make_task(std::shared_ptr<Impl> task, size_t number_threads = 1, std::string const &name = "Task") {
+    using Config = make_task_config<Impl>;
+    return std::make_shared<TaskNode<Config>>(task, NodeInfo{name, number_threads});
+}
+
+template <typename Task>
+auto make_task(size_t number_threads = 1, std::string const &name = "Task") {
+    return make_task(std::make_shared<Task>(), number_threads, name);
+}
+
+// make_graph //////////////////////////////////////////////////////////////////
+
+template <typename Impl, typename Inputs, typename Outputs>
+auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph") {
+    struct Config {
+        using InputTypes = Inputs;
+        using OutputTypes = Outputs;
+        using Input =  typename deduce_node_input_type<Impl, DefaultGraphInput<InputTypes>>::type;
+        using Output = typename deduce_node_output_type<Impl, DefaultGraphOutput<OutputTypes>>::type;
+        using Executor = Impl;
+    };
+    return std::make_shared<GraphNode<Config>>(executor, NodeInfo{name, 0});
+}
+
+template <typename Inputs, typename Outputs>
+auto make_graph(std::string const &name = "Graph") {
+    return make_graph<DefaultGraphExecutor, Inputs, Outputs>(std::make_shared<DefaultGraphExecutor>(), name);
+}
 
 } // end namespace hh
 

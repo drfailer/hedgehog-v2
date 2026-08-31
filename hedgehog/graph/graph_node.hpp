@@ -29,10 +29,10 @@ namespace hh {
 
 template <typename Config>
 struct GraphNode : Node, NodeIO<Config> {
-    using InputTypes = Config::InputTypes;
+    using InputTypes  = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
-    using IO = NodeIO<Config>;
-    using Executor = Config::Executor;
+    using Executor    = Config::Executor;
+    using IO          = NodeIO<Config>;
 
     std::set<std::shared_ptr<Node>> nodes;
     std::shared_ptr<Executor> executor;
@@ -42,6 +42,7 @@ struct GraphNode : Node, NodeIO<Config> {
     void start() {
         initialize(GraphInfo{Node::info().name, 0, 0});
         execute(ExecutionInfo{0});
+        // TODO: connect the sink (only the top graph starts)
     }
 
     void stop() {
@@ -66,9 +67,19 @@ struct GraphNode : Node, NodeIO<Config> {
         }
     }
 
+    //
+    // Edge creation for a type: create an edge between 2 nodes for a specific
+    // type.
+    //
+    // - We do not verify if nodes belong to another graph.
+    // - We do not verify if the edge already exists, creating multiple edges
+    //   for the same sender/receiver/type is allowed.
+    //
+    // TODO: we may use "if constexpr" to display a simpler error message at runtime
+    //
+
     template <typename T>
     void edge(auto sender, auto receiver, Edge<T> edge) {
-        // TODO: check that the node does not belong to another graph
         nodes.insert(sender);
         nodes.insert(receiver);
         sender->connect_output_edge(edge);
@@ -79,6 +90,15 @@ struct GraphNode : Node, NodeIO<Config> {
     void edge(auto sender, auto receiver) {
         edge(sender, receiver, make_direct_edge<T>(sender, receiver));
     }
+
+    //
+    // Edge creation for common types: create an edge between 2 nodes for every
+    // types common between the sender outputs and receiver inputs.
+    //
+    // - We do not verify if nodes belong to another graph.
+    // - We do not verify if the edges already exist, creating multiple edges
+    //   for the same sender/receiver/type is allowed.
+    //
 
     template <typename Sender, typename Receiver>
     void edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver, auto create_edge) {
@@ -99,33 +119,52 @@ struct GraphNode : Node, NodeIO<Config> {
         });
     }
 
-    // TODO: inputs/outputs
+    //
+    // Set graph inputs.
+    //
+
+    // template <typename T>
+    // void input(auto node) {
+    // }
+
+    // template <typename T>
+    // void inputs(auto node) {
+    // }
+
+    //
+    // Set graph outputs.
+    //
+
+    // template <typename T>
+    // void outputs(auto node) {
+    // }
+
+    // template <typename T>
+    // void outputs(auto node) {
+    // }
+
+    // template <typename T>
+    // void push_data(std::shared_ptr<T> data) {
+    //     IO::push_data(data, {});
+    // }
+
+    // TODO
+    // auto get_result() {
+    //     return sink.get_result();
+    // }
+
+    //
+    // Copy the graph for pipelines.
+    //
 
     std::shared_ptr<Node> copy() override {
         if constexpr (requires { executor->copy(); }) {
             std::make_shared<GraphNode<Config>>(executor->copy(), Node::info());
+            // TODO: all the nodes should be copied to and inputs/outputs
         }
         return std::make_shared<GraphNode<Config>>(executor, Node::info());
     }
-
-    auto get_result() {
-        return IO::output.get_result();
-    }
 };
-
-// functions ///////////////////////////////////////////////////////////////////
-
-template <typename Graph>
-auto make_graph(std::shared_ptr<typename Graph::Config::Executor> executor, std::string const &name = "Graph") {
-    return std::make_shared<GraphNode<typename Graph::Config>>(executor, NodeInfo{name, 0});
-}
-
-template <typename Graph>
-auto make_graph(std::string const &name = "Graph") {
-    return make_graph<Graph>(std::make_shared<typename Graph::Config::Executor>(), name);
-}
-
-// TODO: build make the graph directly from the config?
 
 } // end namespace hh
 

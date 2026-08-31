@@ -24,6 +24,8 @@
 
 namespace hh {
 
+// QUESTION: I feel like this is not useful or it is badly named
+
 template <typename Impl>
 class Task {
   public:
