@@ -16,13 +16,17 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_GRAPH_NODE_IO
-#define HEDGEHOG_GRAPH_NODE_IO
+#ifndef HEDGEHOG_GRAPH_IO_H
+#define HEDGEHOG_GRAPH_IO_H
 
 #include <type_traits>
 #include "../tool/helpers.hpp"
 
 namespace hh {
+
+/******************************************************************************/
+/*                                   nodes                                    */
+/******************************************************************************/
 
 // Concepts ////////////////////////////////////////////////////////////////////
 
@@ -44,22 +48,48 @@ struct WaitResult {
     bool skip;      // used to skip execution in the thread loop (no data, or defered)
 };
 
-// TODO: this is badly defined!
-
 template <typename T, typename ...Inputs>
-concept NodeInputTrait = std::default_initializable<T> && requires(T *t) {
-    // initialization / deinitialization
-    // t->initialize(InitializationInfo{});
-    // t->finalize(InitializationInfo{});
-    // triggering
-    {t->wait(RuntimeInfo{})} -> std::same_as<WaitResult>;
-    t->signal(SignalOpts{});
-    // execution
-    []<typename Executor>(T *t, std::shared_ptr<Executor> exec) { t->execute_consumers(exec, RuntimeInfo{}); };
-    // data reception
-    ([](T *t, std::shared_ptr<Inputs> data) { t->push_data(data, RuntimeInfo{}); }, ...);
-    // edges: since edges are directional, they are optional for the inputs
-    // ([](Edge<T> edge) { t->connect_edge(edge); }, ...);
+concept NodeInputTrait = std::default_initializable<T> && requires {
+    //
+    // The input can be initializable/finalizable. initialize_component does:
+    // - calls `t.initialize(info)` if defined
+    // - else calls `t.initialize()` if defined
+    // - else does nothing.
+    // finalize works the same way.
+    //
+    [](T t, InitializationInfo const &info) {
+        initialize_component(&t, info);
+        finalize_component(&t, info);
+    };
+
+    //
+    // The input must allow threads to wait or be signaled.
+    //
+    [](T t, RuntimeInfo const &info, SignalOpts opts) {
+        WaitResult result = t.wait(info);
+        t.signal(opts);
+    };
+
+    //
+    // Input is also responsible to pop and execute data.
+    //
+    []<typename Executor>(T t, std::shared_ptr<Executor> exec) {
+        t.execute_consumers(exec, RuntimeInfo{});
+    };
+
+    //
+    // Data can be pushed to the input.
+    //
+    ([](T t, std::shared_ptr<Inputs> data, RuntimeInfo const &info) {
+        t.push_data(data, info);
+     }, ...);
+
+    //
+    // Edges can be connected to the input.
+    //
+    ([](T t, Edge<Inputs> edge) {
+        t.connect_edge(edge);
+     }, ...);
 };
 
 //
@@ -70,14 +100,32 @@ concept NodeInputTrait = std::default_initializable<T> && requires(T *t) {
 //
 
 template <typename T, typename ...Outputs>
-concept NodeOutputTrait = std::default_initializable<T> && requires(T *t) {
-    // initialization / deinitialization
-    // t->initialize(InitializationInfo{});
-    // t->finalize(InitializationInfo{});
-    // result transmission
-    ([](T *t, std::shared_ptr<Outputs> data) { t->push_result(data, RuntimeInfo{}); }, ...);
-    // edges
-    ([](T *t, Edge<Outputs> edge) { t->connect_edge(edge); }, ...);
+concept NodeOutputTrait = std::default_initializable<T> && requires {
+    //
+    // The input can be initializable/finalizable. initialize_component does:
+    // - calls `t.initialize(info)` if defined
+    // - else calls `t.initialize()` if defined
+    // - else does nothing.
+    // finalize works the same way.
+    //
+    [](T t, InitializationInfo const &info) {
+        initialize_component(&t, info);
+        finalize_component(&t, info);
+    };
+
+    //
+    // Result data can be sent through the output
+    //
+    ([](T t, std::shared_ptr<Outputs> data) {
+        t.push_result(data, RuntimeInfo{});
+     }, ...);
+
+    //
+    // Edges can be connected to the input.
+    //
+    ([](T t, Edge<Outputs> edge) {
+        t.connect_edge(edge);
+     }, ...);
 };
 
 // Node I/O ////////////////////////////////////////////////////////////////////
@@ -86,14 +134,9 @@ concept NodeOutputTrait = std::default_initializable<T> && requires(T *t) {
 // Helper for building node (input + output + default api).
 //
 
-
-// QUESTION: TaskIO vs GraphIO?
-
 // WARN: we avoid concepts here on purpose to reduce compile time (may change later).
 template <typename Config>
 struct NodeIO {
-    // QUESTION: composition vs inheritance
-    // QUESTION: raw types vs pointers (dereferencing cost? allow user side construction?)
     using Input = typename Config::Input;
     using Output = typename Config::Output;
     Input input;
