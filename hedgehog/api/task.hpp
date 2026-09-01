@@ -34,16 +34,18 @@ class Task {
 
   private:
     NodeType *node_;
-    ExecutionInfo info_;
+    RuntimeInfo info_;
 
     friend NodeType;
     void set_node(NodeType *node) { node_ = node; }
-    void set_execution_info(ExecutionInfo const &info) { info_ = info; }
+    void set_runtime_info(RuntimeInfo const &info) { info_ = info; }
 
   public:
-    std::string const &name() { return node_->info().name; }
-    size_t number_thread() { return node_->info().number_thread; }
-    size_t thread_index() { return info_.thread_index; }
+    // TODO: refactor this:
+    // std::string const &name() { return node_->info().name; }
+    // size_t number_thread() { return node_->info().number_thread; }
+    // size_t thread_index() { return info_.thread_index; }
+    // size_t rank() { return info_.thread_indwex; }
 
     template <typename T>
     void push_result(std::shared_ptr<T> data) {

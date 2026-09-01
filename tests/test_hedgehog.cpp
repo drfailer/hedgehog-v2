@@ -80,6 +80,9 @@ TEST(compile_test, compile_test) {
     graph->start();
     graph->push_data(std::make_shared<float>(3.14));
     auto data = graph->get_result();
+    // graph->eat_resuts(10);
+    // graph->wait()
+    // graph->wait_and_stop()
     graph->stop();
     ASSERT_EQ(1, 2) << "this should to fail";
 }

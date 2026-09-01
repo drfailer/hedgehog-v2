@@ -42,7 +42,8 @@ struct GraphNode : Node, NodeIO<Config> {
     GraphNode(std::shared_ptr<Executor> executor, NodeInfo const &info): Node(info), executor(executor) {}
 
     void start() {
-        initialize(GraphInfo{Node::info().name, 0, 0});
+        auto graph_info = GraphInfo{Node::info().name, 0, 0, 0, 0};
+        initialize(graph_info);
         execute(ExecutionInfo{0});
         if (IO::output.edge_count()) {
             auto &output = IO::output;
@@ -54,14 +55,16 @@ struct GraphNode : Node, NodeIO<Config> {
     }
 
     void stop() {
-        finalize(GraphInfo{Node::info().name, 0, 0});
+        auto graph_info = GraphInfo{Node::info().name, 0, 0, 0, 0};
+        finalize(graph_info);
     }
 
-    void initialize(GraphInfo const &info) override {
-        IO::initialize(Node::info());
-        initialize_component(&sink, Node::info());
+    void initialize(GraphInfo const &graph_info) override {
+        auto init_info = InitializationInfo{Node::info(), graph_info};
+        IO::initialize(init_info);
+        initialize_component(&sink, init_info);
         for (auto &node : nodes) {
-            node->initialize(info);
+            node->initialize(graph_info);
         }
     }
 
@@ -71,12 +74,13 @@ struct GraphNode : Node, NodeIO<Config> {
         }
     }
 
-    void finalize(GraphInfo const &info) override {
+    void finalize(GraphInfo const &graph_info) override {
         for (auto &node : nodes) {
-            node->finalize(info);
+            node->finalize(graph_info);
         }
-        finalize_component(&sink, Node::info());
-        IO::finalize(Node::info());
+        auto init_info = InitializationInfo{Node::info(), graph_info};
+        finalize_component(&sink, init_info);
+        IO::finalize(init_info);
     }
 
     //

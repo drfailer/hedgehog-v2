@@ -29,7 +29,7 @@ template <typename T>
 struct DirectOutputPort {
     std::vector<Edge<T>> edges = {};
 
-    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
+    void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
         for (auto &edge : edges) {
             edge(data, info);
         }
@@ -43,12 +43,9 @@ struct DirectOutputPort {
 template <typename ...Outputs>
 struct DirectNodeOutput : NodePorts<DirectOutputPort, Outputs...> {
     template <typename T>
-    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
+    void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
         DirectOutputPort<T>::push_result(data, info);
     }
-
-    void initialize(NodeInfo const &) {}
-    void finalize(NodeInfo const &) {}
 };
 
 } // end namespace

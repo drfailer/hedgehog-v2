@@ -35,7 +35,7 @@ struct GraphSink {
     std::counting_semaphore<1024> sem{0}; // TODO: max size?
 
     template <typename T>
-    void push_data(std::shared_ptr<T> data, ExecutionInfo const &) {
+    void push_data(std::shared_ptr<T> data, RuntimeInfo const &) {
         std::lock_guard<std::mutex> lock(mutex);
         results.push(data);
         sem.release();

@@ -33,11 +33,11 @@ namespace hh {
 //
 
 template <typename T>
-using Edge = std::function<void(std::shared_ptr<T>, ExecutionInfo const &)>;
+using Edge = std::function<void(std::shared_ptr<T>, RuntimeInfo const &)>;
 
 template <typename T>
 Edge<T> make_direct_edge(auto receiver) {
-    return [receiver](std::shared_ptr<T> data, ExecutionInfo const &info) {
+    return [receiver](std::shared_ptr<T> data, RuntimeInfo const &info) {
         receiver->push_data(data, info);
     };
 }

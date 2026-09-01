@@ -33,7 +33,7 @@ template <typename T>
 struct GraphOutputPort {
     std::vector<Edge<T>> edges = {};
 
-    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
+    void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
         for (auto &edge : edges) {
             edge(data, info);
         }
@@ -47,16 +47,13 @@ struct GraphOutputPort {
 template <typename ...Outputs>
 struct GraphOutput : NodePorts<GraphOutputPort, Outputs...> {
     template <typename T>
-    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
+    void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
         GraphOutputPort<T>::push_result(data, info);
     }
 
     size_t edge_count() {
         return (GraphOutputPort<Outputs>::edges.size() + ...);
     }
-
-    void initialize(NodeInfo const &) {}
-    void finalize(NodeInfo const &) {}
 };
 
 } // end namespace

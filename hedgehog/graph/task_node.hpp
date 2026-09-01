@@ -48,33 +48,34 @@ struct TaskNode : Node, NodeIO<Config> {
 
     void initialize(GraphInfo const &info) override {
         graph_info = info;
-        IO::initialize(Node::info());
+        auto init_info = InitializationInfo{Node::info(), graph_info};
+        IO::initialize(init_info);
         for (auto &task : tasks) {
             task->set_node(this);
-            if constexpr (requires { task->initialize(); }) {
-                task->initialize();
-            }
+            initialize_component(task, init_info);
         }
     }
 
     void execute(ExecutionInfo const &info) override {
+        auto runtime_info = RuntimeInfo{Node::info(), graph_info, info};
         auto thread_task = tasks[info.thread_index];
 
-        thread_task->set_execution_info(info);
+        // TODO: tasks should be initialized here (a task/executor should only be called during the execution phase)
+
+        thread_task->set_runtime_info(runtime_info);
         for (;;) {
-            auto wait_result = IO::wait(info);
+            auto wait_result = IO::wait(runtime_info);
             if (wait_result.terminate) break;
             if (wait_result.skip) continue;
-            IO::execute_consumers(thread_task, info);
+            IO::execute_consumers(thread_task, runtime_info);
         }
     }
 
     void finalize(GraphInfo const &info) override {
-        IO::initialize(Node::info());
+        auto init_info = InitializationInfo{Node::info(), graph_info};
+        IO::initialize(init_info);
         for (auto &task : tasks) {
-            if constexpr (requires { task->finalize(); }) {
-                task->finalize();
-            }
+            finalize_component(task, init_info);
         }
     }
 

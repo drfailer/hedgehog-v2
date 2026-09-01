@@ -59,6 +59,14 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     std::condition_variable cond{};
     alignas(64) std::atomic<bool> terminated{false};
 
+    void initialize(InitializationInfo const &) {
+        terminated.store(false);
+    }
+
+    void finalize(InitializationInfo const &) {
+        terminated.store(true);
+    }
+
     void signal(SignalOpts const &opts) {
         std::lock_guard<std::mutex> lock(mutex); // lock to avoid false wakeup
         if (opts.count == 1) {
@@ -68,7 +76,7 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
         }
     }
 
-    WaitResult wait(ExecutionInfo const &) {
+    WaitResult wait(RuntimeInfo const &) {
         std::unique_lock<std::mutex> lock(mutex);
         cond.wait(lock, [this]{
             return has_data() || terminated.load(std::memory_order_acquire);
@@ -81,25 +89,17 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     }
 
     template <typename T>
-    void push_data(std::shared_ptr<T> data, ExecutionInfo const &) {
+    void push_data(std::shared_ptr<T> data, RuntimeInfo const &) {
         LockQueueInputPort<T>::push(data);
     }
 
     template <typename Core>
-    void execute_consumers(std::shared_ptr<Core> core, ExecutionInfo const &) {
+    void execute_consumers(std::shared_ptr<Core> core, RuntimeInfo const &) {
         ([this, core] {
             if (auto data = LockQueueInputPort<Inputs>::pop()) {
                 core->execute(*data);
             }
         }, ...);
-    }
-
-    void initialize(NodeInfo const &) {
-        terminated.store(false);
-    }
-
-    void finalize(NodeInfo const &) {
-        terminated.store(true);
     }
 };
 

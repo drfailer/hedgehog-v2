@@ -41,7 +41,7 @@ void create_component_copies(Iterator begin, Iterator end, std::shared_ptr<Compo
 }
 
 template <typename Component>
-void initialize_component(Component component, NodeInfo const &info) {
+void initialize_component(Component component, InitializationInfo const &info) {
     if constexpr (requires { component->initialize(info); }) {
         component->initialize(info);
     } else if constexpr (requires { component->initialize(); }) {
@@ -50,7 +50,7 @@ void initialize_component(Component component, NodeInfo const &info) {
 }
 
 template <typename Component>
-void finalize_component(Component component, NodeInfo const &info) {
+void finalize_component(Component component, InitializationInfo const &info) {
     if constexpr (requires { component->finalize(info); }) {
         component->finalize(info);
     } else if constexpr (requires { component->finalize(); }) {

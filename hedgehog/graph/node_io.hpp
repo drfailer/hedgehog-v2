@@ -49,15 +49,15 @@ struct WaitResult {
 template <typename T, typename ...Inputs>
 concept NodeInputTrait = std::default_initializable<T> && requires(T *t) {
     // initialization / deinitialization
-    t->initialize(NodeInfo{});
-    t->finalize(NodeInfo{});
+    // t->initialize(InitializationInfo{});
+    // t->finalize(InitializationInfo{});
     // triggering
-    {t->wait(ExecutionInfo{})} -> std::same_as<WaitResult>;
+    {t->wait(RuntimeInfo{})} -> std::same_as<WaitResult>;
     t->signal(SignalOpts{});
     // execution
-    []<typename Executor>(T *t, std::shared_ptr<Executor> exec) { t->execute_consumers(exec, ExecutionInfo{}); };
+    []<typename Executor>(T *t, std::shared_ptr<Executor> exec) { t->execute_consumers(exec, RuntimeInfo{}); };
     // data reception
-    ([](T *t, std::shared_ptr<Inputs> data) { t->push_data(data, ExecutionInfo{}); }, ...);
+    ([](T *t, std::shared_ptr<Inputs> data) { t->push_data(data, RuntimeInfo{}); }, ...);
     // edges: since edges are directional, they are optional for the inputs
     // ([](Edge<T> edge) { t->connect_edge(edge); }, ...);
 };
@@ -72,10 +72,10 @@ concept NodeInputTrait = std::default_initializable<T> && requires(T *t) {
 template <typename T, typename ...Outputs>
 concept NodeOutputTrait = std::default_initializable<T> && requires(T *t) {
     // initialization / deinitialization
-    t->initialize(NodeInfo{});
-    t->finalize(NodeInfo{});
+    // t->initialize(InitializationInfo{});
+    // t->finalize(InitializationInfo{});
     // result transmission
-    ([](T *t, std::shared_ptr<Outputs> data) { t->push_result(data, ExecutionInfo{}); }, ...);
+    ([](T *t, std::shared_ptr<Outputs> data) { t->push_result(data, RuntimeInfo{}); }, ...);
     // edges
     ([](T *t, Edge<Outputs> edge) { t->connect_edge(edge); }, ...);
 };
@@ -99,12 +99,12 @@ struct NodeIO {
     Input input;
     Output output;
 
-    void initialize(NodeInfo const &info) {
+    void initialize(InitializationInfo const &info) {
         initialize_component(&input, info);
         initialize_component(&output, info);
     }
 
-    void finalize(NodeInfo const &info) {
+    void finalize(InitializationInfo const &info) {
         finalize_component(&input, info);
         finalize_component(&output, info);
     }
@@ -120,19 +120,21 @@ struct NodeIO {
     }
 
     template <typename T>
-    void push_data(std::shared_ptr<T> data, ExecutionInfo const &info) {
+    void push_data(std::shared_ptr<T> data, RuntimeInfo const &info) {
         input.push_data(data, info);
     }
 
     template <typename T>
-    void push_result(std::shared_ptr<T> data, ExecutionInfo const &info) {
+    void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
         output.push_result(data, info);
     }
 
-    WaitResult wait(ExecutionInfo const &info) {
+    WaitResult wait(RuntimeInfo const &info) {
         return input.wait(info);
     }
 
+    // TODO: need to determin which API we choose
+    // -> this function should take the execution context which gives access to the Task and the TaskNode api
     void execute_consumers(auto &&...args) {
         input.execute_consumers(std::forward<decltype(args)>(args)...);
     }

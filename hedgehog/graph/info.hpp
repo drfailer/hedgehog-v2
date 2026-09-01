@@ -30,22 +30,28 @@
 
 namespace hh {
 
+/******************************************************************************/
+/*                       information given to the nodes                       */
+/******************************************************************************/
+
 // GraphInfo //////////////////////////////////////////////////////////////////
 
 //
-// Data set after creating the graph.
+// Information about the graph.
 //
 
 struct GraphInfo {
     std::string name;
     int rank;
     int graph_id;
+    int numa_id;
+    int device_id;
 };
 
 // NodeInfo ///////////////////////////////////////////////////////////////////
 
 //
-// Data set after creating the node.
+// Information about the node.
 //
 
 struct NodeInfo {
@@ -56,11 +62,38 @@ struct NodeInfo {
 // ExecutionInfo //////////////////////////////////////////////////////////////
 
 //
-// Data set after executing the node.
+// Information from the executor.
 //
 
 struct ExecutionInfo {
     size_t thread_index;
+};
+
+/******************************************************************************/
+/*                  infomation given to the node components                   */
+/******************************************************************************/
+
+// InitializationInfo //////////////////////////////////////////////////////////
+
+//
+// Data available to node components during the initialization phase.
+//
+
+struct InitializationInfo {
+    NodeInfo node;
+    GraphInfo graph;
+};
+
+// RuntimeInfo /////////////////////////////////////////////////////////////////
+
+//
+// Data available to node components during the runtime phase.
+//
+
+struct RuntimeInfo {
+    NodeInfo node;
+    GraphInfo graph;
+    ExecutionInfo exec;
 };
 
 } // end namespace hh
