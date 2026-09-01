@@ -19,6 +19,7 @@
 
 #include <type_traits>
 #include <gtest/gtest.h>
+#include <cstdio>
 #include "../hedgehog/hedgehog.h"
 
 // struct TaskV2 : hh::Task<TaskV2> {
@@ -33,7 +34,7 @@
 //
 //     void execute(std::shared_ptr<int> data) {
 //         // ...
-//         this->add_result(data); // ???
+//         this->push_result(data); // ???
 //     }
 //
 //     auto copy() {
@@ -61,28 +62,46 @@ struct Task : hh::Task<Task> {
     using inputs = hh::type_list<int, float>;
     using outputs = hh::type_list<int, float>;
 
-    void execute(std::shared_ptr<int>) {}
+    void execute(std::shared_ptr<int> data) {
+        printf("%s::execute<int>(%d)\n", this->name().c_str(), *data);
+        this->push_result(data);
+    }
 
-    void execute(std::shared_ptr<float>) {}
+    void execute(std::shared_ptr<float> data) {
+        printf("%s::execute<float>(%f)\n", this->name().c_str(), *data);
+        this->push_result(data);
+    }
 };
 
 TEST(compile_test, compile_test) {
-    auto node1 = hh::make_task<Task>(2, "task1");
-    auto node2 = hh::make_task<Task>(2, "task2");
+    auto node1 = hh::make_task<Task>(1, "task1");
+    auto node2 = hh::make_task<Task>(1, "task2");
     auto graph = hh::make_graph<hh::type_list<int, float>, hh::type_list<int, float>>();
 
-    // graph->input<float>(node1);
+    printf("running first test\n");
+
     graph->inputs(node1);
-    graph->edge<float>(node1, node2);
     graph->edges(node1, node2);
     graph->outputs(node2);
 
     graph->start();
     graph->push_data(std::make_shared<float>(3.14));
-    auto data = graph->get_result();
+    graph->push_data(std::make_shared<int>(4));
+    auto test_value = [&](auto value) {
+        using value_type = decltype(value);
+        if constexpr (std::is_same_v<value_type, std::shared_ptr<int>>) {
+            printf("value received %d\n", *value);
+            ASSERT_EQ(*value, 4) << "float received";
+        } else if constexpr (std::is_same_v<value_type, std::shared_ptr<float>>) {
+            printf("value received %f\n", *value);
+            ASSERT_EQ(*value, 3.14f) << "float received";
+        }
+    };
+    std::visit(test_value, graph->get_result());
+    std::visit(test_value, graph->get_result());
+    // TODO: how about these?
     // graph->eat_resuts(10);
     // graph->wait()
     // graph->wait_and_stop()
     graph->stop();
-    ASSERT_EQ(1, 2) << "this should to fail";
 }
