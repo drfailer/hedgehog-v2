@@ -24,6 +24,7 @@
 
 #include "node.hpp"
 #include "../tool/helpers.hpp"
+#include "../tool/log.hpp"
 
 namespace hh {
 
@@ -109,7 +110,7 @@ struct TaskNode : Node, NodeIO<Config> {
 
     void finalize(GraphInfo const &info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info};
-        IO::initialize(init_info);
+        IO::finalize(init_info);
     }
 
     std::shared_ptr<Node> copy() override {
