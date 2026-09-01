@@ -20,10 +20,12 @@
 #define HEDGEHOG_GRAPH_GRAPH_H
 
 #include <variant>
+#include <cstdio>
 #include <set>
 
 #include "info.hpp"
 #include "node.hpp"
+#include "../tool/log.hpp"
 
 namespace hh {
 
@@ -42,16 +44,24 @@ struct Graph : Node, NodeIO<Config> {
     Graph(std::shared_ptr<Executor> executor, NodeInfo const &info): Node(info), executor(executor) {}
 
     void start() {
+        if (IO::output.edge_count()) {
+            // TODO: add the source location
+            printf("error: starting a sub-graph is not allowed\n");
+            return;
+        }
         auto graph_info = GraphInfo{Node::info().name, 0};
+        auto init_info = InitializationInfo{Node::info(), graph_info};
+
+        // intialize the sink
+        initialize_component(&sink, init_info);
+        auto &output = IO::output;
+        auto &graph_sink = sink;
+        type_list_map<OutputTypes>([&]<typename T>() {
+            output.connect_edge(make_direct_edge<T>(&graph_sink));
+        });
+
         initialize(graph_info);
         execute(ExecutionInfo{0});
-        if (IO::output.edge_count()) {
-            auto &output = IO::output;
-            auto &graph_sink = sink;
-            type_list_map<OutputTypes>([&]<typename T>() {
-                output.connect_edge(make_direct_edge<T>(&graph_sink));
-            });
-        }
     }
 
     void stop() {
@@ -62,10 +72,10 @@ struct Graph : Node, NodeIO<Config> {
     void initialize(GraphInfo const &graph_info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info};
         IO::initialize(init_info);
-        initialize_component(&sink, init_info);
         for (auto &node : nodes) {
             node->initialize(graph_info);
         }
+        initialize_component(executor, init_info);
     }
 
     void execute(ExecutionInfo const &) override {
@@ -75,12 +85,13 @@ struct Graph : Node, NodeIO<Config> {
     }
 
     void finalize(GraphInfo const &graph_info) override {
+        auto init_info = InitializationInfo{Node::info(), graph_info};
+        finalize_component(executor, init_info);
         for (auto &node : nodes) {
             node->finalize(graph_info);
         }
-        auto init_info = InitializationInfo{Node::info(), graph_info};
-        finalize_component(&sink, init_info);
         IO::finalize(init_info);
+        finalize_component(&sink, init_info);
     }
 
     //
@@ -90,8 +101,6 @@ struct Graph : Node, NodeIO<Config> {
     // - We do not verify if nodes belong to another graph.
     // - We do not verify if the edge already exists, creating multiple edges
     //   for the same sender/receiver/type is allowed.
-    //
-    // TODO: we may use "if constexpr" to display a simpler error message at runtime
     //
 
     template <typename T>
@@ -122,9 +131,7 @@ struct Graph : Node, NodeIO<Config> {
         using receiver_inputs = Sender::InputTypes;
         type_list_map<sender_outputs>([&]<typename T>() {
             if constexpr (type_list_contains<receiver_inputs, T>) {
-                auto edge = create_edge.template operator()<T>(sender, receiver);
-                sender->connect_output_edge(edge);
-                receiver->connect_input_edge(edge);
+                edge(sender, receiver, create_edge.template operator()<T>(sender, receiver));
             }
         });
     }
@@ -140,18 +147,30 @@ struct Graph : Node, NodeIO<Config> {
     //
 
     template <typename T>
+    void input(auto node, Edge<T> edge) {
+        nodes.insert(node);
+        IO::connect_input_edge(edge);
+    }
+
+    template <typename T>
     void input(auto node) {
-        IO::connect_input_edge(make_direct_edge<T>(node));
+        input(node, make_direct_edge<T>(node));
+    }
+
+    template <typename Node>
+    void inputs(std::shared_ptr<Node> node, auto create_edge) {
+        using node_inputs = Node::InputTypes;
+        type_list_map<InputTypes>([&]<typename T>() {
+            if constexpr (type_list_contains<node_inputs, T>) {
+                input(node, create_edge.template operator()<T>(node));
+            }
+        });
     }
 
     template <typename Node>
     void inputs(std::shared_ptr<Node> node) {
-        using node_inputs = Node::InputTypes;
-        auto &input = IO::input; // can't capture this in generic lambda
-        type_list_map<InputTypes>([&]<typename T>() {
-            if constexpr (type_list_contains<node_inputs, T>) {
-                input.connect_edge(make_direct_edge<T>(node));
-            }
+        inputs(node, []<typename T>(auto node) {
+            return make_direct_edge<T>(node);
         });
     }
 
@@ -160,9 +179,15 @@ struct Graph : Node, NodeIO<Config> {
     //
 
     template <typename T>
+    void output(auto node, Edge<T> edge) {
+        nodes.insert(node);
+        node->connect_output_edge(edge);
+    }
+
+    template <typename T>
     void output(auto node) {
         auto &output = IO::output;
-        node->connect_output_edge([&](std::shared_ptr<T> data, ExecutionInfo const &info) {
+        output(node, [&](std::shared_ptr<T> data, ExecutionInfo const &info) {
             output.push_result(data, info);
         });
     }
@@ -170,10 +195,9 @@ struct Graph : Node, NodeIO<Config> {
     template <typename Node>
     void outputs(std::shared_ptr<Node> node, auto create_edge) {
         using node_outputs = Node::OutputTypes;
-        auto &output = IO::output; // can't capture this in generic lambda
         type_list_map<OutputTypes>([&]<typename T>() {
             if constexpr (type_list_contains<node_outputs, T>) {
-                output.connect_edge(make_direct_edge<T>(node));
+                output(node, create_edge.template operator()<T>(node));
             }
         });
     }
@@ -201,9 +225,9 @@ struct Graph : Node, NodeIO<Config> {
     std::shared_ptr<Node> copy() override {
         if constexpr (requires { executor->copy(); }) {
             std::make_shared<Graph<Config>>(executor->copy(), Node::info());
-            // TODO: all the nodes should be copied to and inputs/outputs
         }
-        return std::make_shared<Graph<Config>>(executor, Node::info());
+        // TODO: all the nodes should be copied to and inputs/outputs
+        return nullptr;
     }
 };
 
