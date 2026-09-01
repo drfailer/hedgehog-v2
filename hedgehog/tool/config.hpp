@@ -93,12 +93,8 @@ struct deduce_executor_type<Impl, Default> {
     using type = typename Impl::executor;
 };
 
-// make_task ///////////////////////////////////////////////////////////////////
+// task config /////////////////////////////////////////////////////////////////
 
-//
-// Helper to create the task config based on the task implementation (which is
-// used to determin the config fields).
-//
 template <typename Impl>
 struct make_task_config {
     using InputTypes  = Impl::inputs;
@@ -107,17 +103,6 @@ struct make_task_config {
     using Output = typename deduce_node_output_type<Impl, DefaultNodeOutput<OutputTypes>>::type;
     using Task = Impl;
 };
-
-template <typename Impl>
-auto make_task(std::shared_ptr<Impl> task, size_t number_threads = 1, std::string const &name = "Task") {
-    using Config = make_task_config<Impl>;
-    return std::make_shared<TaskNode<Config>>(task, NodeInfo{name, number_threads});
-}
-
-template <typename Task>
-auto make_task(size_t number_threads = 1, std::string const &name = "Task") {
-    return make_task(std::make_shared<Task>(), number_threads, name);
-}
 
 // make_graph //////////////////////////////////////////////////////////////////
 

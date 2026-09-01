@@ -16,28 +16,44 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_API_TASK
-#define HEDGEHOG_API_TASK
-
-#include "../graph/task_node.hpp"
-#include "../tool/config.hpp"
-#include "execution_context.hpp"
+#ifndef HEDGEHOG_API_EXECUTION_CONTEXT_H
+#define HEDGEHOG_API_EXECUTION_CONTEXT_H
 
 namespace hh {
 
-template <typename Impl>
-struct Task : ExecutionContext<TaskNode<make_task_config<Impl>>> {};
+template <typename NodeType>
+class ExecutionContext {
+  private:
+    friend NodeType;
+    NodeType *node_;
+    RuntimeInfo info_;
 
-template <typename Impl>
-auto make_task(std::shared_ptr<Impl> task, size_t number_threads = 1, std::string const &name = "Task") {
-    using Config = make_task_config<Impl>;
-    return std::make_shared<TaskNode<Config>>(task, NodeInfo{name, number_threads});
-}
+    // constructor used by the node
+    void ctx(NodeType *node, RuntimeInfo const &info) {
+        node_ = node;
+        info_ = info;
+    }
 
-template <typename Task>
-auto make_task(size_t number_threads = 1, std::string const &name = "Task") {
-    return make_task(std::make_shared<Task>(), number_threads, name);
-}
+  public:
+    std::string const &name() { return info_.node.name; }
+    std::string const &graph_name() { return info_.graph.name; }
+    int &graph_id() { return info_.graph.id; }
+    size_t number_thread() { return info_.node.number_threads; }
+    size_t thread_index() { return info_.exec.thread_index; }
+    int numa_id() { return info_.exec.numa_id; }
+    int rank() { return info_.exec.rank; }
+    int device_id() { return info_.exec.device_id; }
+
+    template <typename T>
+    void push_data(std::shared_ptr<T> data) {
+        node_->push_data(data, info_);
+    }
+
+    template <typename T>
+    void push_result(std::shared_ptr<T> data) {
+        node_->push_result(data, info_);
+    }
+};
 
 }
 

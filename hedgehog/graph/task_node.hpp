@@ -66,7 +66,7 @@ struct TaskNode : Node, NodeIO<Config> {
 
             switch (info.direct_phase) {
             case ExecutionInfo::Initialize:
-                thread_task->task(this, runtime_info); // initialize the interface
+                thread_task->ctx(this, runtime_info); // initialize the interface
                 if constexpr (requires { thread_task->intialize(); }) {
                     thread_task->initialize();
                 }
@@ -88,7 +88,7 @@ struct TaskNode : Node, NodeIO<Config> {
             // run loop until the graph terminates.
             //
 
-            thread_task->task(this, runtime_info); // initialize the interface
+            thread_task->ctx(this, runtime_info); // initialize the interface
             if constexpr (requires { thread_task->intialize(); }) {
                 thread_task->initialize();
             }
