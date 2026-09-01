@@ -133,10 +133,9 @@ struct NodeIO {
         return input.wait(info);
     }
 
-    // TODO: need to determin which API we choose
-    // -> this function should take the execution context which gives access to the Task and the TaskNode api
-    void execute_consumers(auto &&...args) {
-        input.execute_consumers(std::forward<decltype(args)>(args)...);
+    template <typename Executor>
+    void execute_consumers(std::shared_ptr<Executor> exec, RuntimeInfo const &info) {
+        input.execute_consumers(exec, info);
     }
 };
 
