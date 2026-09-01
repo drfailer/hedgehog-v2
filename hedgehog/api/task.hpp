@@ -34,10 +34,47 @@ auto make_task(std::shared_ptr<Impl> task, size_t number_threads = 1, std::strin
     return std::make_shared<TaskNode<Config>>(task, NodeInfo{name, number_threads});
 }
 
-template <typename Task>
+template <typename Impl>
 auto make_task(size_t number_threads = 1, std::string const &name = "Task") {
-    return make_task(std::make_shared<Task>(), number_threads, name);
+    return make_task(std::make_shared<Impl>(), number_threads, name);
 }
+
+//
+// Aternate syntax (execute takes an execution context and data as argument):
+//
+// Supportting both inheriting from Task, and not (taking the context as
+// argument in execute) adds a lot of useless complexity.
+//
+
+//
+// template <typename Impl>
+// struct ContextTaskWrapper : Task<Impl> {
+//     std::shared_ptr<Impl> impl;
+//
+//     ContextTaskWrapper(std::shared_ptr<Impl> impl) : impl(impl) {}
+//
+//     template <typename T>
+//     void execute(std::shared_ptr<T> data) {
+//         auto &ctx = *static_cast<Task<Impl> *>(this);
+//         impl->execute(ctx, data);
+//     }
+//
+//     std::shared_ptr<Impl> copy() {
+//         return impl->copy();
+//     }
+// };
+//
+// template <typename Impl>
+// struct TaskWrapper {
+//     /* allow to use impl functions throug `operator.` instead of `operator->` */
+// };
+//
+// /* we can then store this instead of std::shared_ptr<Task> in TaskNode */
+// template <typename Impl>
+// using ThreadTask = std::conditional_t<std::is_convertible_v<Impl, Task<Impl>>
+//                                       TaskWrapper<Impl>,
+//                                       ContextTaskWrapper<Impl>>;
+//
 
 }
 

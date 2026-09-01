@@ -40,7 +40,7 @@ struct TaskNode : Node, NodeIO<Config> {
     // TODO: using Profiler = Config::Profiler;
 
     GraphInfo graph_info;
-    std::vector<std::shared_ptr<Task>> tasks; // QUESTION: do we want pointers for the task?
+    std::vector<std::shared_ptr<Task>> tasks;
 
     TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), tasks(info.number_threads) {
         create_component_copies(tasks.begin(), tasks.end(), task);
