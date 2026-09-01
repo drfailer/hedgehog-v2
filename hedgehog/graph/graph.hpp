@@ -95,6 +95,14 @@ struct Graph : Node, NodeIO<Config> {
     }
 
     //
+    // TODO: it is possible to optimize the data trasfer between graph and
+    //       sub-graphs by linking the connected nodes directly to the input
+    //       edges:
+    //       extr_node->graph_input->input_node => extr_node->input_node
+    //       output_node->graph_output->extr_node => output_node->extr_node
+    //
+
+    //
     // Edge creation for a type: create an edge between 2 nodes for a specific
     // type.
     //
@@ -186,9 +194,8 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename T>
     void output(auto node) {
-        auto &output = IO::output;
-        output(node, [&](std::shared_ptr<T> data, ExecutionInfo const &info) {
-            output.push_result(data, info);
+        output(node, [&](std::shared_ptr<T> data, RuntimeInfo const &info) {
+            IO::push_result(data, info);
         });
     }
 
@@ -204,8 +211,10 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename Node>
     void outputs(std::shared_ptr<Node> node) {
-        outputs(node, []<typename T>(auto node) {
-            return make_direct_edge<T>(node);
+        outputs(node, [&]<typename T>(auto node) -> Edge<T> {
+            return [&](std::shared_ptr<T> data, RuntimeInfo const &info) {
+                IO::push_result(data, info);
+            };
         });
     }
 
