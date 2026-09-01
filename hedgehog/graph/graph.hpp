@@ -16,8 +16,8 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_GRAPH_GRAPH_NODE
-#define HEDGEHOG_GRAPH_GRAPH_NODE
+#ifndef HEDGEHOG_GRAPH_GRAPH_H
+#define HEDGEHOG_GRAPH_GRAPH_H
 
 #include <variant>
 #include <set>
@@ -28,7 +28,7 @@
 namespace hh {
 
 template <typename Config>
-struct GraphNode : Node, NodeIO<Config> {
+struct Graph : Node, NodeIO<Config> {
     using InputTypes  = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
     using Sink        = Config::Sink;
@@ -39,7 +39,7 @@ struct GraphNode : Node, NodeIO<Config> {
     std::set<std::shared_ptr<Node>> nodes;
     std::shared_ptr<Executor> executor;
 
-    GraphNode(std::shared_ptr<Executor> executor, NodeInfo const &info): Node(info), executor(executor) {}
+    Graph(std::shared_ptr<Executor> executor, NodeInfo const &info): Node(info), executor(executor) {}
 
     void start() {
         auto graph_info = GraphInfo{Node::info().name, 0};
@@ -200,10 +200,10 @@ struct GraphNode : Node, NodeIO<Config> {
 
     std::shared_ptr<Node> copy() override {
         if constexpr (requires { executor->copy(); }) {
-            std::make_shared<GraphNode<Config>>(executor->copy(), Node::info());
+            std::make_shared<Graph<Config>>(executor->copy(), Node::info());
             // TODO: all the nodes should be copied to and inputs/outputs
         }
-        return std::make_shared<GraphNode<Config>>(executor, Node::info());
+        return std::make_shared<Graph<Config>>(executor, Node::info());
     }
 };
 

@@ -20,11 +20,11 @@
 #define HEDGEHOG_H
 
 
-#include "graph/graph_node.hpp"
-#include "graph/task_node.hpp"
+#include "graph/graph.hpp"
 #include "graph/node.hpp"
 #include "graph/info.hpp"
 #include "graph/edge.hpp"
+#include "graph/task_node.hpp"
 
 #include "api/task.hpp"
 
