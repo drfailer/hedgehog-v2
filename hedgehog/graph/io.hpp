@@ -38,7 +38,7 @@ namespace hh {
 //
 
 struct SignalOpts {
-    ExecutionInfo info;  // execution context
+    RuntimeInfo info;    // execution context
     size_t count;        // number of threads to signal
     size_t thread_index; // signal a particular thread
 };
