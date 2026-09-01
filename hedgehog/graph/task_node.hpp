@@ -50,33 +50,66 @@ struct TaskNode : Node, NodeIO<Config> {
         graph_info = info;
         auto init_info = InitializationInfo{Node::info(), graph_info};
         IO::initialize(init_info);
-        for (auto &task : tasks) {
-            task->set_node(this);
-            initialize_component(task, init_info);
-        }
     }
 
     void execute(ExecutionInfo const &info) override {
         auto runtime_info = RuntimeInfo{Node::info(), graph_info, info};
         auto thread_task = tasks[info.thread_index];
 
-        // TODO: tasks should be initialized here (a task/executor should only be called during the execution phase)
+        if (info.direct) {
 
-        thread_task->set_runtime_info(runtime_info);
-        for (;;) {
-            auto wait_result = IO::wait(runtime_info);
-            if (wait_result.terminate) break;
-            if (wait_result.skip) continue;
-            IO::execute_consumers(thread_task, runtime_info);
+            //
+            // Direct execution used by serial or scheduled graph executor. In
+            // this case, a thread will enter the function, operate the
+            // executor and leave directly.
+            //
+
+            switch (info.direct_phase) {
+            case ExecutionInfo::Initialize:
+                thread_task->task(this, runtime_info); // initialize the interface
+                if constexpr (requires { thread_task->intialize(); }) {
+                    thread_task->initialize();
+                }
+                break;
+            case ExecutionInfo::Execute:
+                IO::execute_consumers(thread_task, runtime_info);
+                break;
+            case ExecutionInfo::Finalize:
+                if constexpr (requires { thread_task->finalize(); }) {
+                    thread_task->finalize();
+                }
+                break;
+            }
+
+        } else {
+
+            //
+            // Standard execution of the task. The threads are trapped in the
+            // run loop until the graph terminates.
+            //
+
+            thread_task->task(this, runtime_info); // initialize the interface
+            if constexpr (requires { thread_task->intialize(); }) {
+                thread_task->initialize();
+            }
+
+            for (;;) {
+                auto wait_result = IO::wait(runtime_info);
+                if (wait_result.terminate) break;
+                if (wait_result.skip) continue;
+                IO::execute_consumers(thread_task, runtime_info);
+            }
+
+            if constexpr (requires { thread_task->finalize(); }) {
+                thread_task->finalize();
+            }
+
         }
     }
 
     void finalize(GraphInfo const &info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info};
         IO::initialize(init_info);
-        for (auto &task : tasks) {
-            finalize_component(task, init_info);
-        }
     }
 
     std::shared_ptr<Node> copy() override {

@@ -33,19 +33,30 @@ class Task {
     using NodeType = TaskNode<Config>;
 
   private:
+    friend NodeType;
     NodeType *node_;
     RuntimeInfo info_;
 
-    friend NodeType;
-    void set_node(NodeType *node) { node_ = node; }
-    void set_runtime_info(RuntimeInfo const &info) { info_ = info; }
+    // constructor used by the node
+    void task(NodeType *node, RuntimeInfo const &info) {
+        node_ = node;
+        info_ = info;
+    }
 
   public:
-    // TODO: refactor this:
-    // std::string const &name() { return node_->info().name; }
-    // size_t number_thread() { return node_->info().number_thread; }
-    // size_t thread_index() { return info_.thread_index; }
-    // size_t rank() { return info_.thread_indwex; }
+    std::string const &name() { return info_.node.name; }
+    std::string const &graph_name() { return info_.graph.name; }
+    int &graph_id() { return info_.graph.id; }
+    size_t number_thread() { return info_.node.number_threads; }
+    size_t thread_index() { return info_.exec.thread_index; }
+    int numa_id() { return info_.exec.numa_id; }
+    int rank() { return info_.exec.rank; }
+    int device_id() { return info_.exec.device_id; }
+
+    template <typename T>
+    void push_data(std::shared_ptr<T> data) {
+        node_->push_data(data, info_);
+    }
 
     template <typename T>
     void push_result(std::shared_ptr<T> data) {
