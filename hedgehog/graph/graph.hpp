@@ -86,10 +86,10 @@ struct Graph : Node, NodeIO<Config> {
 
     void finalize(GraphInfo const &graph_info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info};
-        finalize_component(executor, init_info);
         for (auto &node : nodes) {
             node->finalize(graph_info);
         }
+        finalize_component(executor, init_info);
         IO::finalize(init_info);
         finalize_component(&sink, init_info);
     }
