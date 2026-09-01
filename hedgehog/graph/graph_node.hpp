@@ -42,7 +42,7 @@ struct GraphNode : Node, NodeIO<Config> {
     GraphNode(std::shared_ptr<Executor> executor, NodeInfo const &info): Node(info), executor(executor) {}
 
     void start() {
-        auto graph_info = GraphInfo{Node::info().name, 0, 0, 0, 0};
+        auto graph_info = GraphInfo{Node::info().name, 0};
         initialize(graph_info);
         execute(ExecutionInfo{0});
         if (IO::output.edge_count()) {
@@ -55,7 +55,7 @@ struct GraphNode : Node, NodeIO<Config> {
     }
 
     void stop() {
-        auto graph_info = GraphInfo{Node::info().name, 0, 0, 0, 0};
+        auto graph_info = GraphInfo{Node::info().name, 0};
         finalize(graph_info);
     }
 

@@ -24,20 +24,30 @@
 
 namespace hh {
 
+// TODO: do we want extra info in the initialize/execute/finalize?
+
 struct ThreadExecutor {
     std::vector<std::thread> threads = {};
 
     void initialize() {}
 
     void execute(std::shared_ptr<Node> node) {
+        auto exec_info = ExecutionInfo{
+            .thread_index = 0,
+            .rank = 0,
+            .numa_id = 0,
+            .device_id = 0,
+            .direct = false,
+            .direct_phase = ExecutionInfo::Execute,
+        };
         if (node->info().number_threads == 0) {
-            // the node is run serialy
-            node->execute(ExecutionInfo{0});
+            node->execute(exec_info);
         } else {
             for (size_t i = 0; i < node->info().number_threads; ++i) {
+                exec_info.thread_index = i;
                 threads.push_back(
-                    std::thread([node, i]() {
-                        node->execute(ExecutionInfo{i});
+                    std::thread([node, exec_info]() {
+                        node->execute(exec_info);
                     })
                 );
             }

@@ -42,10 +42,7 @@ namespace hh {
 
 struct GraphInfo {
     std::string name;
-    int rank;
-    int graph_id;
-    int numa_id;
-    int device_id;
+    int id;
 };
 
 // NodeInfo ///////////////////////////////////////////////////////////////////
@@ -67,6 +64,11 @@ struct NodeInfo {
 
 struct ExecutionInfo {
     size_t thread_index;
+    int rank;
+    int numa_id;
+    int device_id;
+    bool direct;
+    enum { Initialize, Execute, Finalize } direct_phase;
 };
 
 /******************************************************************************/
