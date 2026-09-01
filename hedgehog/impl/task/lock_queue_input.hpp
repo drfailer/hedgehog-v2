@@ -24,6 +24,7 @@
 #include <queue>
 #include <condition_variable>
 #include "../../graph/node.hpp"
+#include "../../tool/log.hpp"
 
 namespace hh {
 
@@ -65,6 +66,7 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
 
     void finalize(InitializationInfo const &) {
         terminated.store(true);
+        cond.notify_all();
     }
 
     void signal(SignalOpts const &opts) {
@@ -76,7 +78,7 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
         }
     }
 
-    WaitResult wait(RuntimeInfo const &) {
+    WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
         std::unique_lock<std::mutex> lock(mutex);
         cond.wait(lock, [this]{
             return has_data() || terminated.load(std::memory_order_acquire);
@@ -89,17 +91,18 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     }
 
     template <typename T>
-    void push_data(std::shared_ptr<T> data, RuntimeInfo const &) {
+    void push_data(std::shared_ptr<T> data, RuntimeInfo const &info) {
         LockQueueInputPort<T>::push(data);
+        signal(SignalOpts{info, 1, 0});
     }
 
     template <typename Executor>
-    void execute_consumers(std::shared_ptr<Executor> exec, RuntimeInfo const &) {
-        ([this, exec] {
+    void execute_consumers(std::shared_ptr<Executor> exec, [[maybe_unused]] RuntimeInfo const &info) {
+        ([&] {
             if (auto data = LockQueueInputPort<Inputs>::pop()) {
                 exec->execute(*data);
             }
-        }, ...);
+        }(), ...);
     }
 };
 
