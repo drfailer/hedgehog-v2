@@ -36,9 +36,13 @@ template <typename T>
 using Edge = std::function<void(std::shared_ptr<T>, RuntimeInfo const &)>;
 
 template <typename T>
-Edge<T> make_direct_edge(auto receiver) {
-    return [receiver](std::shared_ptr<T> data, RuntimeInfo const &info) {
+Edge<T> make_direct_edge(auto executor, auto receiver) {
+    return [receiver, executor](std::shared_ptr<T> data, RuntimeInfo const &info) {
         receiver->push_data(data, info);
+
+        if constexpr (requires { executor->on_push_data(receiver, info); }) {
+            executor->on_push_data(receiver, info);
+        }
     };
 }
 

@@ -24,12 +24,8 @@
 
 namespace hh {
 
-// TODO: do we want extra info in the initialize/execute/finalize?
-
 struct ThreadExecutor {
     std::vector<std::thread> threads = {};
-
-    void initialize() {}
 
     void execute(std::shared_ptr<Node> node) {
         auto exec_info = ExecutionInfo{

@@ -56,7 +56,7 @@ struct Graph : Node, NodeIO<Config> {
         initialize_component(&sink, init_info);
         auto &graph_sink = sink;
         type_list_map<OutputTypes>([&]<typename T>() {
-            IO::output().connect_edge(make_direct_edge<T>(&graph_sink));
+            IO::output().connect_edge(make_direct_edge<T>(executor, &graph_sink));
         });
         // TODO: the executor may need to use the sink as well
 
@@ -121,7 +121,7 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename T>
     void edge(auto sender, auto receiver) {
-        edge(sender, receiver, make_direct_edge<T>(receiver));
+        edge(sender, receiver, make_direct_edge<T>(executor, receiver));
     }
 
     //
@@ -145,8 +145,8 @@ struct Graph : Node, NodeIO<Config> {
     }
 
     void edges(auto sender, auto receiver) {
-        edges(sender, receiver, []<typename T>(auto sender, auto receiver) {
-            return make_direct_edge<T>(receiver);
+        edges(sender, receiver, [&]<typename T>(auto sender, auto receiver) {
+            return make_direct_edge<T>(executor, receiver);
         });
     }
 
@@ -162,7 +162,7 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename T>
     void input(auto node) {
-        input(node, make_direct_edge<T>(node));
+        input(node, make_direct_edge<T>(executor, node));
     }
 
     template <typename Node>
@@ -177,8 +177,8 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename Node>
     void inputs(std::shared_ptr<Node> node) {
-        inputs(node, []<typename T>(auto node) {
-            return make_direct_edge<T>(node);
+        inputs(node, [&]<typename T>(auto node) {
+            return make_direct_edge<T>(executor, node);
         });
     }
 
