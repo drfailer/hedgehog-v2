@@ -21,12 +21,66 @@
 
 #include <string>
 #include <memory>
+#include <cassert>
 
 #include "node.hpp"
+#include "../api/node_execution_context.hpp"
 #include "../tool/helpers.hpp"
 #include "../tool/log.hpp"
 
 namespace hh {
+
+// NodeThreadContext ///////////////////////////////////////////////////////////
+
+//
+// Group the task and the execution context required to execute task function.
+//
+
+template <typename NodeType>
+struct NodeThreadContext {
+    using TaskType = NodeType::Task;
+    std::shared_ptr<TaskType> task_{nullptr};
+    NodeExecutionContext<NodeType> context_{};
+
+    void task(std::shared_ptr<TaskType> task) {
+        this->task_ = std::move(task);
+    }
+
+    std::shared_ptr<TaskType> task() {
+        return task_;
+    }
+
+    NodeType &node() { return context_.node(); }
+    RuntimeInfo const &info() { return context_.info(); }
+
+    void initialize(NodeType *node, RuntimeInfo const &info) {
+        context_.construct(node, info);
+        if constexpr (requires { task_->initialize(context_); }) {
+            task_->initialize(context_);
+        } else if constexpr (requires { task_->initialize(); }) {
+            task_->initialize();
+        }
+    }
+
+    void finalize() {
+        if constexpr (requires { task_->initialize(context_); }) {
+            task_->initialize(context_);
+        } else if constexpr (requires { task_->initialize(); }) {
+            task_->initialize();
+        }
+    }
+
+    void execute(auto data) {
+        if constexpr (requires { task_->execute(context_, data); }) {
+            auto &ctx = this->context_; // make sure we use reference
+            task_->execute(ctx, data);
+        } else {
+            task_->execute(data);
+        }
+    }
+};
+
+// TaskNode ////////////////////////////////////////////////////////////////////
 
 //
 // Configurable task node implementation.
@@ -40,22 +94,24 @@ struct TaskNode : Node, NodeIO<Config> {
     using IO          = NodeIO<Config>;
     // TODO: using Profiler = Config::Profiler;
 
-    GraphInfo graph_info;
-    std::vector<std::shared_ptr<Task>> tasks;
+    GraphInfo graph_info_ = {};
+    std::vector<NodeThreadContext<TaskNode<Config>>> ctxs_ = {};
 
-    TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), tasks(info.number_threads) {
-        create_component_copies(tasks.begin(), tasks.end(), task);
+    TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), ctxs_(info.number_threads) {
+        for (size_t i = 1; i < info.number_threads; ++i) {
+            ctxs_[i].task(copy_component(task));
+        }
+        ctxs_[0].task(std::move(task));
     }
 
     void initialize(GraphInfo const &info) override {
-        graph_info = info;
-        auto init_info = InitializationInfo{Node::info(), graph_info};
+        graph_info_ = info;
+        auto init_info = InitializationInfo{Node::info(), graph_info_};
         IO::initialize(init_info);
     }
 
     void execute(ExecutionInfo const &info) override {
-        auto runtime_info = RuntimeInfo{Node::info(), graph_info, info};
-        auto thread_task = tasks[info.thread_index];
+        auto &ctx = ctxs_[info.thread_index];
 
         if (info.direct) {
 
@@ -67,18 +123,13 @@ struct TaskNode : Node, NodeIO<Config> {
 
             switch (info.direct_phase) {
             case ExecutionInfo::Initialize:
-                thread_task->ctx(this, runtime_info); // initialize the interface
-                if constexpr (requires { thread_task->intialize(); }) {
-                    thread_task->initialize();
-                }
+                ctx.initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
                 break;
             case ExecutionInfo::Execute:
-                IO::execute(thread_task, runtime_info);
+                IO::execute(ctx, ctx.info());
                 break;
             case ExecutionInfo::Finalize:
-                if constexpr (requires { thread_task->finalize(); }) {
-                    thread_task->finalize();
-                }
+                ctx.finalize();
                 break;
             }
 
@@ -89,32 +140,24 @@ struct TaskNode : Node, NodeIO<Config> {
             // run loop until the graph terminates.
             //
 
-            thread_task->ctx(this, runtime_info); // initialize the interface
-            if constexpr (requires { thread_task->intialize(); }) {
-                thread_task->initialize();
-            }
-
+            ctx.initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
             for (;;) {
-                auto wait_result = IO::wait(runtime_info);
+                auto wait_result = IO::wait(ctx.info());
                 if (wait_result.terminate) break;
                 if (wait_result.skip) continue;
-                IO::execute(thread_task, runtime_info);
+                IO::execute(ctx, ctx.info());
             }
-
-            if constexpr (requires { thread_task->finalize(); }) {
-                thread_task->finalize();
-            }
-
+            ctx.finalize();
         }
     }
 
     void finalize(GraphInfo const &info) override {
-        auto init_info = InitializationInfo{Node::info(), graph_info};
+        auto init_info = InitializationInfo{Node::info(), graph_info_};
         IO::finalize(init_info);
     }
 
     std::shared_ptr<Node> copy() override {
-        return std::make_shared<TaskNode<Config>>(copy_component(tasks[0]), Node::info());
+        return std::make_shared<TaskNode<Config>>(copy_component(ctxs_[0].task()), Node::info());
     }
 };
 

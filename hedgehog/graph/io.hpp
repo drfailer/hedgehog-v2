@@ -201,8 +201,8 @@ class NodeIO {
         return input_->wait(info);
     }
 
-    template <typename Executor>
-    void execute(std::shared_ptr<Executor> exec, RuntimeInfo const &info) {
+    template <typename Executable>
+    void execute(Executable exec, RuntimeInfo const &info) {
         input_->execute(exec, info);
     }
 };

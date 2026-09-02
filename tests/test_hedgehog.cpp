@@ -58,18 +58,18 @@ static_assert(!hh::type_list_contains<test_list, double>);
 static_assert(hh::NodeInputTrait<hh::LockQueueNodeInput<int, float>, int, float>);
 static_assert(hh::NodeOutputTrait<hh::DirectNodeOutput<int, float>, int, float>);
 
-struct Task : hh::Task<Task> {
+struct Task {
     using inputs = hh::type_list<int, float>;
     using outputs = hh::type_list<int, float>;
 
-    void execute(std::shared_ptr<int> data) {
-        printf("%s::execute<int>(%d)\n", this->name().c_str(), *data);
-        this->push_result(data);
+    void execute(auto ctx, std::shared_ptr<int> data) {
+        printf("%s::execute<int>(%d)\n", ctx.name().c_str(), *data);
+        ctx.push_result(data);
     }
 
-    void execute(std::shared_ptr<float> data) {
-        printf("%s::execute<float>(%f)\n", this->name().c_str(), *data);
-        this->push_result(data);
+    void execute(auto ctx, std::shared_ptr<float> data) {
+        printf("%s::execute<float>(%f)\n", ctx.name().c_str(), *data);
+        ctx.push_result(data);
     }
 };
 

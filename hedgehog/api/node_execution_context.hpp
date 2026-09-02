@@ -16,26 +16,26 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_API_EXECUTION_CONTEXT_H
-#define HEDGEHOG_API_EXECUTION_CONTEXT_H
+#ifndef HEDGEHOG_API_NODE_EXECUTION_CONTEXT_H
+#define HEDGEHOG_API_NODE_EXECUTION_CONTEXT_H
 
 namespace hh {
 
 template <typename NodeType>
-class ExecutionContext {
-  private:
-    friend NodeType;
+class NodeExecutionContext {
     NodeType *node_;
     RuntimeInfo info_;
 
+  public:
     // constructor used by the node
-    void ctx(NodeType *node, RuntimeInfo const &info) {
+    void construct(NodeType *node, RuntimeInfo const &info) {
         node_ = node;
         info_ = info;
     }
 
-  public:
     NodeType &node() { return *node_; }
+    RuntimeInfo const &info() { return info_; }
+
     std::string const &name() { return info_.node.name; }
     std::string const &graph_name() { return info_.graph.name; }
     int &graph_id() { return info_.graph.id; }

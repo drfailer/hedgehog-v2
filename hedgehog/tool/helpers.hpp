@@ -34,15 +34,6 @@ std::shared_ptr<Component> copy_component(std::shared_ptr<Component> component) 
     return std::make_shared<Component>();
 }
 
-template <typename Iterator, typename Component>
-void create_component_copies(Iterator begin, Iterator end, std::shared_ptr<Component> component) {
-    *begin = component;
-    begin++;
-    for (; begin != end; begin++) {
-        *begin = copy_component(component);
-    }
-}
-
 template <typename Component>
 void initialize_component(Component component, InitializationInfo const &info) {
     if constexpr (requires { component->initialize(info); }) {
