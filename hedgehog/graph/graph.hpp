@@ -58,6 +58,7 @@ struct Graph : Node, NodeIO<Config> {
         type_list_map<OutputTypes>([&]<typename T>() {
             IO::output().connect_edge(make_direct_edge<T>(&graph_sink));
         });
+        // TODO: the executor may need to use the sink as well
 
         initialize(graph_info);
         execute(ExecutionInfo{0});
@@ -223,6 +224,9 @@ struct Graph : Node, NodeIO<Config> {
     }
 
     auto get_result() {
+        if constexpr (requires { executor->on_get_result(); }) {
+            executor->on_get_result(); // important for the serial executor
+        }
         return sink.get_result();
     }
 };
