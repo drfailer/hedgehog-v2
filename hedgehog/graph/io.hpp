@@ -74,7 +74,7 @@ concept NodeInputTrait = std::default_initializable<T> && requires {
     // Input is also responsible to pop and execute data.
     //
     []<typename Executor>(T t, std::shared_ptr<Executor> exec) {
-        t.execute_consumers(exec, RuntimeInfo{});
+        t.execute(exec, RuntimeInfo{});
     };
 
     //
@@ -177,8 +177,8 @@ struct NodeIO {
     }
 
     template <typename Executor>
-    void execute_consumers(std::shared_ptr<Executor> exec, RuntimeInfo const &info) {
-        input.execute_consumers(exec, info);
+    void execute(std::shared_ptr<Executor> exec, RuntimeInfo const &info) {
+        input.execute(exec, info);
     }
 };
 

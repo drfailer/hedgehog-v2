@@ -97,7 +97,7 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     }
 
     template <typename Executor>
-    void execute_consumers(std::shared_ptr<Executor> exec, [[maybe_unused]] RuntimeInfo const &info) {
+    void execute(std::shared_ptr<Executor> exec, [[maybe_unused]] RuntimeInfo const &info) {
         ([&] {
             if (auto data = LockQueueInputPort<Inputs>::pop()) {
                 exec->execute(*data);

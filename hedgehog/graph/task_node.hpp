@@ -73,7 +73,7 @@ struct TaskNode : Node, NodeIO<Config> {
                 }
                 break;
             case ExecutionInfo::Execute:
-                IO::execute_consumers(thread_task, runtime_info);
+                IO::execute(thread_task, runtime_info);
                 break;
             case ExecutionInfo::Finalize:
                 if constexpr (requires { thread_task->finalize(); }) {
@@ -98,7 +98,7 @@ struct TaskNode : Node, NodeIO<Config> {
                 auto wait_result = IO::wait(runtime_info);
                 if (wait_result.terminate) break;
                 if (wait_result.skip) continue;
-                IO::execute_consumers(thread_task, runtime_info);
+                IO::execute(thread_task, runtime_info);
             }
 
             if constexpr (requires { thread_task->finalize(); }) {
