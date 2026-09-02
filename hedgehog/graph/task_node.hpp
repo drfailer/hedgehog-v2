@@ -64,9 +64,9 @@ struct NodeThreadContext {
 
     void finalize() {
         if constexpr (requires { task_->initialize(context_); }) {
-            task_->initialize(context_);
+            task_->finalize(context_);
         } else if constexpr (requires { task_->initialize(); }) {
-            task_->initialize();
+            task_->finalize();
         }
     }
 
