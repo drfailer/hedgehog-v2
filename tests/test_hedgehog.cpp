@@ -76,7 +76,8 @@ struct Task {
 TEST(compile_test, compile_test) {
     auto node1 = hh::make_task<Task>(1, "task1");
     auto node2 = hh::make_task<Task>(1, "task2");
-    auto graph = hh::make_graph<hh::type_list<int, float>, hh::type_list<int, float>>();
+    // auto graph = hh::make_graph<hh::type_list<int, float>, hh::type_list<int, float>>();
+    auto graph = hh::make_serial_graph<hh::type_list<int, float>, hh::type_list<int, float>>();
 
     printf("running first test\n");
 

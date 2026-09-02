@@ -27,6 +27,8 @@
 #include "../impl/graph/graph_input.hpp"
 #include "../impl/graph/graph_output.hpp"
 #include "../impl/graph/graph_sink.hpp"
+#include "../impl/graph/serial_sink.hpp"
+#include "../impl/graph/serial_executor.hpp"
 
 namespace hh {
 
@@ -125,6 +127,22 @@ auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph
 template <typename Inputs, typename Outputs>
 auto make_graph(std::string const &name = "Graph") {
     return make_graph<DefaultGraphExecutor, Inputs, Outputs>(std::make_shared<DefaultGraphExecutor>(), name);
+}
+
+template <typename Inputs, typename Outputs>
+auto make_serial_graph(std::string const &name = "Graph") {
+    struct Config {
+        using InputTypes = Inputs;
+        using OutputTypes = Outputs;
+        using Sink = type_list_dispatch<Outputs, SerialSink>;
+        using Input =  DefaultGraphInput<InputTypes>;
+        using Output = DefaultGraphOutput<OutputTypes>;
+        using Executor = SerialExecutor;
+    };
+    auto graph = std::make_shared<Graph<Config>>(std::make_shared<SerialExecutor>(), NodeInfo{name, 0});
+    graph->construct_input();
+    graph->construct_output();
+    return graph;
 }
 
 } // end namespace hh
