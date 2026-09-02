@@ -31,7 +31,10 @@ struct Task : ExecutionContext<TaskNode<make_task_config<Impl>>> {};
 template <typename Impl>
 auto make_task(std::shared_ptr<Impl> task, size_t number_threads = 1, std::string const &name = "Task") {
     using Config = make_task_config<Impl>;
-    return std::make_shared<TaskNode<Config>>(task, NodeInfo{name, number_threads});
+    auto node = std::make_shared<TaskNode<Config>>(task, NodeInfo{name, number_threads});
+    node->construct_input();
+    node->construct_output();
+    return node;
 }
 
 template <typename Impl>

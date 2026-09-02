@@ -35,6 +35,7 @@ class ExecutionContext {
     }
 
   public:
+    NodeType &node() { return *node_; }
     std::string const &name() { return info_.node.name; }
     std::string const &graph_name() { return info_.graph.name; }
     int &graph_id() { return info_.graph.id; }

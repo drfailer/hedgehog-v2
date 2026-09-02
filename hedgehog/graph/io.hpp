@@ -136,49 +136,74 @@ concept NodeOutputTrait = std::default_initializable<T> && requires {
 
 // WARN: we avoid concepts here on purpose to reduce compile time (may change later).
 template <typename Config>
-struct NodeIO {
+class NodeIO {
+  public:
     using Input = Config::Input;
     using Output = Config::Output;
-    Input input;
-    Output output;
+
+  private:
+    //
+    // To allow users to use non default constructible types while keeping
+    // NodeIO default constructible, we use uninitialized types which allow
+    // deffered construction.
+    //
+    Uninitialized<Input> input_;
+    Uninitialized<Output> output_;
+
+  public:
+    Input &input() { return *input_; }
+    Input const &input() const { return *input_; }
+
+    Output &output() { return *output_; }
+    Output const &output() const { return *output_; }
+
+    template <typename ...Args>
+    void construct_input(Args &&...args) {
+        input_.construct(std::forward<Args>(args)...);
+    }
+
+    template <typename ...Args>
+    void construct_output(Args &&...args) {
+        output_.construct(std::forward<Args>(args)...);
+    }
 
     void initialize(InitializationInfo const &info) {
-        initialize_component(&input, info);
-        initialize_component(&output, info);
+        initialize_component(input_.get(), info);
+        initialize_component(output_.get(), info);
     }
 
     void finalize(InitializationInfo const &info) {
-        finalize_component(&input, info);
-        finalize_component(&output, info);
+        finalize_component(input_.get(), info);
+        finalize_component(output_.get(), info);
     }
 
     template <typename T>
     void connect_input_edge(Edge<T> edge) {
-        input.connect_edge(std::move(edge));
+        input_->connect_edge(std::move(edge));
     }
 
     template <typename T>
     void connect_output_edge(Edge<T> edge) {
-        output.connect_edge(std::move(edge));
+        output_->connect_edge(std::move(edge));
     }
 
     template <typename T>
     void push_data(std::shared_ptr<T> data, RuntimeInfo const &info) {
-        input.push_data(data, info);
+        input_->push_data(data, info);
     }
 
     template <typename T>
     void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
-        output.push_result(data, info);
+        output_->push_result(data, info);
     }
 
     WaitResult wait(RuntimeInfo const &info) {
-        return input.wait(info);
+        return input_->wait(info);
     }
 
     template <typename Executor>
     void execute(std::shared_ptr<Executor> exec, RuntimeInfo const &info) {
-        input.execute(exec, info);
+        input_->execute(exec, info);
     }
 };
 

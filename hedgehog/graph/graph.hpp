@@ -44,7 +44,7 @@ struct Graph : Node, NodeIO<Config> {
     Graph(std::shared_ptr<Executor> executor, NodeInfo const &info): Node(info), executor(executor) {}
 
     void start() {
-        if (IO::output.edge_count()) {
+        if (IO::output().edge_count()) {
             // TODO: add the source location
             printf("error: starting a sub-graph is not allowed\n");
             return;
@@ -54,10 +54,9 @@ struct Graph : Node, NodeIO<Config> {
 
         // intialize the sink
         initialize_component(&sink, init_info);
-        auto &output = IO::output;
         auto &graph_sink = sink;
         type_list_map<OutputTypes>([&]<typename T>() {
-            output.connect_edge(make_direct_edge<T>(&graph_sink));
+            IO::output().connect_edge(make_direct_edge<T>(&graph_sink));
         });
 
         initialize(graph_info);

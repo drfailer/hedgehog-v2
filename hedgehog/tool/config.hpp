@@ -116,7 +116,10 @@ auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph
         using Output = typename deduce_node_output_type<Impl, DefaultGraphOutput<OutputTypes>>::type;
         using Executor = Impl;
     };
-    return std::make_shared<Graph<Config>>(executor, NodeInfo{name, 0});
+    auto graph = std::make_shared<Graph<Config>>(executor, NodeInfo{name, 0});
+    graph->construct_input();
+    graph->construct_output();
+    return graph;
 }
 
 template <typename Inputs, typename Outputs>
