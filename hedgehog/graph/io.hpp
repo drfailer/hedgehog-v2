@@ -137,8 +137,8 @@ concept NodeOutputTrait = std::default_initializable<T> && requires {
 // WARN: we avoid concepts here on purpose to reduce compile time (may change later).
 template <typename Config>
 struct NodeIO {
-    using Input = typename Config::Input;
-    using Output = typename Config::Output;
+    using Input = Config::Input;
+    using Output = Config::Output;
     Input input;
     Output output;
 
