@@ -225,18 +225,6 @@ struct Graph : Node, NodeIO<Config> {
     auto get_result() {
         return sink.get_result();
     }
-
-    //
-    // Copy the graph for pipelines.
-    //
-
-    std::shared_ptr<Node> copy() override {
-        if constexpr (requires { executor->copy(); }) {
-            std::make_shared<Graph<Config>>(executor->copy(), Node::info());
-        }
-        // TODO: all the nodes should be copied to and inputs/outputs
-        return nullptr;
-    }
 };
 
 } // end namespace hh

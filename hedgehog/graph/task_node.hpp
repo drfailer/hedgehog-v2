@@ -144,10 +144,6 @@ struct TaskNode : Node, NodeIO<Config> {
         auto init_info = InitializationInfo{Node::info(), graph_info_};
         IO::finalize(init_info);
     }
-
-    std::shared_ptr<Node> copy() override {
-        return std::make_shared<TaskNode<Config>>(copy_component(states_[0].task), Node::info());
-    }
 };
 
 } // end namespace hh
