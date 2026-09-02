@@ -91,7 +91,7 @@ TEST(compile_test, compile_test) {
         using value_type = decltype(value);
         if constexpr (std::is_same_v<value_type, std::shared_ptr<int>>) {
             printf("value received %d\n", *value);
-            ASSERT_EQ(*value, 4) << "float received";
+            ASSERT_EQ(*value, 4) << "int received";
         } else if constexpr (std::is_same_v<value_type, std::shared_ptr<float>>) {
             printf("value received %f\n", *value);
             ASSERT_EQ(*value, 3.14f) << "float received";

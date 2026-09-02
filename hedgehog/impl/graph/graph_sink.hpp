@@ -26,6 +26,7 @@ namespace hh {
 #include <mutex>
 #include <semaphore>
 #include <cassert>
+#include <cstdio>
 
 template <typename ...Outputs>
 struct GraphSink {
@@ -35,9 +36,10 @@ struct GraphSink {
     std::counting_semaphore<1024> sem{0}; // TODO: max size?
 
     template <typename T>
-    void push_data(std::shared_ptr<T> data, RuntimeInfo const &) {
-        std::lock_guard<std::mutex> lock(mutex);
+    void push_data(std::shared_ptr<T> data, [[maybe_unused]] RuntimeInfo const &info) {
+        mutex.lock();
         results.push(data);
+        mutex.unlock();
         sem.release();
     }
 
@@ -45,7 +47,7 @@ struct GraphSink {
         sem.acquire();
         mutex.lock();
         assert(results.size() > 0);
-        auto data = results.back();
+        auto data = results.front();
         results.pop();
         mutex.unlock();
         return data;
