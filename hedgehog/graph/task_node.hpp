@@ -30,56 +30,6 @@
 
 namespace hh {
 
-// NodeThreadContext ///////////////////////////////////////////////////////////
-
-//
-// Group the task and the execution context required to execute task function.
-//
-
-template <typename NodeType>
-struct NodeThreadContext {
-    using TaskType = NodeType::Task;
-    std::shared_ptr<TaskType> task_{nullptr};
-    NodeExecutionContext<NodeType> context_{};
-
-    void task(std::shared_ptr<TaskType> task) {
-        this->task_ = std::move(task);
-    }
-
-    std::shared_ptr<TaskType> task() {
-        return task_;
-    }
-
-    NodeType &node() { return context_.node(); }
-    RuntimeInfo const &info() { return context_.info(); }
-
-    void initialize(NodeType *node, RuntimeInfo const &info) {
-        context_.construct(node, info);
-        if constexpr (requires { task_->initialize(context_); }) {
-            task_->initialize(context_);
-        } else if constexpr (requires { task_->initialize(); }) {
-            task_->initialize();
-        }
-    }
-
-    void finalize() {
-        if constexpr (requires { task_->initialize(context_); }) {
-            task_->finalize(context_);
-        } else if constexpr (requires { task_->initialize(); }) {
-            task_->finalize();
-        }
-    }
-
-    void execute(auto data) {
-        if constexpr (requires { task_->execute(context_, data); }) {
-            auto &ctx = this->context_; // make sure we use reference
-            task_->execute(ctx, data);
-        } else {
-            task_->execute(data);
-        }
-    }
-};
-
 // TaskNode ////////////////////////////////////////////////////////////////////
 
 //
@@ -88,21 +38,60 @@ struct NodeThreadContext {
 
 template <typename Config>
 struct TaskNode : Node, NodeIO<Config> {
+    // config //////////////////////////////////////////////////////////////////
+
     using InputTypes  = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
     using Task        = Config::Task;
     using IO          = NodeIO<Config>;
     // TODO: using Profiler = Config::Profiler;
 
-    GraphInfo graph_info_ = {};
-    std::vector<NodeThreadContext<TaskNode<Config>>> ctxs_ = {};
+    // thread state ////////////////////////////////////////////////////////////
 
-    TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), ctxs_(info.number_threads) {
-        for (size_t i = 1; i < info.number_threads; ++i) {
-            ctxs_[i].task(copy_component(task));
+    struct ThreadState {
+        std::shared_ptr<Task> task;
+        NodeExecutionContext<TaskNode<Config>> context;
+
+        void initialize(TaskNode<Config> *node, RuntimeInfo const &info) {
+            context.construct(node, info);
+            if constexpr (requires { task->initialize(context); }) {
+                task->initialize(context);
+            } else if constexpr (requires { task->initialize(); }) {
+                task->initialize();
+            }
         }
-        ctxs_[0].task(std::move(task));
+
+        void finalize() {
+            if constexpr (requires { task->initialize(context); }) {
+                task->finalize(context);
+            } else if constexpr (requires { task->initialize(); }) {
+                task->finalize();
+            }
+        }
+
+        void execute(auto data) {
+            if constexpr (requires { task->execute(context, data); }) {
+                auto &state = this->context; // make sure we use reference
+                task->execute(state, data);
+            } else {
+                task->execute(data);
+            }
+        }
+    };
+
+    // attributes & constructors ///////////////////////////////////////////////
+
+    GraphInfo                graph_info_ = {};
+    std::vector<ThreadState> states_     = {};
+
+    TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), states_(info.number_threads) {
+        for (size_t i = 1; i < info.number_threads; ++i) {
+            states_[i].task = copy_component(task);
+        }
+        states_[0].task = std::move(task);
     }
+
+    // node api ////////////////////////////////////////////////////////////////
 
     void initialize(GraphInfo const &info) override {
         graph_info_ = info;
@@ -111,7 +100,7 @@ struct TaskNode : Node, NodeIO<Config> {
     }
 
     void execute(ExecutionInfo const &info) override {
-        auto &ctx = ctxs_[info.thread_index];
+        auto &state = states_[info.thread_index];
 
         if (info.direct) {
 
@@ -123,13 +112,13 @@ struct TaskNode : Node, NodeIO<Config> {
 
             switch (info.direct_phase) {
             case ExecutionInfo::Initialize:
-                ctx.initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
+                state.initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
                 break;
             case ExecutionInfo::Execute:
-                IO::execute(ctx, ctx.info());
+                IO::execute(state, state.context.info());
                 break;
             case ExecutionInfo::Finalize:
-                ctx.finalize();
+                state.finalize();
                 break;
             }
 
@@ -140,14 +129,14 @@ struct TaskNode : Node, NodeIO<Config> {
             // run loop until the graph terminates.
             //
 
-            ctx.initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
+            state.initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
             for (;;) {
-                auto wait_result = IO::wait(ctx.info());
+                auto wait_result = IO::wait(state.context.info());
                 if (wait_result.terminate) break;
                 if (wait_result.skip) continue;
-                IO::execute(ctx, ctx.info());
+                IO::execute(state, state.context.info());
             }
-            ctx.finalize();
+            state.finalize();
         }
     }
 
@@ -157,7 +146,7 @@ struct TaskNode : Node, NodeIO<Config> {
     }
 
     std::shared_ptr<Node> copy() override {
-        return std::make_shared<TaskNode<Config>>(copy_component(ctxs_[0].task()), Node::info());
+        return std::make_shared<TaskNode<Config>>(copy_component(states_[0].task), Node::info());
     }
 };
 
