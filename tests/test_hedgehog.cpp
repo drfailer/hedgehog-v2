@@ -55,6 +55,11 @@ static_assert(hh::type_list_contains<test_list, int>);
 static_assert(hh::type_list_contains<test_list, float>);
 static_assert(!hh::type_list_contains<test_list, double>);
 
+// apply
+static_assert(std::is_same_v<hh::type_list_apply<test_list, std::shared_ptr>,
+                             hh::type_list<std::shared_ptr<int>, std::shared_ptr<float>>>);
+static_assert(std::is_same_v<hh::type_list_apply_ptr<test_list>, hh::type_list<int *, float *>>);
+
 static_assert(hh::NodeInputTrait<hh::LockQueueNodeInput<int, float>, int, float>);
 static_assert(hh::NodeOutputTrait<hh::DirectNodeOutput<int, float>, int, float>);
 

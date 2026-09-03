@@ -23,10 +23,20 @@
 
 namespace hh {
 
+//
+// The type list is a structure that just contains a list of types.
+//
+// using inputs = hh::type_list<int, float, double>;
+//
+
 template <typename ...Ts>
 struct type_list {};
 
 // size ////////////////////////////////////////////////////////////////////////
+
+//
+// Get the number of types in the list.
+//
 
 template <typename L>
 struct type_list_size_impl;
@@ -41,6 +51,13 @@ constexpr size_t type_list_size = type_list_size_impl<L>::value;
 
 // append //////////////////////////////////////////////////////////////////////
 
+//
+// Appends a new type to the list:
+//
+// using list = hh::type_list<int, float>
+// hh::type_list_append<list, NewType>   ->   hh::type_list<int, float, NewType>
+//
+
 template <typename L, typename ...Types>
 struct type_list_append_impl;
 
@@ -53,6 +70,13 @@ template <typename L, typename ...Types>
 using type_list_append = typename type_list_append_impl<L, Types...>::type;
 
 // prepend /////////////////////////////////////////////////////////////////////
+
+//
+// Prepends a new type to the list:
+//
+// using list = hh::type_list<int, float>
+// hh::type_list_prepend<list, NewType>   ->   hh::type_list<NewType, int, float>
+//
 
 template <typename L, typename ...Types>
 struct type_list_prepend_impl;
@@ -67,6 +91,19 @@ using type_list_prepend = typename type_list_prepend_impl<L, Types...>::type;
 
 // dispatch ////////////////////////////////////////////////////////////////////
 
+//
+// Dispatch types inside a list into the give template. It is also possible to
+// specify more types to prepend to the template:
+//
+// using list = hh::type_list<int, float>
+//
+// template <typename Inputs...>                  struct MyTemplate1 {};
+// template <typename Config, typename Inputs...> struct MyTemplate2 {};
+//
+// hh::type_list_dispatch<list, MyTemplate1>             ->   MyTemplate1<int, float>
+// hh::type_list_dispatch<list, MyTemplate2, MyConfig>   ->   MyTemplate2<MyConfig, int, float>
+//
+
 template <typename L, template <typename ...> class T, typename ...Types>
 struct type_list_dispatch_impl;
 
@@ -78,7 +115,54 @@ struct type_list_dispatch_impl<type_list<Ts...>, T, Types...> {
 template <typename L, template <typename ...> class T, typename ...Types>
 using type_list_dispatch = typename type_list_dispatch_impl<L, T, Types...>::type;
 
+// apply ///////////////////////////////////////////////////////////////////////
+
+//
+// Apply a given template to the types in the list:
+//
+// using list = hh::type_list<int, float>
+// hh::type_list_apply<list, std::shared_ptr>   ->   hh::type_list<std::shared_ptr<int>, std::shared_ptr<double>>
+//
+
+template <typename L, template <typename> class T>
+struct type_list_apply_impl;
+
+template <template <typename> class T, typename ...Ts>
+struct type_list_apply_impl<type_list<Ts...>, T> {
+    using type = type_list<T<Ts>...>;
+};
+
+template <typename L, template <typename> class T>
+using type_list_apply = typename type_list_apply_impl<L, T>::type;
+
+//
+// Add * to every type in the list:
+//
+// using list = hh::type_list<int, float>
+// hh::type_list_apply_ptr<list>   ->   hh::type_list<int *, float *>
+//
+
+template <typename L>
+struct type_list_apply_ptr_impl;
+
+template <typename ...Ts>
+struct type_list_apply_ptr_impl<type_list<Ts...>> {
+    using type = type_list<Ts *...>;
+};
+
+template <typename L>
+using type_list_apply_ptr = typename type_list_apply_ptr_impl<L>::type;
+
 // contains ////////////////////////////////////////////////////////////////////
+
+//
+// Check if a type is iside a list:
+//
+// using list = hh::type_list<int, float>
+// hh::type_list_contains<list, int>    -> true
+// hh::type_list_contains<list, float>  -> true
+// hh::type_list_contains<list, double> -> false
+//
 
 template <typename T, typename ...Ts>
 struct types_contain_impl {
@@ -105,6 +189,20 @@ template <typename L, typename T>
 constexpr bool type_list_contains = type_list_contains_impl<L, T>::value;
 
 // map /////////////////////////////////////////////////////////////////////////
+
+//
+// Map a template function to all the types in the list:
+//
+// using list = hh::type_list<int, float>
+// hh::type_list_map<list>([&]<typename T>() {
+//     do_something_with_t<T>();
+// });
+//
+// is equivalent to:
+//
+// do_something_with_t<int>();
+// do_something_with_t<float>();
+//
 
 template <typename T, typename ...Ts>
 constexpr void type_list_map(type_list<T, Ts...>, auto function) {
