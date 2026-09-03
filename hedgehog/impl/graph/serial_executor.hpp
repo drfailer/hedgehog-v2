@@ -48,13 +48,13 @@ struct SerialExecutor {
         node->execute(make_execution_info(ExecutionInfo::Initialize));
     }
 
-    void on_push_data(std::shared_ptr<Node> node, RuntimeInfo const &) {
+    void on_transfer(std::shared_ptr<Node> node, RuntimeInfo const &) {
         // we don't execute the node directly here, otherwize cyclic graphs
         // with a lot of data would stack overflow.
         ready_nodes.push(node);
     }
 
-    void on_get_result() {
+    void on_result() {
         // the graph execution is triggered in get_result (we make sure the
         // graph executes before trying to pop the sink).
         while (!ready_nodes.empty()) {

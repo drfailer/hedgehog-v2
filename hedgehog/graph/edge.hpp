@@ -40,8 +40,8 @@ Edge<T> make_direct_edge(auto executor, auto receiver) {
     return [receiver, executor](std::shared_ptr<T> data, RuntimeInfo const &info) {
         receiver->push_data(data, info);
 
-        if constexpr (requires { executor->on_push_data(receiver, info); }) {
-            executor->on_push_data(receiver, info);
+        if constexpr (requires { executor->on_transfer(receiver, info); }) {
+            executor->on_transfer(receiver, info);
         }
     };
 }

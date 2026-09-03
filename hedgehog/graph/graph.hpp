@@ -224,8 +224,8 @@ struct Graph : Node, NodeIO<Config> {
     }
 
     auto get_result() {
-        if constexpr (requires { executor->on_get_result(); }) {
-            executor->on_get_result(); // important for the serial executor
+        if constexpr (requires { executor->on_result(); }) {
+            executor->on_result(); // important for the serial executor
         }
         return sink.get_result();
     }
