@@ -91,6 +91,8 @@ struct TaskNode : Node, NodeIO<Config> {
         states_[0].task = std::move(task);
     }
 
+    std::vector<ThreadState> const &states() const { return states_; } // may be usefull for some executors
+
     // node api ////////////////////////////////////////////////////////////////
 
     void initialize(GraphInfo const &info) override {

@@ -72,6 +72,11 @@ struct Graph : Node, NodeIO<Config> {
           edge_builder_(std::move(edge_builder))
         {}
 
+    Sink const &sink() const { return sink_; }
+    std::set<std::shared_ptr<Node>> const &nodes() const { return nodes_; }
+    std::shared_ptr<Executor> executor() const {  return executor_; }
+    std::shared_ptr<EdgeBuilder> edge_builder() const { return edge_builder_; }
+
     // user functions //////////////////////////////////////////////////////////
 
     void start() {
