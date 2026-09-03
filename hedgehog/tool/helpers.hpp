@@ -52,41 +52,6 @@ void finalize_component(Component component, InitializationInfo const &info) {
     }
 }
 
-// Uninitialized ///////////////////////////////////////////////////////////////
-
-//
-// Some C++ madness to defer RAII initialization (usefull in node components).
-//
-// It is equivalent to std::optional, but accessing the memory doesn't check if
-// it is initialized. This is only meant to be used internally where we need
-// deffered initialization, thus we expect that this class will be used
-// properly (e.g. construct has to be called at some point, otherwise it might
-// crash, you will debug =D).
-//
-
-template <typename T>
-struct Uninitialized {
-    alignas(T) std::byte mem[sizeof(T)];
-
-    Uninitialized() = default;
-
-    template <typename ...Args>
-    void construct(Args &&...args) { new (mem) T(std::forward<Args>(args)...); }
-
-    T *get() { return std::launder(reinterpret_cast<T *>(&mem)); }
-    T const *get() const { return std::launder(reinterpret_cast<T *>(&mem)); }
-
-    T &operator*() { return *get(); }
-    T const &operator*() const { return *get(); }
-
-    T *operator->() { return get(); }
-    T const *operator->() const { return get(); }
-
-    // unconditional destruction: this class is here because we want to avoid
-    // the check in std::optional
-    ~Uninitialized() { get()->~T(); }
-};
-
 } // end namespace hh
 
 #endif

@@ -20,6 +20,7 @@
 #define HEDGEHOG_GRAPH_IO_H
 
 #include <type_traits>
+#include <optional>
 #include "../tool/helpers.hpp"
 
 namespace hh {
@@ -145,12 +146,10 @@ class NodeIO {
 
   private:
     //
-    // To allow users to use non default constructible types while keeping
-    // NodeIO default constructible, we use uninitialized types which allow
-    // deffered construction.
+    // We use std::optional to defer the object construction (so this class remains default constructible).
     //
-    Uninitialized<Input> input_;
-    Uninitialized<Output> output_;
+    std::optional<Input> input_;
+    std::optional<Output> output_;
 
   public:
     Input &input() { return *input_; }
@@ -161,22 +160,22 @@ class NodeIO {
 
     template <typename ...Args>
     void construct_input(Args &&...args) {
-        input_.construct(std::forward<Args>(args)...);
+        input_.emplace(std::forward<Args>(args)...);
     }
 
     template <typename ...Args>
     void construct_output(Args &&...args) {
-        output_.construct(std::forward<Args>(args)...);
+        output_.emplace(std::forward<Args>(args)...);
     }
 
     void initialize(InitializationInfo const &info) {
-        initialize_component(input_.get(), info);
-        initialize_component(output_.get(), info);
+        initialize_component(&(*input_), info);
+        initialize_component(&(*output_), info);
     }
 
     void finalize(InitializationInfo const &info) {
-        finalize_component(input_.get(), info);
-        finalize_component(output_.get(), info);
+        finalize_component(&(*input_), info);
+        finalize_component(&(*output_), info);
     }
 
     template <typename T>
