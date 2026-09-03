@@ -37,15 +37,40 @@ struct Graph : Node, NodeIO<Config> {
     using OutputTypes = Config::OutputTypes;
     using Sink        = Config::Sink;
     using Executor    = Config::Executor;
+    using EdgeBuilder = Config::EdgeBuilder;
     using IO          = NodeIO<Config>;
+
+    //
+    // Argument struct to pass to the edge builder. We use a struct because it
+    // makes things easier to change. Note that this struct stores standard
+    // pointers and not shared pointers. This is important because the edges are
+    // heavily used by multiple threads during the execution, and we don't want
+    // them to go through the shared_ptr api which could introduce extra atomic
+    // operations (the lifetime of all the arguments is at least the same as
+    // the graph, so the data will always be available to the edge).
+    //
+    template <typename Sender, typename Receiver>
+    struct MakeEdgeArgs {
+        Sender *sender;
+        Receiver *receiver;
+        Sink *sink;
+        Executor *executor;
+    };
 
     // attributes & constructors ///////////////////////////////////////////////
 
     Sink sink_;
     std::set<std::shared_ptr<Node>> nodes_;
     std::shared_ptr<Executor> executor_;
+    std::shared_ptr<EdgeBuilder> edge_builder_;
 
-    Graph(std::shared_ptr<Executor> executor_, NodeInfo const &info): Node(info), executor_(executor_) {}
+    Graph(std::shared_ptr<Executor>     executor,
+          std::shared_ptr<EdgeBuilder>  edge_builder,
+          NodeInfo const               &info)
+        : Node(info),
+          executor_(std::move(executor)),
+          edge_builder_(std::move(edge_builder))
+        {}
 
     // user functions //////////////////////////////////////////////////////////
 
@@ -62,7 +87,7 @@ struct Graph : Node, NodeIO<Config> {
         initialize_component(&sink_, init_info);
         auto &graph_sink = sink_;
         type_list_map<OutputTypes>([&]<typename T>() {
-            IO::output().connect_edge(make_direct_edge<T>(executor_, &graph_sink));
+            IO::output().connect_edge(make_edge<T>(&graph_sink));
         });
         // TODO: the executor_ may need to use the sink_ as well
 
@@ -106,7 +131,7 @@ struct Graph : Node, NodeIO<Config> {
 
     void execute(ExecutionInfo const &) override {
         for (auto &node : nodes_) {
-            executor_->execute(node);
+            executor_->execute(node.get());
         }
     }
 
@@ -130,6 +155,21 @@ struct Graph : Node, NodeIO<Config> {
     //       output_node->graph_output->extr_node => output_node->extr_node
     //
 
+    template <typename T>
+    Edge<T> make_edge(auto sender, auto receiver) {
+        return edge_builder_->template make_edge<T>(MakeEdgeArgs{
+            .sender = sender,
+            .receiver = receiver,
+            .sink = &sink_,
+            .executor = executor_.get(),
+        });
+    }
+
+    template <typename T>
+    Edge<T> make_edge(auto receiver) {
+        return make_edge<T>((void *)nullptr, receiver);
+    }
+
     //
     // Edge creation for a type: create an edge between 2 nodes_ for a specific
     // type.
@@ -149,7 +189,7 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename T>
     void draw_edge(auto sender, auto receiver) {
-        draw_edge(sender, receiver, make_direct_edge<T>(executor_, receiver));
+        draw_edge(sender, receiver, make_edge<T>(sender.get(), receiver.get()));
     }
 
     //
@@ -174,7 +214,7 @@ struct Graph : Node, NodeIO<Config> {
 
     void draw_edges(auto sender, auto receiver) {
         draw_edges(sender, receiver, [&]<typename T>(auto sender, auto receiver) {
-            return make_direct_edge<T>(executor_, receiver);
+            return make_edge<T>(receiver.get());
         });
     }
 
@@ -192,7 +232,7 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename T>
     void connect_input(auto node) {
-        connect_input(node, make_direct_edge<T>(executor_, node));
+        connect_input(node, make_edge<T>(node.get()));
     }
 
     template <typename Node>
@@ -208,7 +248,7 @@ struct Graph : Node, NodeIO<Config> {
     template <typename Node>
     void connect_inputs(std::shared_ptr<Node> node) {
         connect_inputs(node, [&]<typename T>(auto node) {
-            return make_direct_edge<T>(executor_, node);
+            return make_edge<T>(node.get());
         });
     }
 

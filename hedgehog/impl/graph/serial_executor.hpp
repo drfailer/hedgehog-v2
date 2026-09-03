@@ -28,8 +28,8 @@
 namespace hh {
 
 struct SerialExecutor {
-    std::vector<std::shared_ptr<Node>> nodes;
-    std::queue<std::shared_ptr<Node>> ready_nodes;
+    std::vector<Node *> nodes;
+    std::queue<Node *> ready_nodes;
 
     ExecutionInfo make_execution_info(auto phase) {
         return ExecutionInfo{
@@ -42,13 +42,13 @@ struct SerialExecutor {
         };
     }
 
-    void execute(std::shared_ptr<Node> node) {
+    void execute(Node *node) {
         // we register the nodes and initialize the state of the thread 0
         nodes.push_back(node);
         node->execute(make_execution_info(ExecutionInfo::Initialize));
     }
 
-    void on_transfer(std::shared_ptr<Node> node, RuntimeInfo const &) {
+    void on_transfer(Node *node, RuntimeInfo const &) {
         // we don't execute the node directly here, otherwize cyclic graphs
         // with a lot of data would stack overflow.
         ready_nodes.push(node);
@@ -69,6 +69,7 @@ struct SerialExecutor {
         for (auto node : nodes) {
             node->execute(make_execution_info(ExecutionInfo::Finalize));
         }
+        nodes.clear();
     }
 };
 

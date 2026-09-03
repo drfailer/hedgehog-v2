@@ -21,6 +21,7 @@
 
 #include <type_traits>
 #include <memory>
+#include <cassert>
 #include "../tool/type_list.hpp"
 #include "info.hpp"
 
@@ -35,16 +36,21 @@ namespace hh {
 template <typename T>
 using Edge = std::function<void(std::shared_ptr<T>, RuntimeInfo const &)>;
 
-template <typename T>
-Edge<T> make_direct_edge(auto executor, auto receiver) {
-    return [receiver, executor](std::shared_ptr<T> data, RuntimeInfo const &info) {
-        receiver->push_data(data, info);
+struct DirectEdgeBuilder {
+    template <typename T>
+    Edge<T> make_edge(auto args) {
+        return [args](std::shared_ptr<T> data, RuntimeInfo const &info) {
+            assert(args.receiver != nullptr);
+            assert(args.executor != nullptr);
 
-        if constexpr (requires { executor->on_transfer(receiver, info); }) {
-            executor->on_transfer(receiver, info);
-        }
-    };
-}
+            args.receiver->push_data(data, info);
+
+            if constexpr (requires { args.executor->on_transfer(args.receiver, info); }) {
+                args.executor->on_transfer(args.receiver, info);
+            }
+        };
+    }
+};
 
 } // end namespace hh
 

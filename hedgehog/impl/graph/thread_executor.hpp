@@ -27,7 +27,7 @@ namespace hh {
 struct ThreadExecutor {
     std::vector<std::thread> threads = {};
 
-    void execute(std::shared_ptr<Node> node) {
+    void execute(Node *node) {
         auto exec_info = ExecutionInfo{
             .thread_index = 0,
             .rank = 0,
@@ -54,6 +54,7 @@ struct ThreadExecutor {
         for (auto &thread : threads) {
             thread.join();
         }
+        threads.clear();
     }
 };
 

@@ -169,6 +169,8 @@ class NodeIO {
     }
 
     void initialize(InitializationInfo const &info) {
+        assert(input_.has_value() && "the input was not constructed");
+        assert(output_.has_value() && "the output was not constructed");
         initialize_component(&(*input_), info);
         initialize_component(&(*output_), info);
     }

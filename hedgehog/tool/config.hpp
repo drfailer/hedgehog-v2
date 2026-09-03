@@ -20,6 +20,7 @@
 #define HEDGEHOG_TOOL_CONFIG
 
 #include <type_traits>
+#include "../graph/edge.hpp"
 #include "../tool/type_list.hpp"
 #include "../impl/task/lock_queue_input.hpp"
 #include "../impl/task/direct_output.hpp"
@@ -117,8 +118,9 @@ auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph
         using Input =  typename deduce_node_input_type<Impl, DefaultGraphInput<InputTypes>>::type;
         using Output = typename deduce_node_output_type<Impl, DefaultGraphOutput<OutputTypes>>::type;
         using Executor = Impl;
+        using EdgeBuilder = DirectEdgeBuilder;
     };
-    auto graph = std::make_shared<Graph<Config>>(executor, NodeInfo{name, 0});
+    auto graph = std::make_shared<Graph<Config>>(executor, std::make_shared<DirectEdgeBuilder>(), NodeInfo{name, 0});
     graph->construct_input();
     graph->construct_output();
     return graph;
@@ -138,6 +140,7 @@ auto make_serial_graph(std::string const &name = "Graph") {
         using Input =  DefaultGraphInput<InputTypes>;
         using Output = DefaultGraphOutput<OutputTypes>;
         using Executor = SerialExecutor;
+        using EdgeBuilder = DirectEdgeBuilder;
     };
     auto graph = std::make_shared<Graph<Config>>(std::make_shared<SerialExecutor>(), NodeInfo{name, 0});
     graph->construct_input();
