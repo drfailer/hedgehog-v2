@@ -89,6 +89,7 @@ concept NodeInputTrait = std::default_initializable<T> && requires {
     //
     ([](T t, Edge<Inputs> edge) {
         t.connect_edge(edge);
+        // auto &edges = t.template edges<Inputs>();
      }, ...);
 };
 
@@ -125,6 +126,7 @@ concept NodeOutputTrait = std::default_initializable<T> && requires {
     //
     ([](T t, Edge<Outputs> edge) {
         t.connect_edge(edge);
+        auto &edges = t.template edges<Outputs>();
      }, ...);
 };
 

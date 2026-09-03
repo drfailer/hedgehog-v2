@@ -27,16 +27,16 @@ namespace hh {
 
 template <typename T>
 struct DirectOutputPort {
-    std::vector<Edge<T>> edges = {};
+    std::vector<Edge<T>> edges_ = {};
 
     void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
-        for (auto &edge : edges) {
+        for (auto &edge : edges_) {
             edge(data, info);
         }
     }
 
     void connect_edge(Edge<T> edge) {
-        edges.push_back(std::move(edge));
+        edges_.push_back(std::move(edge));
     }
 };
 
@@ -45,6 +45,11 @@ struct DirectNodeOutput : NodePorts<DirectOutputPort, Outputs...> {
     template <typename T>
     void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
         DirectOutputPort<T>::push_result(data, info);
+    }
+
+    template <typename T>
+    std::vector<Edge<T>> &edges() {
+        return DirectOutputPort<T>::edges_;
     }
 };
 

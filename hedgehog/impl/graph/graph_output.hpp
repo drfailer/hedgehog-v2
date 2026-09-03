@@ -31,16 +31,16 @@ namespace hh {
 
 template <typename T>
 struct GraphOutputPort {
-    std::vector<Edge<T>> edges = {};
+    std::vector<Edge<T>> edges_ = {};
 
     void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
-        for (auto &edge : edges) {
+        for (auto &edge : edges_) {
             edge(data, info);
         }
     }
 
     void connect_edge(Edge<T> edge) {
-        edges.push_back(std::move(edge));
+        edges_.push_back(std::move(edge));
     }
 };
 
@@ -52,7 +52,12 @@ struct GraphOutput : NodePorts<GraphOutputPort, Outputs...> {
     }
 
     size_t edge_count() {
-        return (GraphOutputPort<Outputs>::edges.size() + ...);
+        return (GraphOutputPort<Outputs>::edges_.size() + ...);
+    }
+
+    template <typename T>
+    std::vector<Edge<T>> &edges() {
+        return GraphOutputPort<T>::edges_;
     }
 };
 
