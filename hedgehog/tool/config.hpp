@@ -98,10 +98,22 @@ struct deduce_executor_type<Impl, Default> {
 
 // task config /////////////////////////////////////////////////////////////////
 
+template <typename T>
+concept HasIO = requires {
+    typename T::io;
+};
+
+template <typename Impl>
+struct deduce_task_io : Impl {};
+
+template <HasIO Impl>
+struct deduce_task_io<Impl> : Impl::io {};
+
 template <typename Impl>
 struct make_task_config {
-    using InputTypes  = Impl::inputs;
-    using OutputTypes = Impl::outputs;
+    using io = deduce_task_io<Impl>;
+    using InputTypes  = io::inputs;
+    using OutputTypes = io::outputs;
     using Input  = typename deduce_node_input_type<Impl, DefaultNodeInput<InputTypes>>::type;
     using Output = typename deduce_node_output_type<Impl, DefaultNodeOutput<OutputTypes>>::type;
     using Task = Impl;
@@ -109,12 +121,13 @@ struct make_task_config {
 
 // make_graph //////////////////////////////////////////////////////////////////
 
-template <typename Impl, typename Inputs, typename Outputs>
+template <typename Impl, size_t Sep, typename ...Types>
 auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph") {
+    using io = io_types<Sep, Types...>;
     struct Config {
-        using InputTypes = Inputs;
-        using OutputTypes = Outputs;
-        using Sink = type_list_dispatch<Outputs, GraphSink>; // TODO: how to specify this?
+        using InputTypes = io::inputs;
+        using OutputTypes = io::outputs;
+        using Sink = type_list_dispatch<OutputTypes, GraphSink>; // TODO: how to specify this?
         using Input =  typename deduce_node_input_type<Impl, DefaultGraphInput<InputTypes>>::type;
         using Output = typename deduce_node_output_type<Impl, DefaultGraphOutput<OutputTypes>>::type;
         using Executor = Impl;
@@ -127,17 +140,18 @@ auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph
     return graph;
 }
 
-template <typename Inputs, typename Outputs>
+template <size_t Sep, typename ...Types>
 auto make_graph(std::string const &name = "Graph") {
-    return make_graph<DefaultGraphExecutor, Inputs, Outputs>(std::make_shared<DefaultGraphExecutor>(), name);
+    return make_graph<DefaultGraphExecutor, Sep, Types...>(std::make_shared<DefaultGraphExecutor>(), name);
 }
 
-template <typename Inputs, typename Outputs>
+template <size_t Sep, typename ...Types>
 auto make_serial_graph(std::string const &name = "Graph") {
+    using io = io_types<Sep, Types...>;
     struct Config {
-        using InputTypes = Inputs;
-        using OutputTypes = Outputs;
-        using Sink = type_list_dispatch<Outputs, SerialSink>;
+        using InputTypes = io::outputs;
+        using OutputTypes = io::outputs;
+        using Sink = type_list_dispatch<OutputTypes, SerialSink>;
         using Input =  DefaultGraphInput<InputTypes>;
         using Output = DefaultGraphOutput<OutputTypes>;
         using Executor = SerialExecutor;

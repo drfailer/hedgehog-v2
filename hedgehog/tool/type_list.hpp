@@ -19,6 +19,9 @@
 #ifndef HEDGEHOG_TOOL_TYPE_LIST_H
 #define HEDGEHOG_TOOL_TYPE_LIST_H
 
+#include <cstddef>
+#include <utility>
+
 // TODO: type lists operations should be rewritten using std::meta::info from C++26 to improve compile time.
 
 namespace hh {
@@ -203,6 +206,86 @@ template <typename L>
 constexpr void type_list_map(auto function) {
     type_list_map_impl(L{}, function);
 }
+
+// type at /////////////////////////////////////////////////////////////////////
+
+#if __has_builtin(__type_pack_element)
+
+//
+// We use a compiler builtin (supported by Clang, GCC 9+, MSVC) to extract
+// types. It is supposed to be faster than using recursion and it doesn't
+// involve including massive headers like tuple (tuple_element).
+//
+// Clang also has __make_integer_seq that we could use.
+//
+
+template <size_t I, typename... Ts>
+using type_at = __type_pack_element<I, Ts...>;
+
+#else
+
+// fallback to standard recusion approach
+
+template <size_t I, typename T>
+struct type_at_impl;
+
+template <size_t I, typename T, typename... Ts>
+struct type_at_impl<I, type_list<T, Ts...>> {
+    using type = typename type_at_impl<I - 1, type_list<Ts...>>::type;
+};
+
+template <typename T, typename... Ts>
+struct type_at_impl<0, type_list<T, Ts...>> {
+    using type = T;
+};
+
+// Interface
+template <size_t I, typename... Ts>
+using type_at = typename type_at_impl<I, type_list<Ts...>>::type;
+
+#endif
+
+// io types ////////////////////////////////////////////////////////////////////
+
+//
+// Split list of types based on a separator (Hedgehog-v1 api):
+//
+// using io = hh::io_types<1, int ,float>
+// io::inputs    ->   hh::type_list<int>
+// io::outputs   ->   hh::type_list<float>
+//
+
+namespace io_types_helpers {
+    template <size_t Offset, typename Seq>
+    struct shift_seq;
+
+    template <size_t Offset, size_t... Is>
+    struct shift_seq<Offset, std::index_sequence<Is...>> {
+        using type = std::index_sequence<(Offset + Is)...>;
+    };
+
+    template <typename Seq, typename... Ts>
+    struct build_list;
+
+    template <size_t... Is, typename... Ts>
+    struct build_list<std::index_sequence<Is...>, Ts...> {
+        using type = type_list<type_at<Is, Ts...>...>;
+    };
+}
+
+template <size_t Separator, typename... Ts>
+struct io_types {
+    static_assert(Separator <= sizeof...(Ts), "Separator exceeds type pack size");
+
+    using input_seq  = std::make_index_sequence<Separator>;
+    using output_seq = typename io_types_helpers::shift_seq<
+        Separator,
+        std::make_index_sequence<sizeof...(Ts) - Separator>
+    >::type;
+
+    using inputs  = typename io_types_helpers::build_list<input_seq, Ts...>::type;
+    using outputs = typename io_types_helpers::build_list<output_seq, Ts...>::type;
+};
 
 } // end namespace hh
 

@@ -22,26 +22,6 @@
 #include <cstdio>
 #include "../hedgehog/hedgehog.h"
 
-// struct TaskV2 : hh::Task<TaskV2> {
-//     using inputs  = hh::type_list<int>;
-//     using outputs = hh::type_list<int>;
-//
-//     // we will support both getters (function) and members (static and non static).
-//     static constexpr char * name = "Task";
-//     const size_t number_threads = 0;
-//
-//     TaskV2(size_t number_threads) : number_threads(number_threads) {}
-//
-//     void execute(std::shared_ptr<int> data) {
-//         // ...
-//         this->push_result(data); // ???
-//     }
-//
-//     auto copy() {
-//         return std::make_shared<TaskV2>(this->number_threads);
-//     }
-// };
-
 using test_list = hh::type_list<int, float>;
 
 // append prepend
@@ -63,7 +43,13 @@ static_assert(std::is_same_v<hh::type_list_apply_ptr<test_list>, hh::type_list<i
 static_assert(hh::NodeInputTrait<hh::LockQueueNodeInput<int, float>, int, float>);
 static_assert(hh::NodeOutputTrait<hh::DirectNodeOutput<int, float>, int, float>);
 
+// io types
+using test_io_types = hh::io_types<2, char, int, float, double>;
+static_assert(std::is_same_v<test_io_types::inputs, hh::type_list<char, int>>);
+static_assert(std::is_same_v<test_io_types::outputs, hh::type_list<float, double>>);
+
 struct Task {
+    // using io = hh::io_types<2, int, float, int, float>;
     using inputs = hh::type_list<int, float>;
     using outputs = hh::type_list<int, float>;
 
@@ -81,8 +67,8 @@ struct Task {
 TEST(compile_test, compile_test) {
     auto node1 = hh::make_task<Task>(2, "task1");
     auto node2 = hh::make_task<Task>(2, "task2");
-    auto graph = hh::make_graph<hh::type_list<int, float>, hh::type_list<int, float>>();
-    // auto graph = hh::make_serial_graph<hh::type_list<int, float>, hh::type_list<int, float>>();
+    auto graph = hh::make_graph<2, int, float, int, float>();
+    // auto graph = hh::make_serial_graph<2, int, float, int, float>();
 
     printf("running first test\n");
 
