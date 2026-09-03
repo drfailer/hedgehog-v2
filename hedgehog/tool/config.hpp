@@ -120,7 +120,8 @@ auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph
         using Executor = Impl;
         using EdgeBuilder = DirectEdgeBuilder;
     };
-    auto graph = std::make_shared<Graph<Config>>(executor, std::make_shared<DirectEdgeBuilder>(), NodeInfo{name, 0});
+    auto edge_builder = std::make_shared<DirectEdgeBuilder>();
+    auto graph = std::make_shared<Graph<Config>>(executor, edge_builder, NodeInfo{name, 0});
     graph->construct_input();
     graph->construct_output();
     return graph;
@@ -142,7 +143,9 @@ auto make_serial_graph(std::string const &name = "Graph") {
         using Executor = SerialExecutor;
         using EdgeBuilder = DirectEdgeBuilder;
     };
-    auto graph = std::make_shared<Graph<Config>>(std::make_shared<SerialExecutor>(), NodeInfo{name, 0});
+    auto executor = std::make_shared<SerialExecutor>();
+    auto edge_builder = std::make_shared<DirectEdgeBuilder>();
+    auto graph = std::make_shared<Graph<Config>>(executor, edge_builder, NodeInfo{name, 0});
     graph->construct_input();
     graph->construct_output();
     return graph;
