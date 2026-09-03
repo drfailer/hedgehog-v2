@@ -28,8 +28,12 @@ template <typename Impl>
 auto make_task(std::shared_ptr<Impl> task, size_t number_threads = 1, std::string const &name = "Task") {
     using Config = make_task_config<Impl>;
     auto node = std::make_shared<TaskNode<Config>>(task, NodeInfo{name, number_threads});
-    node->construct_input();
-    node->construct_output();
+    if (requires { node->construct_input(); }) {
+        node->construct_input();
+    }
+    if (requires { node->construct_output(); }) {
+        node->construct_output();
+    }
     return node;
 }
 

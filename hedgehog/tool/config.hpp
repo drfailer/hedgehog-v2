@@ -135,8 +135,12 @@ auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph
     };
     auto edge_builder = std::make_shared<DirectEdgeBuilder>();
     auto graph = std::make_shared<Graph<Config>>(executor, edge_builder, NodeInfo{name, 0});
-    graph->construct_input();
-    graph->construct_output();
+    if (requires { graph->construct_input(); }) {
+        graph->construct_input();
+    }
+    if (requires { graph->construct_output(); }) {
+        graph->construct_output();
+    }
     return graph;
 }
 
