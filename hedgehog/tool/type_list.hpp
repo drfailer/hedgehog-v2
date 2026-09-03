@@ -165,24 +165,14 @@ using type_list_apply_ptr = typename type_list_apply_ptr_impl<L>::type;
 //
 
 template <typename T, typename ...Ts>
-struct types_contain_impl {
-    static constexpr bool value = false;
-};
-
-template <typename T, typename H, typename ...Ts>
-struct types_contain_impl<T, H, Ts...> {
-    static constexpr bool value = std::is_same_v<T, H> || types_contain_impl<T, Ts...>::value;
-};
-
-template <typename T, typename ...Ts>
-constexpr bool types_contain = types_contain_impl<T, Ts...>::value;
+constexpr bool types_contain = (std::is_same_v<T, Ts> || ...);
 
 template <typename L, typename T>
 struct type_list_contains_impl;
 
 template <typename T, typename ...Ts>
 struct type_list_contains_impl<type_list<Ts...>, T> {
-    static constexpr bool value = types_contain_impl<T, Ts...>::value;
+    static constexpr bool value = types_contain<T, Ts...>;
 };
 
 template <typename L, typename T>
@@ -204,17 +194,14 @@ constexpr bool type_list_contains = type_list_contains_impl<L, T>::value;
 // do_something_with_t<float>();
 //
 
-template <typename T, typename ...Ts>
-constexpr void type_list_map(type_list<T, Ts...>, auto function) {
-    function.template operator()<T>();
-    if constexpr (sizeof...(Ts) > 0) {
-        type_list_map(type_list<Ts...>(), function);
-    }
+template <typename ...Ts>
+constexpr void type_list_map_impl(type_list<Ts...>, auto function) {
+    (function.template operator()<Ts>(), ...);
 }
 
 template <typename L>
 constexpr void type_list_map(auto function) {
-    type_list_map(L(), function);
+    type_list_map_impl(L{}, function);
 }
 
 } // end namespace hh
