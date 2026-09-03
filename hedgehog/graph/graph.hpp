@@ -31,17 +31,23 @@ namespace hh {
 
 template <typename Config>
 struct Graph : Node, NodeIO<Config> {
+    // config //////////////////////////////////////////////////////////////////
+
     using InputTypes  = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
     using Sink        = Config::Sink;
     using Executor    = Config::Executor;
     using IO          = NodeIO<Config>;
 
-    Sink sink;
-    std::set<std::shared_ptr<Node>> nodes;
-    std::shared_ptr<Executor> executor;
+    // attributes & constructors ///////////////////////////////////////////////
 
-    Graph(std::shared_ptr<Executor> executor, NodeInfo const &info): Node(info), executor(executor) {}
+    Sink sink_;
+    std::set<std::shared_ptr<Node>> nodes_;
+    std::shared_ptr<Executor> executor_;
+
+    Graph(std::shared_ptr<Executor> executor_, NodeInfo const &info): Node(info), executor_(executor_) {}
+
+    // user functions //////////////////////////////////////////////////////////
 
     void start() {
         if (IO::output().edge_count()) {
@@ -52,13 +58,13 @@ struct Graph : Node, NodeIO<Config> {
         auto graph_info = GraphInfo{Node::info().name, 0};
         auto init_info = InitializationInfo{Node::info(), graph_info};
 
-        // intialize the sink
-        initialize_component(&sink, init_info);
-        auto &graph_sink = sink;
+        // intialize the sink_
+        initialize_component(&sink_, init_info);
+        auto &graph_sink = sink_;
         type_list_map<OutputTypes>([&]<typename T>() {
-            IO::output().connect_edge(make_direct_edge<T>(executor, &graph_sink));
+            IO::output().connect_edge(make_direct_edge<T>(executor_, &graph_sink));
         });
-        // TODO: the executor may need to use the sink as well
+        // TODO: the executor_ may need to use the sink_ as well
 
         initialize(graph_info);
         execute(ExecutionInfo{0});
@@ -69,116 +75,140 @@ struct Graph : Node, NodeIO<Config> {
         finalize(graph_info);
     }
 
+    template <typename T>
+    void push_data(std::shared_ptr<T> data) {
+        IO::push_data(data, {});
+    }
+
+    auto get_result() {
+        if constexpr (requires { executor_->on_result(); }) {
+            executor_->on_result(); // important for the serial executor_
+        }
+        return sink_.get_result();
+    }
+
+    void eat_resutls(size_t count = 1) {
+        for (size_t i = 0; i < count; ++i) {
+            auto _ = get_result();
+        }
+    }
+
+    // node api ////////////////////////////////////////////////////////////////
+
     void initialize(GraphInfo const &graph_info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info};
         IO::initialize(init_info);
-        for (auto &node : nodes) {
+        for (auto &node : nodes_) {
             node->initialize(graph_info);
         }
-        initialize_component(executor, init_info);
+        initialize_component(executor_, init_info);
     }
 
     void execute(ExecutionInfo const &) override {
-        for (auto &node : nodes) {
-            executor->execute(node);
+        for (auto &node : nodes_) {
+            executor_->execute(node);
         }
     }
 
     void finalize(GraphInfo const &graph_info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info};
-        for (auto &node : nodes) {
+        for (auto &node : nodes_) {
             node->finalize(graph_info);
         }
-        finalize_component(executor, init_info);
+        finalize_component(executor_, init_info);
         IO::finalize(init_info);
-        finalize_component(&sink, init_info);
+        finalize_component(&sink_, init_info);
     }
+
+    // edges ///////////////////////////////////////////////////////////////////
 
     //
     // TODO: it is possible to optimize the data trasfer between graph and
-    //       sub-graphs by linking the connected nodes directly to the input
+    //       sub-graphs by linking the connected nodes_ directly to the input
     //       edges:
     //       extr_node->graph_input->input_node => extr_node->input_node
     //       output_node->graph_output->extr_node => output_node->extr_node
     //
 
     //
-    // Edge creation for a type: create an edge between 2 nodes for a specific
+    // Edge creation for a type: create an edge between 2 nodes_ for a specific
     // type.
     //
-    // - We do not verify if nodes belong to another graph.
+    // - We do not verify if nodes_ belong to another graph.
     // - We do not verify if the edge already exists, creating multiple edges
     //   for the same sender/receiver/type is allowed.
     //
 
     template <typename T>
-    void edge(auto sender, auto receiver, Edge<T> edge) {
-        nodes.insert(sender);
-        nodes.insert(receiver);
+    void draw_edge(auto sender, auto receiver, Edge<T> edge) {
+        nodes_.insert(sender);
+        nodes_.insert(receiver);
         sender->connect_output_edge(edge);
         receiver->connect_input_edge(edge);
     }
 
     template <typename T>
-    void edge(auto sender, auto receiver) {
-        edge(sender, receiver, make_direct_edge<T>(executor, receiver));
+    void draw_edge(auto sender, auto receiver) {
+        draw_edge(sender, receiver, make_direct_edge<T>(executor_, receiver));
     }
 
     //
-    // Edge creation for common types: create an edge between 2 nodes for every
+    // Edge creation for common types: create an edge between 2 nodes_ for every
     // types common between the sender outputs and receiver inputs.
     //
-    // - We do not verify if nodes belong to another graph.
+    // - We do not verify if nodes_ belong to another graph.
     // - We do not verify if the edges already exist, creating multiple edges
     //   for the same sender/receiver/type is allowed.
     //
 
     template <typename Sender, typename Receiver>
-    void edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver, auto create_edge) {
+    void draw_edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver, auto create_edge) {
         using sender_outputs = Sender::OutputTypes;
         using receiver_inputs = Sender::InputTypes;
         type_list_map<sender_outputs>([&]<typename T>() {
             if constexpr (type_list_contains<receiver_inputs, T>) {
-                edge(sender, receiver, create_edge.template operator()<T>(sender, receiver));
+                draw_edge(sender, receiver, create_edge.template operator()<T>(sender, receiver));
             }
         });
     }
 
-    void edges(auto sender, auto receiver) {
-        edges(sender, receiver, [&]<typename T>(auto sender, auto receiver) {
-            return make_direct_edge<T>(executor, receiver);
+    void draw_edges(auto sender, auto receiver) {
+        draw_edges(sender, receiver, [&]<typename T>(auto sender, auto receiver) {
+            return make_direct_edge<T>(executor_, receiver);
         });
     }
+
+    // inputs & outputs ////////////////////////////////////////////////////////
 
     //
     // Set graph inputs.
     //
 
     template <typename T>
-    void input(auto node, Edge<T> edge) {
-        nodes.insert(node);
+    void connect_input(auto node, Edge<T> edge) {
+        nodes_.insert(node);
         IO::connect_input_edge(edge);
     }
 
     template <typename T>
-    void input(auto node) {
-        input(node, make_direct_edge<T>(executor, node));
+    void connect_input(auto node) {
+        connect_input(node, make_direct_edge<T>(executor_, node));
     }
 
     template <typename Node>
-    void inputs(std::shared_ptr<Node> node, auto create_edge) {
+    void connect_inputs(std::shared_ptr<Node> node, auto create_edge) {
         using node_inputs = Node::InputTypes;
         type_list_map<InputTypes>([&]<typename T>() {
             if constexpr (type_list_contains<node_inputs, T>) {
-                input(node, create_edge.template operator()<T>(node));
+                connect_input(node, create_edge.template operator()<T>(node));
             }
         });
     }
 
     template <typename Node>
-    void inputs(std::shared_ptr<Node> node) {
-        inputs(node, [&]<typename T>(auto node) {
-            return make_direct_edge<T>(executor, node);
+    void connect_inputs(std::shared_ptr<Node> node) {
+        connect_inputs(node, [&]<typename T>(auto node) {
+            return make_direct_edge<T>(executor_, node);
         });
     }
 
@@ -187,47 +217,35 @@ struct Graph : Node, NodeIO<Config> {
     //
 
     template <typename T>
-    void output(auto node, Edge<T> edge) {
-        nodes.insert(node);
+    void connect_output(auto node, Edge<T> edge) {
+        nodes_.insert(node);
         node->connect_output_edge(edge);
     }
 
     template <typename T>
-    void output(auto node) {
-        output(node, [&](std::shared_ptr<T> data, RuntimeInfo const &info) {
+    void connect_output(auto node) {
+        connect_output(node, [&](std::shared_ptr<T> data, RuntimeInfo const &info) {
             IO::push_result(data, info);
         });
     }
 
     template <typename Node>
-    void outputs(std::shared_ptr<Node> node, auto create_edge) {
+    void connect_outputs(std::shared_ptr<Node> node, auto create_edge) {
         using node_outputs = Node::OutputTypes;
         type_list_map<OutputTypes>([&]<typename T>() {
             if constexpr (type_list_contains<node_outputs, T>) {
-                output(node, create_edge.template operator()<T>(node));
+                connect_output(node, create_edge.template operator()<T>(node));
             }
         });
     }
 
     template <typename Node>
-    void outputs(std::shared_ptr<Node> node) {
-        outputs(node, [&]<typename T>(auto node) -> Edge<T> {
+    void connect_outputs(std::shared_ptr<Node> node) {
+        connect_outputs(node, [&]<typename T>(auto node) -> Edge<T> {
             return [&](std::shared_ptr<T> data, RuntimeInfo const &info) {
                 IO::push_result(data, info);
             };
         });
-    }
-
-    template <typename T>
-    void push_data(std::shared_ptr<T> data) {
-        IO::push_data(data, {});
-    }
-
-    auto get_result() {
-        if constexpr (requires { executor->on_result(); }) {
-            executor->on_result(); // important for the serial executor
-        }
-        return sink.get_result();
     }
 };
 
