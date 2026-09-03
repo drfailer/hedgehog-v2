@@ -52,6 +52,28 @@ void finalize_component(Component component, InitializationInfo const &info) {
     }
 }
 
+template<typename T>
+constexpr auto type_to_string() {
+  std::string_view name, prefix, suffix;
+#ifdef __clang__
+  name = __PRETTY_FUNCTION__;
+  prefix = "auto hh::type_to_string() [T = ";
+  suffix = "]";
+#elif defined(__GNUC__)
+  name = __PRETTY_FUNCTION__;
+  prefix = "constexpr auto hh::type_to_string() [with T = ";
+  suffix = "]";
+#elif defined(_MSC_VER)
+  name = __FUNCSIG__;
+    prefix = "auto __cdecl type_to_string<";
+    suffix = ">(void)";
+#endif
+  name.remove_prefix(prefix.size());
+  name.remove_suffix(suffix.size());
+
+  return std::string(name);
+}
+
 } // end namespace hh
 
 #endif

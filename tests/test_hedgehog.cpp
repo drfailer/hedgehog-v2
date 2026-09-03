@@ -95,6 +95,7 @@ TEST(compile_test, compile_test) {
     graph->push_data(std::make_shared<int>(4));
     auto test_value = [&](auto value) {
         using value_type = decltype(value);
+        printf("value_type = %s\n", hh::type_to_string<value_type>().c_str());
         if constexpr (std::is_same_v<value_type, std::shared_ptr<int>>) {
             printf("value received %d\n", *value);
             ASSERT_EQ(*value, 4) << "int received";

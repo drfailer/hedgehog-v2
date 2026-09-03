@@ -36,5 +36,6 @@
 
 #include "tool/config.hpp"
 #include "tool/type_list.hpp"
+#include "tool/helpers.hpp"
 
 #endif
