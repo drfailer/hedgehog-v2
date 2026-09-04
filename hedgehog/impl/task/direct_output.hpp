@@ -44,7 +44,7 @@ template <typename ...Outputs>
 struct DirectNodeOutput : NodePorts<DirectOutputPort, Outputs...> {
     template <typename T>
     void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
-        DirectOutputPort<T>::push_result(data, info);
+        DirectOutputPort<T>::push_result(std::move(data), info);
     }
 
     template <typename T>

@@ -192,12 +192,12 @@ class NodeIO {
 
     template <typename T>
     void push_data(std::shared_ptr<T> data, RuntimeInfo const &info) {
-        input_->push_data(data, info);
+        input_->push_data(std::move(data), info);
     }
 
     template <typename T>
     void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
-        output_->push_result(data, info);
+        output_->push_result(std::move(data), info);
     }
 
     WaitResult wait(RuntimeInfo const &info) {

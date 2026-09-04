@@ -44,7 +44,7 @@ struct DirectEdgeBuilder {
             assert(args.receiver != nullptr);
             assert(args.executor != nullptr);
 
-            args.receiver->push_data(data, info);
+            args.receiver->push_data(std::move(data), info);
 
             if constexpr (requires { args.executor->on_transfer(args.receiver, info); }) {
                 args.executor->on_transfer(args.receiver, info);

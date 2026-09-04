@@ -38,7 +38,7 @@ struct GraphSink {
     template <typename T>
     void push_data(std::shared_ptr<T> data, [[maybe_unused]] RuntimeInfo const &info) {
         mutex.lock();
-        results.push(data);
+        results.push(std::move(data));
         mutex.unlock();
         sem.release();
     }

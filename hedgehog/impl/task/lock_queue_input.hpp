@@ -35,13 +35,13 @@ struct LockQueueInputPort {
 
     void push(std::shared_ptr<T> data) {
         std::lock_guard<std::mutex> lock(mutex);
-        queue.push(data);
+        queue.push(std::move(data));
     }
 
     std::optional<std::shared_ptr<T>> pop() {
         std::lock_guard<std::mutex> lock(mutex);
         if (queue.empty()) return std::nullopt;
-        auto data = queue.front();
+        auto data = std::move(queue.front());
         queue.pop();
         return data;
     }
@@ -92,7 +92,7 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
 
     template <typename T>
     void push_data(std::shared_ptr<T> data, RuntimeInfo const &info) {
-        LockQueueInputPort<T>::push(data);
+        LockQueueInputPort<T>::push(std::move(data));
         signal(SignalOpts{info, 1, 0});
     }
 

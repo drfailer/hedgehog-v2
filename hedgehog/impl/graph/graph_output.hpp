@@ -48,7 +48,7 @@ template <typename ...Outputs>
 struct GraphOutput : NodePorts<GraphOutputPort, Outputs...> {
     template <typename T>
     void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
-        GraphOutputPort<T>::push_result(data, info);
+        GraphOutputPort<T>::push_result(std::move(data), info);
     }
 
     size_t edge_count() {

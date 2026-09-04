@@ -44,7 +44,7 @@ template <typename ...Outputs>
 struct GraphInput : NodePorts<GraphInputPort, Outputs...> {
     template <typename T>
     void push_data(std::shared_ptr<T> data, RuntimeInfo const &info) {
-        GraphInputPort<T>::push_data(data, info);
+        GraphInputPort<T>::push_data(std::move(data), info);
     }
 };
 

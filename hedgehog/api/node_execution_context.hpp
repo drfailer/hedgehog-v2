@@ -47,12 +47,12 @@ class NodeExecutionContext {
 
     template <typename T>
     void push_data(std::shared_ptr<T> data) {
-        node_->push_data(data, info_);
+        node_->push_data(std::move(data), info_);
     }
 
     template <typename T>
     void push_result(std::shared_ptr<T> data) {
-        node_->push_result(data, info_);
+        node_->push_result(std::move(data), info_);
     }
 };
 
