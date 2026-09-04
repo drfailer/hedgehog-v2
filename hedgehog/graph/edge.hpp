@@ -21,6 +21,7 @@
 
 #include <type_traits>
 #include <memory>
+#include <functional>
 #include <cassert>
 #include "../tool/type_list.hpp"
 #include "info.hpp"
