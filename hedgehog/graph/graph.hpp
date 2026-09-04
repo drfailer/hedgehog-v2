@@ -209,7 +209,7 @@ struct Graph : Node, NodeIO<Config> {
     template <typename Sender, typename Receiver>
     void draw_edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver, auto create_edge) {
         using sender_outputs = Sender::OutputTypes;
-        using receiver_inputs = Sender::InputTypes;
+        using receiver_inputs = Receiver::InputTypes;
         type_list_map<sender_outputs>([&]<typename T>() {
             if constexpr (type_list_contains<receiver_inputs, T>) {
                 draw_edge(sender, receiver, create_edge.template operator()<T>(sender, receiver));
