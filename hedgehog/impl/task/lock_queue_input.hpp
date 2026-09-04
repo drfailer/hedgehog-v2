@@ -87,7 +87,7 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     }
 
     bool has_data() {
-        return ((LockQueueInputPort<Inputs>::size() > 0) && ...);
+        return ((LockQueueInputPort<Inputs>::size() > 0) || ...);
     }
 
     template <typename T>
