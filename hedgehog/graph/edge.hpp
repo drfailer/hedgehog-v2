@@ -40,14 +40,16 @@ using Edge = std::function<void(std::shared_ptr<T>, RuntimeInfo const &)>;
 struct DirectEdgeBuilder {
     template <typename T>
     Edge<T> make_edge(auto args) {
-        return [args](std::shared_ptr<T> data, RuntimeInfo const &info) {
-            assert(args.receiver != nullptr);
-            assert(args.executor != nullptr);
+        auto receiver = args.receiver;
+        auto executor = args.executor;
+        assert(receiver != nullptr);
+        assert(executor != nullptr);
 
-            args.receiver->push_data(std::move(data), info);
+        return [receiver, executor](std::shared_ptr<T> data, RuntimeInfo const &info) {
+            receiver->push_data(std::move(data), info);
 
-            if constexpr (requires { args.executor->on_transfer(args.receiver, info); }) {
-                args.executor->on_transfer(args.receiver, info);
+            if constexpr (requires { executor->on_transfer(receiver, info); }) {
+                executor->on_transfer(receiver, info);
             }
         };
     }
