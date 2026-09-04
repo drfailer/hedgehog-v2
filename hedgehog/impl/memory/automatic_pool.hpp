@@ -16,29 +16,62 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_H
-#define HEDGEHOG_H
+#ifndef HEDGEHOG_IMPL_MEMORY_AUTOMATIC_POOL_H
+#define HEDGEHOG_IMPL_MEMORY_AUTOMATIC_POOL_H
 
+#include <memory>
+#include <vector>
+#include <functional>
 
-#include "graph/graph.hpp"
-#include "graph/node.hpp"
-#include "graph/info.hpp"
-#include "graph/edge.hpp"
-#include "graph/task_node.hpp"
+#include "../../tool/helpers.hpp"
+#include "pool.hpp"
 
-#include "api/task.hpp"
+namespace hh {
 
-#include "impl/graph/graph_output.hpp"
-#include "impl/graph/thread_executor.hpp"
-#include "impl/graph/graph_input.hpp"
-#include "impl/task/lock_queue_input.hpp"
-#include "impl/task/direct_output.hpp"
-#include "impl/memory/automatic_pool.hpp"
-#include "impl/memory/index_allocator.hpp"
-#include "impl/memory/pool.hpp"
+//
+// Automatic memory pool that uses shared_ptr destructor to return memory
+// automatically.
+//
 
-#include "tool/config.hpp"
-#include "tool/type_list.hpp"
-#include "tool/helpers.hpp"
+template <typename T>
+struct AutomaticPool {
+    Pool<T> pool_;
+
+    void fill(auto &&...args) {
+        pool_.fill(std::forward<decltype(args)>(args)...);
+    }
+
+    std::shared_ptr<T> allocate(bool wait = false) {
+        auto ptr = pool_.allocate(wait);
+        if (ptr == nullptr) {
+            assert(wait = false && "the pool should not return null when wait is true");
+            return nullptr;
+        }
+        return std::make_shared<T>(ptr, [this](T *ptr) { pool_.release(ptr); });
+    }
+
+    void release(std::shared_ptr<T>) { /* do nothing */ }
+};
+
+//
+// Wrapper supporting multiple types.
+//
+
+template <typename ...Types>
+struct MultiAutomaticPool : AutomaticPool<Types>... {
+    template <typename T>
+    Pool<T> *pool() { return static_cast<AutomaticPool<T> *>(this); }
+
+    template <typename T>
+    void fill(auto &&...args) { AutomaticPool<T>::fill(std::forward<decltype(args)>(args)...); }
+
+    template <typename T>
+    std::shared_ptr<T> allocate(bool wait = false) { AutomaticPool<T>::allocate(wait); }
+
+    template <typename T>
+    void release(std::shared_ptr<T>) { /* do nothing */ }
+};
+
+} // end namespace hh
 
 #endif

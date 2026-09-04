@@ -20,6 +20,7 @@
 #include <type_traits>
 #include <gtest/gtest.h>
 #include <cstdio>
+#include <algorithm>
 #include "../hedgehog/hedgehog.h"
 
 using test_list = hh::type_list<int, float>;
@@ -93,4 +94,38 @@ TEST(compile_test, compile_test) {
     std::visit(test_value, graph->get_result());
     std::visit(test_value, graph->get_result());
     graph->stop();
+}
+
+TEST(memory, pool) {
+    std::vector<int *> ptrs;
+    hh::Pool<int> pool;
+
+    pool.fill(10);
+    for (size_t i = 0; i < 10; ++i) {
+        auto ptr = pool.allocate(false);
+        EXPECT_TRUE(ptr != nullptr) << "pool.allocate returned null";
+        *ptr = i + 1; // set the ptr to a non 0 value for "no double-alloc" check
+        ptrs.push_back(ptr);
+    }
+    auto ptr = pool.allocate(false);
+    EXPECT_TRUE(ptr == nullptr);
+
+    // release the pointers
+    for (size_t i = 0; i < 10; ++i) {
+        pool.release(ptrs[i]);
+    }
+
+    // reallocated them back and make sure they are all present in the array
+    for (size_t i = 0; i < 10; ++i) {
+        auto ptr = pool.allocate(false);
+        EXPECT_TRUE(ptr != nullptr) << "pool.allocate returned null";
+        auto it = std::find(ptrs.begin(), ptrs.end(), ptr);
+        EXPECT_TRUE(it != ptrs.end());
+        EXPECT_TRUE(*ptr != 0) << "double-alloc detected";
+        *ptr = 0;
+    }
+    ptr = pool.allocate(false);
+    EXPECT_TRUE(ptr == nullptr);
+
+    // memory should be cleaned up even if the data is not released.
 }
