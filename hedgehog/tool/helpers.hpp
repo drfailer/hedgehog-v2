@@ -30,8 +30,9 @@ template <typename Component>
 std::shared_ptr<Component> copy_component(std::shared_ptr<Component> component) {
     if constexpr (requires { component->copy(); }) {
         return component->copy();
+    } else {
+        return std::make_shared<Component>();
     }
-    return std::make_shared<Component>();
 }
 
 template <typename Component>
