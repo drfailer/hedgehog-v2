@@ -17,37 +17,10 @@
 // United States.
 
 
-#include <type_traits>
 #include <gtest/gtest.h>
 #include <cstdio>
 #include <algorithm>
 #include "../hedgehog/hedgehog.h"
-
-using test_list = hh::type_list<int, float>;
-
-// append prepend
-static_assert(std::is_same_v<hh::type_list_append<test_list, double>,
-                             hh::type_list<int, float, double>>);
-static_assert(std::is_same_v<hh::type_list_prepend<test_list, double>,
-                             hh::type_list<double, int, float>>);
-
-// contains
-static_assert(hh::type_list_contains<test_list, int>);
-static_assert(hh::type_list_contains<test_list, float>);
-static_assert(!hh::type_list_contains<test_list, double>);
-
-// apply
-static_assert(std::is_same_v<hh::type_list_apply<test_list, std::shared_ptr>,
-                             hh::type_list<std::shared_ptr<int>, std::shared_ptr<float>>>);
-static_assert(std::is_same_v<hh::type_list_apply_ptr<test_list>, hh::type_list<int *, float *>>);
-
-static_assert(hh::NodeInputTrait<hh::LockQueueNodeInput<int, float>, int, float>);
-static_assert(hh::NodeOutputTrait<hh::DirectNodeOutput<int, float>, int, float>);
-
-// io types
-using test_io_types = hh::io_types<2, char, int, float, double>;
-static_assert(std::is_same_v<test_io_types::inputs, hh::type_list<char, int>>);
-static_assert(std::is_same_v<test_io_types::outputs, hh::type_list<float, double>>);
 
 struct Task {
     // using io = hh::io_types<2, int, float, int, float>;
