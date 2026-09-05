@@ -34,7 +34,7 @@ struct SerialSink {
     std::queue<VariantType> results;
 
     template <typename T>
-    void push_data(std::shared_ptr<T> data, [[maybe_unused]] RuntimeInfo const &info) {
+    void push_data(data_t<T> data, [[maybe_unused]] RuntimeInfo const &info) {
         results.push(std::move(data));
     }
 

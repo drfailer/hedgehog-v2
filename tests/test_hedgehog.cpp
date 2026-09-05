@@ -27,12 +27,12 @@ struct Task {
     using inputs = hh::type_list<int, float>;
     using outputs = hh::type_list<int, float>;
 
-    void execute(auto ctx, std::shared_ptr<int> data) {
+    void execute(auto ctx, hh::data_t<int> data) {
         printf("%s::execute<int>(%d)[%ld]\n", ctx.name().c_str(), *data, ctx.thread_index());
         ctx.push_result(data);
     }
 
-    void execute(auto ctx, std::shared_ptr<float> data) {
+    void execute(auto ctx, hh::data_t<float> data) {
         printf("%s::execute<float>(%f)[%ld]\n", ctx.name().c_str(), *data, ctx.thread_index());
         ctx.push_result(data);
     }
@@ -51,8 +51,8 @@ TEST(compile_test, compile_test) {
     graph->connect_outputs(node2);
 
     graph->start();
-    graph->push_data(std::make_shared<float>(3.14));
-    graph->push_data(std::make_shared<int>(4));
+    graph->push_data(hh::make_data<float>(3.14));
+    graph->push_data(hh::make_data<int>(4));
     auto test_value = [&](auto value) {
         using value_type = decltype(value);
         printf("value_type = %s\n", hh::type_to_string<value_type>().c_str());

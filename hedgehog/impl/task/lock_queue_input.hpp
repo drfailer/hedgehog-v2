@@ -31,14 +31,14 @@ namespace hh {
 template <typename T>
 struct LockQueueInputPort {
     std::mutex mutex;
-    std::queue<std::shared_ptr<T>> queue;
+    std::queue<data_t<T>> queue;
 
-    void push(std::shared_ptr<T> data) {
+    void push(data_t<T> data) {
         std::lock_guard<std::mutex> lock(mutex);
         queue.push(std::move(data));
     }
 
-    std::optional<std::shared_ptr<T>> pop() {
+    std::optional<data_t<T>> pop() {
         std::lock_guard<std::mutex> lock(mutex);
         if (queue.empty()) return std::nullopt;
         auto data = std::move(queue.front());
@@ -93,7 +93,7 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     }
 
     template <typename T>
-    void push_data(std::shared_ptr<T> data, RuntimeInfo const &info) {
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
         LockQueueInputPort<T>::push(std::move(data));
         signal(SignalOpts{info, 1, 0});
     }

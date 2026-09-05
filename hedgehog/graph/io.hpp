@@ -22,6 +22,7 @@
 #include <type_traits>
 #include <optional>
 #include "../tool/helpers.hpp"
+#include "../tool/data.hpp"
 
 namespace hh {
 
@@ -81,7 +82,7 @@ concept NodeInputTrait = std::default_initializable<T> && requires {
     //
     // Data can be pushed to the input.
     //
-    ([](T t, std::shared_ptr<Inputs> data, RuntimeInfo const &info) {
+    ([](T t, data_t<Inputs> data, RuntimeInfo const &info) {
         t.push_data(data, info);
      }, ...);
 
@@ -118,7 +119,7 @@ concept NodeOutputTrait = std::default_initializable<T> && requires {
     //
     // Result data can be sent through the output
     //
-    ([](T t, std::shared_ptr<Outputs> data) {
+    ([](T t, data_t<Outputs> data) {
         t.push_result(data, RuntimeInfo{});
      }, ...);
 
@@ -191,12 +192,12 @@ class NodeIO {
     }
 
     template <typename T>
-    void push_data(std::shared_ptr<T> data, RuntimeInfo const &info) {
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
         input_->push_data(std::move(data), info);
     }
 
     template <typename T>
-    void push_result(std::shared_ptr<T> data, RuntimeInfo const &info) {
+    void push_result(data_t<T> data, RuntimeInfo const &info) {
         output_->push_result(std::move(data), info);
     }
 

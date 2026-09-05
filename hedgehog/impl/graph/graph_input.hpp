@@ -29,7 +29,7 @@ template <typename T>
 struct GraphInputPort {
     std::vector<Edge<T>> edges;
 
-    void push_data(std::shared_ptr<T> data, RuntimeInfo const &info) {
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
         for (auto &edge : edges) {
             edge(data, info);
         }
@@ -43,7 +43,7 @@ struct GraphInputPort {
 template <typename ...Outputs>
 struct GraphInput : NodePorts<GraphInputPort, Outputs...> {
     template <typename T>
-    void push_data(std::shared_ptr<T> data, RuntimeInfo const &info) {
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
         GraphInputPort<T>::push_data(std::move(data), info);
     }
 };

@@ -24,6 +24,7 @@
 #include <functional>
 #include <cassert>
 #include "../tool/type_list.hpp"
+#include "../tool/data.hpp"
 #include "info.hpp"
 
 namespace hh {
@@ -35,7 +36,7 @@ namespace hh {
 //
 
 template <typename T>
-using Edge = std::function<void(std::shared_ptr<T>, RuntimeInfo const &)>;
+using Edge = std::function<void(data_t<T>, RuntimeInfo const &)>;
 
 struct DirectEdgeBuilder {
     template <typename T>
@@ -45,7 +46,7 @@ struct DirectEdgeBuilder {
         assert(receiver != nullptr);
         assert(executor != nullptr);
 
-        return [receiver, executor](std::shared_ptr<T> data, RuntimeInfo const &info) {
+        return [receiver, executor](data_t<T> data, RuntimeInfo const &info) {
             receiver->push_data(std::move(data), info);
 
             if constexpr (requires { executor->on_transfer(receiver, info); }) {

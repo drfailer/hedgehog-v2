@@ -46,12 +46,12 @@ class NodeExecutionContext {
     int device_id() { return info_.exec.device_id; }
 
     template <typename T>
-    void push_data(std::shared_ptr<T> data) {
+    void push_data(data_t<T> data) {
         node_->push_data(std::move(data), info_);
     }
 
     template <typename T>
-    void push_result(std::shared_ptr<T> data) {
+    void push_result(data_t<T> data) {
         node_->push_result(std::move(data), info_);
     }
 };

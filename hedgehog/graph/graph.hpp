@@ -106,7 +106,7 @@ struct Graph : Node, NodeIO<Config> {
     }
 
     template <typename T>
-    void push_data(std::shared_ptr<T> data) {
+    void push_data(data_t<T> data) {
         IO::push_data(std::move(data), {});
     }
 
@@ -269,7 +269,7 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename T>
     void connect_output(auto node) {
-        connect_output(node, [&](std::shared_ptr<T> data, RuntimeInfo const &info) {
+        connect_output(node, [&](data_t<T> data, RuntimeInfo const &info) {
             IO::push_result(std::move(data), info);
         });
     }
@@ -287,7 +287,7 @@ struct Graph : Node, NodeIO<Config> {
     template <typename Node>
     void connect_outputs(std::shared_ptr<Node> node) {
         connect_outputs(node, [&]<typename T>(auto node) -> Edge<T> {
-            return [&](std::shared_ptr<T> data, RuntimeInfo const &info) {
+            return [&](data_t<T> data, RuntimeInfo const &info) {
                 IO::push_result(std::move(data), info);
             };
         });

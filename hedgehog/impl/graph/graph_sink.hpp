@@ -30,13 +30,13 @@ namespace hh {
 
 template <typename ...Outputs>
 struct GraphSink {
-    using VariantType = std::variant<std::shared_ptr<Outputs>...>;
+    using VariantType = std::variant<data_t<Outputs>...>;
     std::mutex mutex;
     std::queue<VariantType> results;
     std::counting_semaphore<1024> sem{0}; // TODO: max size?
 
     template <typename T>
-    void push_data(std::shared_ptr<T> data, [[maybe_unused]] RuntimeInfo const &info) {
+    void push_data(data_t<T> data, [[maybe_unused]] RuntimeInfo const &info) {
         mutex.lock();
         results.push(std::move(data));
         mutex.unlock();
