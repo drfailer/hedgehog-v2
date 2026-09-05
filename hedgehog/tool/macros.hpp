@@ -16,39 +16,10 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_GRAPH_NODE
-#define HEDGEHOG_GRAPH_NODE
+#ifndef HEDGEHOG_TOOL_MACROS_H
+#define HEDGEHOG_TOOL_MACROS_H
 
-#include <memory>
-#include "../tool/type_list.hpp"
-#include "../tool/profiling.hpp"
-#include "info.hpp"
-#include "edge.hpp"
-#include "io.hpp"
-
-namespace hh {
-
-//
-// Node interface used in the graph: things that the graph/executor needs the
-// node to do.
-//
-
-class Node {
-    NodeInfo info_;
-    Profiler profiler_;
-
-  public:
-    Node(NodeInfo info) : info_(info) {}
-
-    NodeInfo const &info() { return info_; }
-    Profiler &profiler() { return profiler_; }
-
-    virtual void initialize(GraphInfo const &info) = 0;
-    virtual void execute(ExecutionInfo const &info) = 0;
-    virtual void finalize(GraphInfo const &info) = 0;
-};
-
-
-} // end namespace hh
+#define HH_CONCAT_INDIRECT(a, b) a##b
+#define HH_CONCAT(a, b) HH_CONCAT_INDIRECT(a, b)
 
 #endif

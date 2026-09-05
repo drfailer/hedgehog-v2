@@ -86,7 +86,7 @@ struct Graph : Node, NodeIO<Config> {
             return;
         }
         auto graph_info = GraphInfo{Node::info().name, 0};
-        auto init_info = InitializationInfo{Node::info(), graph_info};
+        auto init_info = InitializationInfo{Node::info(), graph_info, &Node::profiler()};
 
         // intialize the sink_
         initialize_component(&sink_, init_info);
@@ -126,7 +126,7 @@ struct Graph : Node, NodeIO<Config> {
     // node api ////////////////////////////////////////////////////////////////
 
     void initialize(GraphInfo const &graph_info) override {
-        auto init_info = InitializationInfo{Node::info(), graph_info};
+        auto init_info = InitializationInfo{Node::info(), graph_info, &Node::profiler()};
         IO::initialize(init_info);
         for (auto &node : nodes_) {
             node->initialize(graph_info);
@@ -141,7 +141,7 @@ struct Graph : Node, NodeIO<Config> {
     }
 
     void finalize(GraphInfo const &graph_info) override {
-        auto init_info = InitializationInfo{Node::info(), graph_info};
+        auto init_info = InitializationInfo{Node::info(), graph_info, &Node::profiler()};
         for (auto &node : nodes_) {
             node->finalize(graph_info);
         }

@@ -21,6 +21,7 @@
 
 #include <string>
 #include <unistd.h>
+#include "../tool/profiling.hpp"
 
 //
 // To avoid further maintenance issues, we use info structs that contains all
@@ -84,6 +85,7 @@ struct ExecutionInfo {
 struct InitializationInfo {
     NodeInfo node;
     GraphInfo graph;
+    Profiler *profiler;
 };
 
 // RuntimeInfo /////////////////////////////////////////////////////////////////

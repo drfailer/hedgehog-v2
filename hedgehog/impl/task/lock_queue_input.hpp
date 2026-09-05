@@ -59,9 +59,11 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     std::mutex mutex{};
     std::condition_variable cond{};
     alignas(64) std::atomic<bool> terminated{false};
+    Profiler *profiler;
 
-    void initialize(InitializationInfo const &) {
+    void initialize(InitializationInfo const &info) {
         terminated.store(false);
+        profiler = info.profiler;
     }
 
     void finalize(InitializationInfo const &) {

@@ -97,7 +97,7 @@ struct TaskNode : Node, NodeIO<Config> {
 
     void initialize(GraphInfo const &info) override {
         graph_info_ = info;
-        auto init_info = InitializationInfo{Node::info(), graph_info_};
+        auto init_info = InitializationInfo{Node::info(), graph_info_, &Node::profiler()};
         IO::initialize(init_info);
     }
 
@@ -143,7 +143,7 @@ struct TaskNode : Node, NodeIO<Config> {
     }
 
     void finalize(GraphInfo const &info) override {
-        auto init_info = InitializationInfo{Node::info(), graph_info_};
+        auto init_info = InitializationInfo{Node::info(), graph_info_, &Node::profiler()};
         IO::finalize(init_info);
     }
 };
