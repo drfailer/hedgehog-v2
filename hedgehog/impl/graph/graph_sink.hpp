@@ -33,7 +33,7 @@ struct GraphSink {
     using VariantType = std::variant<data_t<Outputs>...>;
     std::mutex mutex;
     std::queue<VariantType> results;
-    std::counting_semaphore<1024> sem{0}; // TODO: max size?
+    std::counting_semaphore<> sem{0};
 
     template <typename T>
     void push_data(data_t<T> data, [[maybe_unused]] RuntimeInfo const &info) {
@@ -47,7 +47,7 @@ struct GraphSink {
         sem.acquire();
         mutex.lock();
         assert(results.size() > 0);
-        auto data = results.front();
+        auto data = std::move(results.front());
         results.pop();
         mutex.unlock();
         return data;
