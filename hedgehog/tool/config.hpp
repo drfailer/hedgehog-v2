@@ -121,27 +121,34 @@ struct make_task_config {
 
 // make_graph //////////////////////////////////////////////////////////////////
 
+template <typename Config>
+auto make_configured_graph(std::shared_ptr<typename Config::Executor>     executor,
+                           std::shared_ptr<typename Config::EdgeBuilder>  edge_builder,
+                           std::string const                             &name = "Graph") {
+    auto graph = std::make_shared<Graph<Config>>(executor, edge_builder, NodeInfo{name, 0});
+    if constexpr (std::default_initializable<typename Config::Input>) {
+        graph->construct_input();
+    }
+    if constexpr (std::default_initializable<typename Config::Output>) {
+        graph->construct_output();
+    }
+    return graph;
+}
+
 template <typename Impl, size_t Sep, typename ...Types>
 auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph") {
     using io = io_types<Sep, Types...>;
     struct Config {
         using InputTypes = io::inputs;
         using OutputTypes = io::outputs;
-        using Sink = type_list_dispatch<OutputTypes, GraphSink>; // TODO: how to specify this?
+        using Sink = type_list_dispatch<OutputTypes, GraphSink>;
         using Input =  typename deduce_node_input_type<Impl, DefaultGraphInput<InputTypes>>::type;
         using Output = typename deduce_node_output_type<Impl, DefaultGraphOutput<OutputTypes>>::type;
         using Executor = Impl;
         using EdgeBuilder = DirectEdgeBuilder;
     };
     auto edge_builder = std::make_shared<DirectEdgeBuilder>();
-    auto graph = std::make_shared<Graph<Config>>(executor, edge_builder, NodeInfo{name, 0});
-    if (requires { graph->construct_input(); }) {
-        graph->construct_input();
-    }
-    if (requires { graph->construct_output(); }) {
-        graph->construct_output();
-    }
-    return graph;
+    return make_configured_graph<Config>(executor, edge_builder, name);
 }
 
 template <size_t Sep, typename ...Types>
