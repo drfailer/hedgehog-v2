@@ -59,10 +59,13 @@ struct Graph : Node, NodeIO<Config> {
 
     // attributes & constructors ///////////////////////////////////////////////
 
-    Sink sink_;
-    std::set<std::shared_ptr<Node>> nodes_;
     std::shared_ptr<Executor> executor_;
     std::shared_ptr<EdgeBuilder> edge_builder_;
+    Sink sink_;
+    std::set<std::shared_ptr<Node>> nodes_;
+    std::set<std::shared_ptr<Node>> input_nodes_;
+    std::set<std::shared_ptr<Node>> output_nodes_;
+    std::vector<Connection> connections_;
 
     Graph(std::shared_ptr<Executor>     executor,
           std::shared_ptr<EdgeBuilder>  edge_builder,
@@ -72,10 +75,13 @@ struct Graph : Node, NodeIO<Config> {
           edge_builder_(std::move(edge_builder))
         {}
 
-    Sink const &sink() const { return sink_; }
-    std::set<std::shared_ptr<Node>> const &nodes() const { return nodes_; }
     std::shared_ptr<Executor> executor() const {  return executor_; }
     std::shared_ptr<EdgeBuilder> edge_builder() const { return edge_builder_; }
+    Sink const &sink() const { return sink_; }
+    std::set<std::shared_ptr<Node>> const &nodes() const { return nodes_; }
+    std::set<std::shared_ptr<Node>> const &input_nodes() const { return input_nodes_; }
+    std::set<std::shared_ptr<Node>> const &output_nodes() const { return output_nodes_; }
+    std::vector<Connection> const &connections() const { return connections_; }
 
     // user functions //////////////////////////////////////////////////////////
 
@@ -188,6 +194,7 @@ struct Graph : Node, NodeIO<Config> {
     void draw_edge(auto sender, auto receiver, Edge<T> edge) {
         nodes_.insert(sender);
         nodes_.insert(receiver);
+        connections_.push_back(Connection{sender.get(), receiver.get()});
         sender->connect_output_edge(edge);
         receiver->connect_input_edge(edge);
     }
@@ -232,6 +239,7 @@ struct Graph : Node, NodeIO<Config> {
     template <typename T>
     void connect_input(auto node, Edge<T> edge) {
         nodes_.insert(node);
+        input_nodes_.insert(node);
         IO::connect_input_edge(edge);
     }
 
@@ -264,6 +272,7 @@ struct Graph : Node, NodeIO<Config> {
     template <typename T>
     void connect_output(auto node, Edge<T> edge) {
         nodes_.insert(node);
+        output_nodes_.insert(node);
         node->connect_output_edge(edge);
     }
 

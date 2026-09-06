@@ -48,6 +48,17 @@ class Node {
     virtual void finalize(GraphInfo const &info) = 0;
 };
 
+// Connections /////////////////////////////////////////////////////////////////
+
+//
+// Connections stored by the graph (used for building dot file, or other
+// operations on the graph).
+//
+
+struct Connection {
+    Node *sender;
+    Node *receiver;
+};
 
 } // end namespace hh
 
