@@ -23,8 +23,6 @@
 #include "../tool/type_list.hpp"
 #include "../tool/profiling.hpp"
 #include "info.hpp"
-#include "edge.hpp"
-#include "io.hpp"
 
 namespace hh {
 
@@ -46,6 +44,7 @@ class Node {
     virtual void initialize(GraphInfo const &info) = 0;
     virtual void execute(ExecutionInfo const &info) = 0;
     virtual void finalize(GraphInfo const &info) = 0;
+    virtual ProfilerReport profile() = 0;
 };
 
 // Connections /////////////////////////////////////////////////////////////////

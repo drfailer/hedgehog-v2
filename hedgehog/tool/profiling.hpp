@@ -75,8 +75,8 @@ struct Profile {
 
 // TODO: do we want this struct to be empty when profiling is disabled (make the node smaller)?
 struct Profiler {
-    std::unordered_map<std::string, size_t> ids_;
-    std::vector<Profile> profiles_;
+    std::unordered_map<std::string, size_t> ids;
+    std::vector<Profile> profiles;
 
     static void add_duration(Profile &profile, double dur) {
         // Welford's algorithm to accumulate the mean and the variance
@@ -92,6 +92,7 @@ struct Profiler {
         return profile.m2 / profile.count;
     }
 
+    // TODO: how de we handle clearing the profiles?
 
     //
     // To reduce the impact of the profiler on the runtime, we try to avoid
@@ -105,29 +106,59 @@ struct Profiler {
     //
 
     size_t create_profile(std::string const &name) {
-        size_t id = profiles_.size();
-        ids_[name] = id;
-        profiles_.emplace_back();
+        size_t id = profiles.size();
+        ids[name] = id;
+        profiles.emplace_back();
         return id;
     }
 
     bool begin_region(size_t id) {
-        Profile &profile = profiles_[id];
+        Profile &profile = profiles[id];
         profile.region_begin = Clock::now();
         return true;
     }
 
     bool end_region(size_t id) {
         TimePoint region_end = Clock::now();
-        Profile &profile = profiles_[id];
+        Profile &profile = profiles[id];
         Duration duration = region_end - profile.region_begin;
         add_duration(profile, duration.count());
         return false;
     }
 };
 
+// TODO: this is a basic idea on how we could compile profiling information,
+// however, we need to be able to make the difference between
+// edges/nodes/graph/pipeline (group entries by level)
+
+struct ProfilerStats {
+    size_t count;
+    double mean;
+    double stddev;
+    double min;
+    double max;
+};
+
+struct ProfilerReport {
+    ProfilerStats stats;
+    std::unordered_map<std::string, ProfilerReport> entries;
+
+    void add_profiler(Profiler const &profiler) {
+        // TODO
+    }
+
+    std::string to_dot() {
+        return "TODO";
+    }
+
+    std::string to_json() {
+        return "TODO";
+    }
+
+    // TODO: binary format
+};
+
 // TODO: merging profile data
-// TODO: do output
 
 } // end namespace hh
 

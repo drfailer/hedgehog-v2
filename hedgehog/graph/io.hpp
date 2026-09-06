@@ -23,6 +23,7 @@
 #include <optional>
 #include "../tool/helpers.hpp"
 #include "../tool/data.hpp"
+#include "edge.hpp"
 
 namespace hh {
 
@@ -31,6 +32,8 @@ namespace hh {
 /******************************************************************************/
 
 // Concepts ////////////////////////////////////////////////////////////////////
+
+// TODO: rewrite those concepts
 
 //
 // Node input specifications.

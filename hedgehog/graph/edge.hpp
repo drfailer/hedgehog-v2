@@ -26,6 +26,7 @@
 #include "../tool/type_list.hpp"
 #include "../tool/data.hpp"
 #include "info.hpp"
+#include "node.hpp"
 
 namespace hh {
 
@@ -33,6 +34,13 @@ namespace hh {
 // Bridge between nodes. Here we use type erasure to allow connecting nodes
 // with different sender/receiver types. One can also implement a custom edge
 // for various purpose (MPI edge for instance).
+//
+
+//
+// TODO: to be able to profile the edge, it would be easier to use a struct
+//       here (with sender/receiver/profiler/transfer_function, replacing
+//       Connection). However, it is hard to tell how it will impact the
+//       runtime.
 //
 
 template <typename T>

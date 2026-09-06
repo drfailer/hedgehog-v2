@@ -44,7 +44,6 @@ struct TaskNode : Node, NodeIO<Config> {
     using OutputTypes = Config::OutputTypes;
     using Task        = Config::Task;
     using IO          = NodeIO<Config>;
-    // TODO: using Profiler = Config::Profiler;
 
     // thread state ////////////////////////////////////////////////////////////
 
@@ -145,6 +144,12 @@ struct TaskNode : Node, NodeIO<Config> {
     void finalize(GraphInfo const &info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info_, &Node::profiler()};
         IO::finalize(init_info);
+    }
+
+    ProfilerReport profile() override {
+        ProfilerReport report;
+        // TODO
+        return report;
     }
 };
 

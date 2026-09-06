@@ -25,6 +25,7 @@
 
 #include "info.hpp"
 #include "node.hpp"
+#include "io.hpp"
 #include "../tool/log.hpp"
 
 namespace hh {
@@ -154,6 +155,12 @@ struct Graph : Node, NodeIO<Config> {
         finalize_component(executor_, init_info);
         IO::finalize(init_info);
         finalize_component(&sink_, init_info);
+    }
+
+    ProfilerReport profile() override {
+        ProfilerReport report;
+        // TODO
+        return report;
     }
 
     // edges ///////////////////////////////////////////////////////////////////
