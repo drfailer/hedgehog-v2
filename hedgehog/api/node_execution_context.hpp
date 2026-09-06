@@ -25,6 +25,7 @@ template <typename NodeType>
 class NodeExecutionContext {
     NodeType *node_;
     RuntimeInfo info_;
+    Profiler profiler_;
 
   public:
     // constructor used by the node
@@ -35,6 +36,7 @@ class NodeExecutionContext {
 
     NodeType &node() { return *node_; }
     RuntimeInfo const &info() { return info_; }
+    Profiler &profiler() { return profiler_; }
 
     std::string const &name() { return info_.node.name; }
     std::string const &graph_name() { return info_.graph.name; }
