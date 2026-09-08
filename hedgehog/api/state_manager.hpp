@@ -49,7 +49,7 @@ struct StateManager {
             //       determin the output
             if (!state_->should_transfer(data, info)) return;
             for (auto &edge : edges_) {
-                edge(data, info);
+                edge.transfer(data, info);
             }
         }
 

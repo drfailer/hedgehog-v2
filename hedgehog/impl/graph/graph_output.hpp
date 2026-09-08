@@ -35,7 +35,7 @@ struct GraphOutputPort {
 
     void push_result(data_t<T> data, RuntimeInfo const &info) {
         for (auto &edge : edges_) {
-            edge(data, info);
+            edge.transfer(data, info);
         }
     }
 

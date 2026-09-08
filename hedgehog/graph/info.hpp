@@ -94,6 +94,7 @@ struct InitializationInfo {
 // Data available to node components during the runtime phase.
 //
 
+// TODO: add profiler pointer
 struct RuntimeInfo {
     NodeInfo node;
     GraphInfo graph;

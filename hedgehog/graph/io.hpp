@@ -224,7 +224,7 @@ template <template <typename> class PortType, typename ...Types>
 struct NodePorts : PortType<Types>... {
     template <typename T>
     void connect_edge(Edge<T> data) {
-        PortType<T>::connect_edge(data);
+        PortType<T>::connect_edge(std::move(data));
     }
 };
 

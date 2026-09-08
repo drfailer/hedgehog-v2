@@ -19,48 +19,58 @@
 #ifndef HEDGEHOG_GRAPH_EDGE
 #define HEDGEHOG_GRAPH_EDGE
 
-#include <type_traits>
-#include <memory>
 #include <functional>
 #include <cassert>
-#include "../tool/type_list.hpp"
 #include "../tool/data.hpp"
+#include "../tool/profiling.hpp"
 #include "info.hpp"
 #include "node.hpp"
 
 namespace hh {
 
-//
-// Bridge between nodes. Here we use type erasure to allow connecting nodes
-// with different sender/receiver types. One can also implement a custom edge
-// for various purpose (MPI edge for instance).
-//
-
-//
-// TODO: to be able to profile the edge, it would be easier to use a struct
-//       here (with sender/receiver/profiler/transfer_function, replacing
-//       Connection). However, it is hard to tell how it will impact the
-//       runtime.
-//
+template <typename T>
+struct Edge;
 
 template <typename T>
-using Edge = std::function<void(data_t<T>, RuntimeInfo const &)>;
+using EdgeTransfer = std::function<void(Edge<T> *, data_t<T>, RuntimeInfo const &)>;
+
+template <typename T>
+struct Edge {
+    Profiler profiler;
+    void *sender = nullptr;
+    void *receiver = nullptr;
+    void *graph = nullptr;
+    EdgeTransfer<T> fun;
+
+    Edge(void *sender, void *receiver, void *graph, EdgeTransfer<T> fun)
+        : sender(sender), receiver(receiver), graph(graph), fun(std::move(fun)) {}
+
+    Edge(void *sender, void *receiver, EdgeTransfer<T> fun)
+        : sender(sender), receiver(receiver), fun(std::move(fun)) {}
+
+    Edge(void *graph, EdgeTransfer<T> fun)
+        : graph(graph), fun(std::move(fun)) {}
+
+    void transfer(data_t<T> data, RuntimeInfo const &info) {
+        fun(this, data, info);
+    }
+};
 
 struct DirectEdgeBuilder {
     template <typename T>
     Edge<T> make_edge(auto args) {
-        auto receiver = args.receiver;
-        auto executor = args.executor;
-        assert(receiver != nullptr);
-        assert(executor != nullptr);
+        using Receiver = std::remove_pointer_t<decltype(args.receiver)>;
+        using Graph = std::remove_pointer_t<decltype(args.graph)>;
 
-        return [receiver, executor](data_t<T> data, RuntimeInfo const &info) {
+        return Edge<T>(args.sender, args.receiver, args.graph, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
+            auto receiver = static_cast<Receiver *>(e->receiver);
+            auto graph = static_cast<Graph *>(e->graph);
+
             receiver->push_data(std::move(data), info);
-
-            if constexpr (requires { executor->on_transfer(receiver, info); }) {
-                executor->on_transfer(receiver, info);
+            if constexpr (requires { graph->executor().on_transfer(receiver, info); }) {
+                graph->executor().on_transfer(receiver, info);
             }
-        };
+        });
     }
 };
 

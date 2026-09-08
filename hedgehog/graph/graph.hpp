@@ -54,8 +54,7 @@ struct Graph : Node, NodeIO<Config> {
     struct MakeEdgeArgs {
         Sender *sender;
         Receiver *receiver;
-        Sink *sink;
-        Executor *executor;
+        Graph<Config> *graph;
     };
 
     // attributes & constructors ///////////////////////////////////////////////
@@ -178,14 +177,20 @@ struct Graph : Node, NodeIO<Config> {
         return edge_builder_->template make_edge<T>(MakeEdgeArgs{
             .sender = sender,
             .receiver = receiver,
-            .sink = &sink_,
-            .executor = executor_.get(),
+            .graph = this,
         });
     }
 
     template <typename T>
     Edge<T> make_edge(auto receiver) {
         return make_edge<T>((void *)nullptr, receiver);
+    }
+
+    template <typename T>
+    Edge<T> make_output_edge() {
+        return Edge<T>(this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
+            static_cast<Graph<Config> *>(e->graph)->template push_result<T>(std::move(data), info);
+        });
     }
 
     //
@@ -202,8 +207,8 @@ struct Graph : Node, NodeIO<Config> {
         nodes_.insert(sender);
         nodes_.insert(receiver);
         connections_.push_back(Connection{sender.get(), receiver.get()});
-        sender->connect_output_edge(edge);
         receiver->connect_input_edge(edge);
+        sender->connect_output_edge(std::move(edge));
     }
 
     template <typename T>
@@ -233,7 +238,7 @@ struct Graph : Node, NodeIO<Config> {
 
     void draw_edges(auto sender, auto receiver) {
         draw_edges(sender, receiver, [&]<typename T>(auto sender, auto receiver) {
-            return make_edge<T>(receiver.get());
+            return make_edge<T>(sender.get(), receiver.get());
         });
     }
 
@@ -247,7 +252,7 @@ struct Graph : Node, NodeIO<Config> {
     void connect_input(auto node, Edge<T> edge) {
         nodes_.insert(node);
         input_nodes_.insert(node);
-        IO::connect_input_edge(edge);
+        IO::connect_input_edge(std::move(edge));
     }
 
     template <typename T>
@@ -280,14 +285,12 @@ struct Graph : Node, NodeIO<Config> {
     void connect_output(auto node, Edge<T> edge) {
         nodes_.insert(node);
         output_nodes_.insert(node);
-        node->connect_output_edge(edge);
+        node->connect_output_edge(std::move(edge));
     }
 
     template <typename T>
     void connect_output(auto node) {
-        connect_output(node, [&](data_t<T> data, RuntimeInfo const &info) {
-            IO::push_result(std::move(data), info);
-        });
+        connect_output(node, make_output_edge<T>());
     }
 
     template <typename Node>
@@ -303,9 +306,7 @@ struct Graph : Node, NodeIO<Config> {
     template <typename Node>
     void connect_outputs(std::shared_ptr<Node> node) {
         connect_outputs(node, [&]<typename T>(auto node) -> Edge<T> {
-            return [&](data_t<T> data, RuntimeInfo const &info) {
-                IO::push_result(std::move(data), info);
-            };
+            return make_output_edge<T>();
         });
     }
 };

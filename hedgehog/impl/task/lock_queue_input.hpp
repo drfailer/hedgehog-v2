@@ -59,11 +59,9 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     std::mutex mutex{};
     std::condition_variable cond{};
     alignas(64) std::atomic<bool> terminated{false};
-    Profiler *profiler;
 
     void initialize(InitializationInfo const &info) {
         terminated.store(false);
-        profiler = info.profiler;
     }
 
     void finalize(InitializationInfo const &) {
@@ -72,7 +70,7 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     }
 
     void signal(SignalOpts const &opts) {
-        std::lock_guard<std::mutex> lock(mutex); // lock to avoid false wakeup
+        std::lock_guard<std::mutex> lock(mutex); // lock to avoid lost wakeup
         if (opts.count == 1) {
             cond.notify_one();
         } else {
