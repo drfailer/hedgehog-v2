@@ -78,6 +78,9 @@ struct Profiler {
     std::unordered_map<std::string, size_t> ids;
     std::vector<Profile> profiles;
 
+    Profiler() = default;
+    Profiler(Profiler const &) = delete;
+
     static void add_duration(Profile &profile, double dur) {
         // Welford's algorithm to accumulate the mean and the variance
         profile.count += 1;

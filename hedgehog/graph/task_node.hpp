@@ -69,9 +69,8 @@ struct TaskNode : Node, NodeIO<Config> {
         }
 
         void execute(auto data) {
-            if constexpr (requires { task->execute(context, data); }) {
-                auto &state = this->context; // make sure we use reference
-                task->execute(state, data);
+            if constexpr (requires { task->execute(&this->context, data); }) {
+                task->execute(&this->context, data);
             } else {
                 task->execute(data);
             }
@@ -101,7 +100,7 @@ struct TaskNode : Node, NodeIO<Config> {
     }
 
     void execute(ExecutionInfo const &info) override {
-        auto &state = states_[info.thread_index];
+        auto state = &states_[info.thread_index];
 
         if (info.direct) {
 
@@ -113,13 +112,13 @@ struct TaskNode : Node, NodeIO<Config> {
 
             switch (info.direct_phase) {
             case ExecutionInfo::Initialize:
-                state.initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
+                state->initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
                 break;
             case ExecutionInfo::Execute:
-                IO::execute(state, state.context.info());
+                IO::execute(state, state->context.info());
                 break;
             case ExecutionInfo::Finalize:
-                state.finalize();
+                state->finalize();
                 break;
             }
 
@@ -130,14 +129,14 @@ struct TaskNode : Node, NodeIO<Config> {
             // run loop until the graph terminates.
             //
 
-            state.initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
+            state->initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
             for (;;) {
-                auto wait_result = IO::wait(state.context.info());
+                auto wait_result = IO::wait(state->context.info());
                 if (wait_result.terminate) break;
                 if (wait_result.skip) continue;
-                IO::execute(state, state.context.info());
+                IO::execute(state, state->context.info());
             }
-            state.finalize();
+            state->finalize();
         }
     }
 

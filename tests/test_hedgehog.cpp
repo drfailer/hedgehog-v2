@@ -28,13 +28,13 @@ struct Task {
     using outputs = hh::type_list<int, float>;
 
     void execute(auto ctx, hh::data_t<int> data) {
-        printf("%s::execute<int>(%d)[%ld]\n", ctx.name().c_str(), *data, ctx.thread_index());
-        ctx.push_result(data);
+        printf("%s::execute<int>(%d)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
+        ctx->push_result(data);
     }
 
     void execute(auto ctx, hh::data_t<float> data) {
-        printf("%s::execute<float>(%f)[%ld]\n", ctx.name().c_str(), *data, ctx.thread_index());
-        ctx.push_result(data);
+        printf("%s::execute<float>(%f)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
+        ctx->push_result(data);
     }
 };
 

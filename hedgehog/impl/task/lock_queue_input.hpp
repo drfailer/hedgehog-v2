@@ -100,7 +100,7 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
         ([&] {
             if (auto data = LockQueueInputPort<Inputs>::pop()) {
-                exec.execute(*data);
+                exec->execute(*data);
             }
         }(), ...);
     }
