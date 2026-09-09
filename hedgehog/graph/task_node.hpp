@@ -53,6 +53,7 @@ struct TaskNode : Node, NodeIO<Config> {
         Profiler profiler;
 
         void initialize(TaskNode<Config> *node, RuntimeInfo const &info) {
+            profiler.initialize();
             context.construct(node, info);
             if constexpr (requires { task->initialize(context); }) {
                 task->initialize(context);
@@ -61,19 +62,20 @@ struct TaskNode : Node, NodeIO<Config> {
             }
         }
 
-        void finalize() {
-            if constexpr (requires { task->initialize(context); }) {
-                task->finalize(context);
-            } else if constexpr (requires { task->initialize(); }) {
-                task->finalize();
-            }
-        }
-
         void execute(auto data) {
             if constexpr (requires { task->execute(&this->context, data); }) {
                 task->execute(&this->context, data);
             } else {
                 task->execute(data);
+            }
+        }
+
+        void finalize() {
+            profiler.finalize();
+            if constexpr (requires { task->initialize(context); }) {
+                task->finalize(context);
+            } else if constexpr (requires { task->initialize(); }) {
+                task->finalize();
             }
         }
     };
@@ -96,6 +98,7 @@ struct TaskNode : Node, NodeIO<Config> {
 
     void initialize(GraphInfo const &info) override {
         graph_info_ = info;
+        Node::profiler().initialize();
         auto init_info = InitializationInfo{Node::info(), graph_info_, &Node::profiler()};
         IO::initialize(init_info);
     }
@@ -144,6 +147,7 @@ struct TaskNode : Node, NodeIO<Config> {
     void finalize(GraphInfo const &info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info_, &Node::profiler()};
         IO::finalize(init_info);
+        Node::profiler().finalize();
     }
 
     ProfilerReport profile() override {

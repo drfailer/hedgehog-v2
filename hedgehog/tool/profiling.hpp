@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <string>
 #include <cstddef>
+#include <cmath>
 #include <chrono>
 
 #include "macros.hpp"
@@ -40,11 +41,11 @@
 
 #ifdef HH_ENABLE_PROFILING
 #define HH_PROFILE_REGION(profiler, name) \
-    thread_local static size_t HH_CONCAT(_prof_id_, __LINE__) = profiler.create_profile(name); \
+    thread_local static auto HH_CONCAT(_profile_, __LINE__) = profiler.create_profile(name); \
     for (bool \
-         HH_CONCAT(_prof_, __LINE__) = profiler.begin_region(HH_CONCAT(prof_id_, __LINE__)); \
+         HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->region.begin(); \
          HH_CONCAT(_prof_, __LINE__); \
-         HH_CONCAT(_prof_, __LINE__) = profiler.end_region(HH_CONCAT(prof_id_, __LINE__)))
+         HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->region.end())
 #else
 #define HH_PROFILE_REGION(profiler, name)
 #endif
@@ -63,70 +64,77 @@ using Duration = std::chrono::duration<double, std::nano>; // TODO: de we really
 // wiki: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
 //
 
-struct Profile {
+struct ProfileRegion {
     size_t count;
     double mean;
     double m2;
     double min;
     double max;
-    TimePoint region_begin;
-    // TODO: nvtx domain
+    TimePoint t0;
+
+    double stddev() {
+        return std::sqrt(this->m2 / this->count);
+    }
+
+    bool begin() {
+        this->t0 = Clock::now();
+        return true;
+    }
+
+    bool end() {
+        TimePoint t1 = Clock::now();
+        Duration duration = t1 - this->t0;
+        double dur_count = duration.count();
+
+        // Welford's algorithm to accumulate the mean and the variance
+        this->count += 1;
+        auto old_mean = this->mean;
+        this->mean += (dur_count - this->mean) / this->count;
+        this->m2 += (dur_count - old_mean) * (dur_count - this->mean);
+        this->min = std::min(this->min, dur_count);
+        this->max = std::max(this->max, dur_count);
+        return false;
+    }
+};
+
+//
+// Using a union for this might be better, but I don't want to use a variant
+// (too slow) and unions don't work with RAII...
+//
+struct Profile {
+    ProfileRegion region; // profiling region
+    std::string info;     // add information to the report
 };
 
 // TODO: do we want this struct to be empty when profiling is disabled (make the node smaller)?
 struct Profiler {
-    std::unordered_map<std::string, size_t> ids;
-    std::vector<Profile> profiles;
+    std::unordered_map<std::string, std::unique_ptr<Profile>> profiles;
 
     Profiler() = default;
     Profiler(Profiler const &) = delete;
 
-    static void add_duration(Profile &profile, double dur) {
-        // Welford's algorithm to accumulate the mean and the variance
-        profile.count += 1;
-        auto old_mean = profile.mean;
-        profile.mean += (dur - profile.mean) / profile.count;
-        profile.m2 += (dur - old_mean) * (dur - profile.mean);
-        profile.min = std::min(profile.min, dur);
-        profile.max = std::max(profile.max, dur);
+    void initialize() {
+        profiles.clear();
     }
 
-    static double compute_variance(Profile const &profile) {
-        return profile.m2 / profile.count;
-    }
-
-    // TODO: how de we handle clearing the profiles?
+    void finalize() {}
 
     //
     // To reduce the impact of the profiler on the runtime, we try to avoid
     // hash map lookups during the computation. Here is the intended way to use
     // this profiling system:
     //
-    // thread_local static size_t id = profiler.create_profile(); // an id has to be created beforehand
-    // profiler.begin_region(id);
+    // thread_local static auto profile = profiler.create_profile(); // an id has to be created beforehand
+    // profile->region.begin();
     // ...
-    // profiler.end_region(id);
+    // profiler->region.end();
     //
 
-    size_t create_profile(std::string const &name) {
-        size_t id = profiles.size();
-        ids[name] = id;
-        profiles.emplace_back();
-        return id;
-    }
-
-    bool begin_region(size_t id) {
-        Profile &profile = profiles[id];
-        profile.region_begin = Clock::now();
-        return true;
-    }
-
-    bool end_region(size_t id) {
-        TimePoint region_end = Clock::now();
-        Profile &profile = profiles[id];
-        Duration duration = region_end - profile.region_begin;
-        add_duration(profile, duration.count());
-        return false;
+    Profile *create_profile(std::string const &name) {
+        auto profile = std::make_unique<Profile>();
+        auto ptr = profile.get();
+        profiles[name] = std::move(profile);
+        return ptr;
     }
 };
 
