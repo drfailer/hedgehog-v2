@@ -47,18 +47,6 @@ class Node {
     virtual ProfilerReport profile() = 0;
 };
 
-// Connections /////////////////////////////////////////////////////////////////
-
-//
-// Connections stored by the graph (used for building dot file, or other
-// operations on the graph).
-//
-
-struct Connection {
-    Node *sender;
-    Node *receiver;
-};
-
 } // end namespace hh
 
 #endif

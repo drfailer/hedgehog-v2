@@ -20,6 +20,7 @@
 #define HEDGEHOG_GRAPH_EDGE
 
 #include <functional>
+#include <memory>
 #include <cassert>
 #include "../tool/data.hpp"
 #include "../tool/profiling.hpp"
@@ -28,15 +29,40 @@
 
 namespace hh {
 
+//
+// Edges are used to connect nodes. Here, we use type erasure to be able to
+// connect any node type to any other node type. It also makes things more
+// manageable because it avoids adding too many interfaces everywhere (reduces
+// interdependencies).
+//
+// Nodes inputs/outputs store a raw edge struct instead of a pointer because
+// benchmarks have shown that dereferencing the pointer had a non negligible
+// impact on performance (this way, all the data required by an edge is loaded
+// with the edge).
+//
+
 template <typename T>
 struct Edge;
 
+//
+// For user customization purpose, we use an std::function which allow users to
+// capture content when defining custom edges. If the captured content fits in
+// the std::function small buffer, it should not impact the performance (cf
+// SBO).
+//
+// Note that using a function pointer here would be more efficient but less
+// practical API wise.
+//
 template <typename T>
 using EdgeTransfer = std::function<void(Edge<T> *, data_t<T>, RuntimeInfo const &)>;
 
 template <typename T>
 struct Edge {
-    Profiler profiler;
+    // Since the edge is stored by copy inside node inputs/outputs, we use a
+    // shared pointer for the profiler. Note that this involves sharing the
+    // profiler between multiple threads which is not a problem performance
+    // wise because threads should operate on different profiles independently.
+    std::shared_ptr<Profiler> profiler = std::make_shared<Profiler>();
     void *sender = nullptr;
     void *receiver = nullptr;
     void *graph = nullptr;
@@ -50,6 +76,11 @@ struct Edge {
 
     Edge(void *graph, EdgeTransfer<T> fun)
         : graph(graph), fun(std::move(fun)) {}
+
+    Edge(Edge<T> const &edge) = default;
+    Edge<T> &operator=(Edge<T> const &edge) = default;
+    Edge(Edge<T> &&edge) = default;
+    Edge<T> &operator=(Edge<T> &&edge) = default;
 
     void transfer(data_t<T> data, RuntimeInfo const &info) {
         fun(this, data, info);
@@ -72,6 +103,22 @@ struct DirectEdgeBuilder {
             }
         });
     }
+};
+
+// Connections /////////////////////////////////////////////////////////////////
+
+//
+// Connections stored by the graph (used for building dot file, or other
+// operations on the graph).
+//
+// We don't store the edge directly because edges need to be taken by copy in
+// inputs/outputs.
+//
+
+struct Connection {
+    Profiler *profiler; // profiler from the edge
+    Node *sender;
+    Node *receiver;
 };
 
 } // end namespace hh

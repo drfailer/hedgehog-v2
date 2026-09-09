@@ -206,7 +206,7 @@ struct Graph : Node, NodeIO<Config> {
     void draw_edge(auto sender, auto receiver, Edge<T> edge) {
         nodes_.insert(sender);
         nodes_.insert(receiver);
-        connections_.push_back(Connection{sender.get(), receiver.get()});
+        connections_.push_back(Connection{edge.profiler.get(), sender.get(), receiver.get()});
         receiver->connect_input_edge(edge);
         sender->connect_output_edge(std::move(edge));
     }
