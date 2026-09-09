@@ -30,6 +30,9 @@ namespace hh {
 
 template <typename ...Outputs>
 struct GraphSink {
+    void initialize(InitializationInfo const &) {}
+    void finalize(InitializationInfo const &) {}
+
     using VariantType = std::variant<data_t<Outputs>...>;
     std::mutex mutex;
     std::queue<VariantType> results;

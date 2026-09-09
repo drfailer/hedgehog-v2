@@ -95,7 +95,7 @@ struct Graph : Node, NodeIO<Config> {
         auto init_info = InitializationInfo{Node::info(), graph_info, &Node::profiler()};
 
         // intialize the sink_
-        initialize_component(&sink_, init_info);
+        sink_.initialize(init_info);
         auto &graph_sink = sink_;
         type_list_map<OutputTypes>([&]<typename T>() {
             IO::output().connect_edge(make_edge<T>(&graph_sink));
@@ -151,9 +151,9 @@ struct Graph : Node, NodeIO<Config> {
         for (auto &node : nodes_) {
             node->finalize(graph_info);
         }
-        finalize_component(executor_, init_info);
+        executor_->finalize(init_info);
         IO::finalize(init_info);
-        finalize_component(&sink_, init_info);
+        sink_.finalize(init_info);
     }
 
     ProfilerReport profile() override {

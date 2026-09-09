@@ -42,6 +42,9 @@ struct DirectOutputPort {
 
 template <typename ...Outputs>
 struct DirectNodeOutput : NodePorts<DirectOutputPort, Outputs...> {
+    void initialize(InitializationInfo const &) {}
+    void finalize(InitializationInfo const &) {}
+
     template <typename T>
     void push_result(data_t<T> data, RuntimeInfo const &info) {
         DirectOutputPort<T>::push_result(std::move(data), info);

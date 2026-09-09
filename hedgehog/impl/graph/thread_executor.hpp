@@ -27,6 +27,9 @@ namespace hh {
 struct ThreadExecutor {
     std::vector<std::thread> threads = {};
 
+    void initialize(InitializationInfo const &) {}
+    void finalize(InitializationInfo const &) {}
+
     void execute(Node *node) {
         auto exec_info = ExecutionInfo{
             .thread_index = 0,

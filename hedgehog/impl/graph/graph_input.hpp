@@ -42,6 +42,9 @@ struct GraphInputPort {
 
 template <typename ...Outputs>
 struct GraphInput : NodePorts<GraphInputPort, Outputs...> {
+    void initialize(InitializationInfo const &) {}
+    void finalize(InitializationInfo const &) {}
+
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
         GraphInputPort<T>::push_data(std::move(data), info);

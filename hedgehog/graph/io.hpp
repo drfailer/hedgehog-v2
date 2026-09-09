@@ -56,15 +56,11 @@ struct WaitResult {
 template <typename T, typename ...Inputs>
 concept NodeInputTrait = std::default_initializable<T> && requires {
     //
-    // The input can be initializable/finalizable. initialize_component does:
-    // - calls `t.initialize(info)` if defined
-    // - else calls `t.initialize()` if defined
-    // - else does nothing.
-    // finalize works the same way.
+    // The input should be initializable/finalizable:
     //
     [](T t, InitializationInfo const &info) {
-        initialize_component(&t, info);
-        finalize_component(&t, info);
+        t.initialize(info);
+        t.finalize(info);
     };
 
     //
@@ -108,15 +104,11 @@ concept NodeInputTrait = std::default_initializable<T> && requires {
 template <typename T, typename ...Outputs>
 concept NodeOutputTrait = std::default_initializable<T> && requires {
     //
-    // The input can be initializable/finalizable. initialize_component does:
-    // - calls `t.initialize(info)` if defined
-    // - else calls `t.initialize()` if defined
-    // - else does nothing.
-    // finalize works the same way.
+    // The output should be initializable/finalizable:
     //
     [](T t, InitializationInfo const &info) {
-        initialize_component(&t, info);
-        finalize_component(&t, info);
+        t.initialize(info);
+        t.finalize(info);
     };
 
     //
@@ -175,13 +167,13 @@ class NodeIO {
     void initialize(InitializationInfo const &info) {
         assert(input_.has_value() && "the input was not constructed");
         assert(output_.has_value() && "the output was not constructed");
-        initialize_component(&(*input_), info);
-        initialize_component(&(*output_), info);
+        input_->initialize(info);
+        output_->initialize(info);
     }
 
     void finalize(InitializationInfo const &info) {
-        finalize_component(&(*input_), info);
-        finalize_component(&(*output_), info);
+        input_->finalize(info);
+        output_->finalize(info);
     }
 
     template <typename T>
