@@ -28,7 +28,6 @@ struct ThreadExecutor {
     std::vector<std::thread> threads = {};
 
     void initialize(InitializationInfo const &) {}
-    void finalize(InitializationInfo const &) {}
 
     void execute(Node *node) {
         auto exec_info = ExecutionInfo{
@@ -53,7 +52,7 @@ struct ThreadExecutor {
         }
     }
 
-    void finalize() {
+    void finalize(InitializationInfo const &) {
         for (auto &thread : threads) {
             thread.join();
         }
