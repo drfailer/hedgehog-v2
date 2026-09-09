@@ -35,7 +35,7 @@ class NodeExecutionContext {
 
     NodeType &node() { return *node_; }
     RuntimeInfo const &info() { return info_; }
-    Profiler *profiler() { return info_.profiler; }
+    Profiler &profiler() { return *info_.profiler; }
 
     std::string const &name() { return info_.node.name; }
     std::string const &graph_name() { return info_.graph.name; }
