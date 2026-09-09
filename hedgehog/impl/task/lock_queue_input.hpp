@@ -58,14 +58,15 @@ template <typename ...Inputs>
 struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     std::mutex mutex{};
     std::condition_variable cond{};
-    alignas(64) std::atomic<bool> terminated{false};
+    bool terminated = false;
 
     void initialize(InitializationInfo const &info) {
-        terminated.store(false);
+        terminated = false;
     }
 
     void finalize(InitializationInfo const &) {
-        terminated.store(true);
+        std::lock_guard<std::mutex> lock(mutex); // lock to avoid lost wakeup
+        terminated = true;
         cond.notify_all();
     }
 
@@ -81,9 +82,9 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
         std::unique_lock<std::mutex> lock(mutex);
         cond.wait(lock, [this]{
-            return has_data() || terminated.load(std::memory_order_acquire);
+            return has_data() || terminated;
         });
-        return WaitResult{terminated.load(std::memory_order_relaxed), false};
+        return WaitResult{terminated, false};
     }
 
     bool has_data() {
