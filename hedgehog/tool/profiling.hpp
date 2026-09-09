@@ -19,11 +19,14 @@
 #ifndef HEDGEHOG_TOOL_PROFILING_H
 #define HEDGEHOG_TOOL_PROFILING_H
 
-#include <unordered_map>
+#include <map>
 #include <string>
 #include <cstddef>
 #include <cmath>
+#include <cstdio>
 #include <chrono>
+#include <mutex>
+#include <limits>
 
 #include "macros.hpp"
 
@@ -39,13 +42,15 @@
 
 // TODO: add HH_ENABLE_PROFILING in the profiler functions
 
+#define HH_ENABLE_PROFILING
+
 #ifdef HH_ENABLE_PROFILING
 #define HH_PROFILE_REGION(profiler, name) \
-    thread_local static auto HH_CONCAT(_profile_, __LINE__) = profiler.create_profile(name); \
+    thread_local static auto HH_CONCAT(_profile_, __LINE__) = (profiler).create_profile((name)); \
     for (bool \
-         HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->region.begin(); \
+         HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->begin_region(); \
          HH_CONCAT(_prof_, __LINE__); \
-         HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->region.end())
+         HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->end_region())
 #else
 #define HH_PROFILE_REGION(profiler, name)
 #endif
@@ -57,44 +62,46 @@ using TimePoint = std::chrono::time_point<Clock>;
 using Duration = std::chrono::duration<double, std::nano>; // TODO: de we really want doubles?
 
 //
-// The profile stores all the profiler data for a particular id.
-//
-// To compute an estimate of the mean and the variance without having to store
-// all the timers, we use the Welford's algorithm.
-// wiki: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+// The measure computes the mean and the stddev using the Welford's algorithm.
 //
 
-struct ProfileRegion {
-    size_t count;
-    double mean;
-    double m2;
-    double min;
-    double max;
-    TimePoint t0;
+struct Measure {
+    size_t count = 0;
+    double mean = 0;
+    double m2 = 0;
+    double min = std::numeric_limits<double>::max();
+    double max = 0;
+
+    void add_value(double x) {
+        this->count += 1;
+        auto old_mean = this->mean;
+        this->mean += (x - this->mean) / this->count;
+        this->m2 += (x - old_mean) * (x - this->mean);
+        this->min = std::min(this->min, x);
+        this->max = std::max(this->max, x);
+    }
+
+    void merge(Measure const &m) {
+        if (&m == this || m.count == 0) return;
+        size_t count = this->count + m.count;
+        double delta = this->mean - m.mean;
+        double mean = (this->count * this->mean + m.count * m.mean) / count;
+        double m2 = this->m2 + m.m2 + delta * delta * this->count * m.count / count;
+        this->count = count;
+        this->mean = mean;
+        this->m2 = m2;
+        this->min = std::min(this->min, m.min);
+        this->max = std::max(this->max, m.max);
+    }
 
     double stddev() {
         return std::sqrt(this->m2 / this->count);
     }
+};
 
-    bool begin() {
-        this->t0 = Clock::now();
-        return true;
-    }
-
-    bool end() {
-        TimePoint t1 = Clock::now();
-        Duration duration = t1 - this->t0;
-        double dur_count = duration.count();
-
-        // Welford's algorithm to accumulate the mean and the variance
-        this->count += 1;
-        auto old_mean = this->mean;
-        this->mean += (dur_count - this->mean) / this->count;
-        this->m2 += (dur_count - old_mean) * (dur_count - this->mean);
-        this->min = std::min(this->min, dur_count);
-        this->max = std::max(this->max, dur_count);
-        return false;
-    }
+struct ProfileRegion {
+    Measure measure;
+    TimePoint t0;
 };
 
 //
@@ -104,11 +111,103 @@ struct ProfileRegion {
 struct Profile {
     ProfileRegion region; // profiling region
     std::string info;     // add information to the report
+
+    bool begin_region() {
+        region.t0 = Clock::now();
+        return true;
+    }
+
+    bool end_region() {
+        TimePoint t1 = Clock::now();
+        Duration duration = t1 - this->region.t0;
+        region.measure.add_value(duration.count());
+        return false;
+    }
+
+    void set_info(std::string const &info_str) {
+        this->info = info_str;
+    }
+
+    void set_info(auto ...args) {
+        std::ostringstream oss;
+        (oss << ... << args);
+        this->info = oss.str();
+    }
+
+    bool has_info() const { return info.size() > 0; }
+    bool has_region() const { return region.measure.count > 0; }
+
+    void merge(Profile const &profile) {
+        if (profile.has_region()) {
+            region.measure.merge(profile.region.measure);
+        }
+        if (profile.has_info()) {
+            info += profile.info;
+        }
+    }
+};
+
+// TODO: how to make this easily expandable?
+enum class ProfileReportKind {
+    Node,
+    Edge,
+    Graph,
+    Pipeline,
+};
+
+struct ProfilerReport {
+    ProfilerReport *parent = nullptr;
+    ProfileReportKind kind;
+    std::string label = "";
+    std::map<std::string, Profile> profiles = {};
+    std::vector<ProfilerReport> childs;
+
+    void add_report(ProfilerReport report) {
+        report.parent = this;
+        childs.push_back(std::move(report));
+    }
+
+    void add_profile(std::string const &label, Profile const &profile) {
+        auto it = profiles.find(label);
+        if (it == profiles.end()) {
+            profiles[label] = profile;
+        } else {
+            profiles[label].merge(profile);
+        }
+    }
+
+    void print() {
+        switch (kind) {
+        case ProfileReportKind::Node: printf("node %s:\n", label.c_str()); break;
+        case ProfileReportKind::Edge: printf("edge %s:\n", label.c_str()); break;
+        case ProfileReportKind::Graph: printf("graph %s:\n", label.c_str()); break;
+        }
+        for (auto &[label, profile] : profiles) {
+            if (profile.has_region()) {
+                printf("- %s: %.3f +- %.3f [%.3f; %.3f] (%ld)\n", label.c_str(),
+                       profile.region.measure.mean, profile.region.measure.stddev(),
+                       profile.region.measure.min, profile.region.measure.max,
+                       profile.region.measure.count);
+            }
+            if (profile.has_info()) {
+                printf("  - %s\n", profile.info.c_str());
+            }
+        }
+        for (auto &child : childs) {
+            child.print();
+        }
+    }
+
+    void to_dot(std::ostream &os, size_t lvl = 0) {
+        // TODO
+    }
 };
 
 // TODO: do we want this struct to be empty when profiling is disabled (make the node smaller)?
+// - we could return a global dummy profile
 struct Profiler {
-    std::unordered_map<std::string, std::unique_ptr<Profile>> profiles;
+    std::mutex mutex;
+    std::map<std::string, std::unique_ptr<Profile>> profiles;
 
     Profiler() = default;
     Profiler(Profiler const &) = delete;
@@ -124,52 +223,30 @@ struct Profiler {
     // hash map lookups during the computation. Here is the intended way to use
     // this profiling system:
     //
-    // thread_local static auto profile = profiler.create_profile(); // an id has to be created beforehand
+    // thread_local static Profile *profile = profiler.create_profile(); // an id has to be created beforehand
     // profile->region.begin();
     // ...
     // profiler->region.end();
     //
 
     Profile *create_profile(std::string const &name) {
+        std::lock_guard<std::mutex> lock(mutex);
         auto profile = std::make_unique<Profile>();
         auto ptr = profile.get();
         profiles[name] = std::move(profile);
         return ptr;
     }
-};
 
-// TODO: this is a basic idea on how we could compile profiling information,
-// however, we need to be able to make the difference between
-// edges/nodes/graph/pipeline (group entries by level)
-
-struct ProfilerStats {
-    size_t count;
-    double mean;
-    double stddev;
-    double min;
-    double max;
-};
-
-struct ProfilerReport {
-    ProfilerStats stats;
-    std::unordered_map<std::string, ProfilerReport> entries;
-
-    void add_profiler(Profiler const &profiler) {
-        // TODO
+    ProfilerReport create_report(std::string const &label, ProfileReportKind kind) {
+        ProfilerReport report;
+        report.label = label;
+        report.kind = kind;
+        for (auto &[label, profile] : profiles) {
+            report.profiles[label] = *profile.get();
+        }
+        return report;
     }
-
-    std::string to_dot() {
-        return "TODO";
-    }
-
-    std::string to_json() {
-        return "TODO";
-    }
-
-    // TODO: binary format
 };
-
-// TODO: merging profile data
 
 } // end namespace hh
 

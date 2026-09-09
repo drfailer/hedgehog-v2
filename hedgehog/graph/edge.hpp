@@ -119,6 +119,12 @@ struct Connection {
     Profiler *profiler; // profiler from the edge
     Node *sender;
     Node *receiver;
+
+    ProfilerReport profile() {
+        std::ostringstream oss;
+        oss << "edge_" << (void *)sender << "_" << (void *)receiver;
+        return profiler->create_report(oss.str(), ProfileReportKind::Edge);
+    }
 };
 
 } // end namespace hh

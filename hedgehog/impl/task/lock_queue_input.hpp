@@ -32,10 +32,13 @@ template <typename T>
 struct LockQueueInputPort {
     std::mutex mutex;
     std::queue<data_t<T>> queue;
+    size_t max_queue_size = 0;
 
-    void push(data_t<T> data) {
+    size_t push(data_t<T> data) {
         std::lock_guard<std::mutex> lock(mutex);
         queue.push(std::move(data));
+        if (queue.size() > max_queue_size) max_queue_size = queue.size();
+        return queue.size();
     }
 
     std::optional<data_t<T>> pop() {
@@ -61,13 +64,20 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     bool terminated = false;
 
     void initialize(InitializationInfo const &info) {
+        ([&] { LockQueueInputPort<Inputs>::max_queue_size = 0; }(), ...);
         terminated = false;
     }
 
-    void finalize(InitializationInfo const &) {
+    void finalize(InitializationInfo const &info) {
         std::lock_guard<std::mutex> lock(mutex); // lock to avoid lost wakeup
         terminated = true;
         cond.notify_all();
+        ([&] {
+            using namespace std::string_literals; // for ""s
+            auto profile = info.profiler->create_profile("LockQueueInputPort<"s + type_to_string<Inputs>() + ">");
+            profile->set_info("MQS = ", LockQueueInputPort<Inputs>::max_queue_size, "\n",
+                              "QS = ", LockQueueInputPort<Inputs>::size());
+        }(), ...);
     }
 
     void signal(SignalOpts const &opts) {
@@ -93,7 +103,7 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
 
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
-        LockQueueInputPort<T>::push(std::move(data));
+        size_t queue_size = LockQueueInputPort<T>::push(std::move(data));
         signal(SignalOpts{info, 1, 0});
     }
 

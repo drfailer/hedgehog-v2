@@ -22,6 +22,7 @@
 #include <string>
 #include <memory>
 #include <cassert>
+#include <map>
 
 #include "node.hpp"
 #include "../api/node_execution_context.hpp"
@@ -63,10 +64,14 @@ struct TaskNode : Node, NodeIO<Config> {
         }
 
         void execute(auto data) {
-            if constexpr (requires { task->execute(&this->context, data); }) {
-                task->execute(&this->context, data);
-            } else {
-                task->execute(data);
+            using namespace std::string_literals; // for ""s
+            HH_PROFILE_REGION(profiler, "execute<"s + type_to_string<decltype(data)>() + ">"s)
+            {
+                if constexpr (requires { task->execute(&this->context, data); }) {
+                    task->execute(&this->context, data);
+                } else {
+                    task->execute(data);
+                }
             }
         }
 
@@ -134,8 +139,12 @@ struct TaskNode : Node, NodeIO<Config> {
             //
 
             state->initialize(this, RuntimeInfo{Node::info(), graph_info_, info, &state->profiler});
+            WaitResult wait_result;
             for (;;) {
-                auto wait_result = IO::wait(state->context.info());
+                HH_PROFILE_REGION(state->profiler, "wait")
+                {
+                    wait_result = IO::wait(state->context.info());
+                }
                 if (wait_result.terminate) break;
                 if (wait_result.skip) continue;
                 IO::execute(state, state->context.info());
@@ -151,8 +160,12 @@ struct TaskNode : Node, NodeIO<Config> {
     }
 
     ProfilerReport profile() override {
-        ProfilerReport report;
-        // TODO
+        ProfilerReport report = Node::profiler().create_report(Node::info().name, ProfileReportKind::Node);
+        for (auto &state : states_) {
+            for (auto &[label, profile] : state.profiler.profiles) {
+                report.add_profile(label, *profile.get());
+            }
+        }
         return report;
     }
 };

@@ -67,6 +67,8 @@ TEST(compile_test, compile_test) {
     std::visit(test_value, graph->get_result());
     std::visit(test_value, graph->get_result());
     graph->stop();
+
+    graph->generate_dot_file("test");
 }
 
 TEST(memory, pool) {

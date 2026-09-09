@@ -22,6 +22,7 @@
 #include <variant>
 #include <cstdio>
 #include <set>
+#include <sstream>
 
 #include "info.hpp"
 #include "node.hpp"
@@ -130,7 +131,7 @@ struct Graph : Node, NodeIO<Config> {
 
     void initialize(GraphInfo const &graph_info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info, &Node::profiler()};
-        Node::profiler().initialize();
+        Node::profiler().initialize(); // TODO: we may need a cleanup system for this?
         IO::initialize(init_info);
         for (auto &node : nodes_) {
             node->initialize(graph_info);
@@ -156,8 +157,14 @@ struct Graph : Node, NodeIO<Config> {
     }
 
     ProfilerReport profile() override {
-        ProfilerReport report;
-        // TODO
+        ProfilerReport report = Node::profiler().create_report(Node::info().name, ProfileReportKind::Graph);
+        for (auto &node : nodes_) {
+            report.add_report(node->profile());
+        }
+        for (auto &connection : connections_) {
+            report.add_report(connection.profile());
+        }
+        // TODO: we may miss some edges here (input/sink)
         return report;
     }
 
@@ -307,6 +314,13 @@ struct Graph : Node, NodeIO<Config> {
         connect_outputs(node, [&]<typename T>(auto node) -> Edge<T> {
             return make_output_edge<T>();
         });
+    }
+
+    // profiling ///////////////////////////////////////////////////////////////
+
+    void generate_dot_file(std::string const &name) {
+        auto report = this->profile();
+        report.print();
     }
 };
 
