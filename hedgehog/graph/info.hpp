@@ -99,6 +99,7 @@ struct RuntimeInfo {
     NodeInfo node;
     GraphInfo graph;
     ExecutionInfo exec;
+    Profiler *profiler;
 };
 
 } // end namespace hh

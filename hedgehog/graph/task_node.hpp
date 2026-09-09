@@ -50,6 +50,7 @@ struct TaskNode : Node, NodeIO<Config> {
     struct ThreadState {
         std::shared_ptr<Task> task;
         NodeExecutionContext<TaskNode<Config>> context;
+        Profiler profiler;
 
         void initialize(TaskNode<Config> *node, RuntimeInfo const &info) {
             context.construct(node, info);
@@ -112,7 +113,7 @@ struct TaskNode : Node, NodeIO<Config> {
 
             switch (info.direct_phase) {
             case ExecutionInfo::Initialize:
-                state->initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
+                state->initialize(this, RuntimeInfo{Node::info(), graph_info_, info, &state->profiler});
                 break;
             case ExecutionInfo::Execute:
                 IO::execute(state, state->context.info());
@@ -129,7 +130,7 @@ struct TaskNode : Node, NodeIO<Config> {
             // run loop until the graph terminates.
             //
 
-            state->initialize(this, RuntimeInfo{Node::info(), graph_info_, info});
+            state->initialize(this, RuntimeInfo{Node::info(), graph_info_, info, &state->profiler});
             for (;;) {
                 auto wait_result = IO::wait(state->context.info());
                 if (wait_result.terminate) break;
