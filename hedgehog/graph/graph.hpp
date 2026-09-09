@@ -92,23 +92,20 @@ struct Graph : Node, NodeIO<Config> {
             return;
         }
         auto graph_info = GraphInfo{Node::info().name, 0};
-        auto init_info = InitializationInfo{Node::info(), graph_info, &Node::profiler()};
 
         // intialize the sink_
-        sink_.initialize(init_info);
+        sink_.initialize(InitializationInfo{Node::info(), graph_info, nullptr});
         auto &graph_sink = sink_;
         type_list_map<OutputTypes>([&]<typename T>() {
             IO::output().connect_edge(make_edge<T>(&graph_sink));
         });
-        // TODO: the executor_ may need to use the sink_ as well
 
         initialize(graph_info);
         execute(ExecutionInfo{0});
     }
 
     void stop() {
-        auto graph_info = GraphInfo{Node::info().name, 0};
-        finalize(graph_info);
+        finalize(GraphInfo{Node::info().name, 0});
     }
 
     template <typename T>
@@ -133,6 +130,7 @@ struct Graph : Node, NodeIO<Config> {
 
     void initialize(GraphInfo const &graph_info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info, &Node::profiler()};
+        Node::profiler().initialize();
         IO::initialize(init_info);
         for (auto &node : nodes_) {
             node->initialize(graph_info);
@@ -154,6 +152,7 @@ struct Graph : Node, NodeIO<Config> {
         executor_->finalize(init_info);
         IO::finalize(init_info);
         sink_.finalize(init_info);
+        Node::profiler().finalize();
     }
 
     ProfilerReport profile() override {
