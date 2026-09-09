@@ -36,48 +36,6 @@ struct StateManager {
     using inputs = State::inputs;
     using outputs = State::outputs;
 
-    template <typename T>
-    struct OutputPort {
-        std::vector<Edge<T>> edges_ = {};
-        State *state_ = nullptr;
-
-        void push_result(data_t<T> data, RuntimeInfo const &info) {
-            // TODO: what kind of API do we want here?
-            //       We could also use methods or members of the data to
-            //       determin if we need to send
-            //       NOTE: info will contain the graph id which will be used to
-            //       determin the output
-            if (!state_->should_transfer(data, info)) return;
-            for (auto &edge : edges_) {
-                edge.transfer(data, info);
-            }
-        }
-
-        void connect_edge(Edge<T> edge) {
-            edges_.push_back(std::move(edge));
-        }
-    };
-
-    struct Output : type_list_dispatch<outputs, NodePorts, OutputPort> {
-        // TODO: the make_state_manager should construct the output with the state
-        Output(State *state) {
-            type_list_map<outputs>([state]<typename T>() {
-                OutputPort<T>::state_ = state
-            });
-        }
-
-        template <typename T>
-        void push_result(data_t<T> data, RuntimeInfo const &info) {
-            DirectOutputPort<T>::push_result(std::move(data), info);
-        }
-
-        template <typename T>
-        std::vector<Edge<T>> &edges() {
-            return DirectOutputPort<T>::edges_;
-        }
-    };
-    using node_output = Output;
-
     std::shared_ptr<State> state_;
 
     StateManager(std::shared_ptr<State> state) : state_(state) {}
