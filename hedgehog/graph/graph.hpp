@@ -32,6 +32,7 @@
 #include "edge.hpp"
 #include "../tool/log.hpp"
 #include "../tool/profiling_report.hpp"
+#include "../impl/graph/graph_input.hpp"
 
 namespace hh {
 
@@ -208,11 +209,9 @@ struct Graph : Node, NodeIO<Config> {
     // edges ///////////////////////////////////////////////////////////////////
 
     //
-    // TODO: it is possible to optimize the data trasfer between graph and
-    //       sub-graphs by linking the connected nodes_ directly to the input
-    //       edges:
-    //       extr_node->graph_input->input_node => extr_node->input_node
-    //       output_node->graph_output->extr_node => output_node->extr_node
+    // Input-side edge flattening: draw_edge<T> and connect_input<T> detect
+    // when the receiver/node is a Graph and bypass GraphInput by reusing inner
+    // edge transfer functions. Output-side flattening is not yet implemented.
     //
 
     template <typename T>
@@ -256,7 +255,18 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename T>
     void draw_edge(auto sender, auto receiver) {
-        draw_edge(sender, receiver, make_edge<T>(sender.get(), receiver.get()));
+        if constexpr (requires { receiver->input_nodes(); }) {
+            nodes_.insert(sender);
+            nodes_.insert(receiver);
+            auto& inner_edges = static_cast<GraphInputPort<T>&>(receiver->input()).edges;
+            for (auto& inner_edge : inner_edges) {
+                Edge<T> flat(sender.get(), inner_edge.receiver, inner_edge.graph, inner_edge.fun);
+                connections_.push_back(Connection{flat.profiler.get(), sender.get(), receiver.get(), type_to_string<T>()});
+                sender->connect_output_edge(std::move(flat));
+            }
+        } else {
+            draw_edge(sender, receiver, make_edge<T>(sender.get(), receiver.get()));
+        }
     }
 
     //
@@ -279,9 +289,14 @@ struct Graph : Node, NodeIO<Config> {
         });
     }
 
-    void draw_edges(auto sender, auto receiver) {
-        draw_edges(sender, receiver, [&]<typename T>(auto sender, auto receiver) {
-            return make_edge<T>(sender.get(), receiver.get());
+    template <typename Sender, typename Receiver>
+    void draw_edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver) {
+        using sender_outputs = Sender::OutputTypes;
+        using receiver_inputs = Receiver::InputTypes;
+        type_list_map<sender_outputs>([&]<typename T>() {
+            if constexpr (type_list_contains<receiver_inputs, T>) {
+                draw_edge<T>(sender, receiver);
+            }
         });
     }
 
@@ -301,7 +316,18 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename T>
     void connect_input(auto node) {
-        connect_input(node, make_edge<T>(node.get()));
+        nodes_.insert(node);
+        input_nodes_.insert(node);
+        input_connections_.push_back({node.get(), type_to_string<T>()});
+        if constexpr (requires { node->input_nodes(); }) {
+            auto& inner_edges = static_cast<GraphInputPort<T>&>(node->input()).edges;
+            for (auto& inner_edge : inner_edges) {
+                Edge<T> forwarded(nullptr, inner_edge.receiver, inner_edge.graph, inner_edge.fun);
+                IO::connect_input_edge(std::move(forwarded));
+            }
+        } else {
+            IO::connect_input_edge(make_edge<T>(node.get()));
+        }
     }
 
     template <typename Node>
@@ -316,8 +342,11 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename Node>
     void connect_inputs(std::shared_ptr<Node> node) {
-        connect_inputs(node, [&]<typename T>(auto node) {
-            return make_edge<T>(node.get());
+        using node_inputs = Node::InputTypes;
+        type_list_map<InputTypes>([&]<typename T>() {
+            if constexpr (type_list_contains<node_inputs, T>) {
+                connect_input<T>(node);
+            }
         });
     }
 
