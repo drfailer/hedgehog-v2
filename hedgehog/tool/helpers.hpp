@@ -19,6 +19,7 @@
 #ifndef HEDGEHOG_TOOL_HELPERS_H
 #define HEDGEHOG_TOOL_HELPERS_H
 
+#include <cassert>
 #include <cstddef>
 #include <new>
 
