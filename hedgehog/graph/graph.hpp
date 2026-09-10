@@ -27,6 +27,7 @@
 #include "info.hpp"
 #include "node.hpp"
 #include "io.hpp"
+#include "edge.hpp"
 #include "../tool/log.hpp"
 
 namespace hh {
