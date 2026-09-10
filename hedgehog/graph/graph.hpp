@@ -242,6 +242,8 @@ struct Graph : Node, NodeIO<Config> {
     // - We do not verify if nodes_ belong to another graph.
     // - We do not verify if the edge already exists, creating multiple edges
     //   for the same sender/receiver/type is allowed.
+    // - Sub-graphs input edges are not flattened when a custom edge is used.
+    // - Sub-graphs output edges are not flattened.
     //
 
     template <typename T>
@@ -276,6 +278,8 @@ struct Graph : Node, NodeIO<Config> {
     // - We do not verify if nodes_ belong to another graph.
     // - We do not verify if the edges already exist, creating multiple edges
     //   for the same sender/receiver/type is allowed.
+    // - Sub-graphs input edges are not flattened when a custom edge is used.
+    // - Sub-graphs output edges are not flattened.
     //
 
     template <typename Sender, typename Receiver>
