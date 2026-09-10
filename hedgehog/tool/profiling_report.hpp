@@ -148,6 +148,21 @@ inline void write_node_label(std::ostream &os, ProfilerReport const &report, std
 }
 
 inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report, double max_exec) {
+    // collect graph child IDs so edges to/from sub-graphs can target
+    // their source/sink nodes instead of a nonexistent node
+    std::set<uintptr_t> graph_ids;
+    for (auto &child : report.children) {
+        if (child.kind == ProfileReportKind::Graph) {
+            graph_ids.insert(child.id);
+        }
+    }
+    auto incoming_name = [&](uintptr_t id) {
+        return graph_ids.count(id) ? "source_" + std::to_string(id) : "n" + std::to_string(id);
+    };
+    auto outgoing_name = [&](uintptr_t id) {
+        return graph_ids.count(id) ? "sink_" + std::to_string(id) : "n" + std::to_string(id);
+    };
+
     // group edges by (sender_id, type_name) for intermediate type nodes
     struct TypeNode {
         uintptr_t sender_id;
@@ -191,9 +206,9 @@ inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report
     for (auto &[key, tn] : type_nodes) {
         std::string tid = "t" + std::to_string(tn.sender_id) + "_" + std::to_string(idx++);
         os << tid << " [label=\"" << tn.type_name << "\"];\n";
-        os << "n" << tn.sender_id << " -> " << tid << " [dir=none];\n";
+        os << outgoing_name(tn.sender_id) << " -> " << tid << " [dir=none];\n";
         for (auto rid : tn.receiver_ids) {
-            os << tid << " -> n" << rid << ";\n";
+            os << tid << " -> " << incoming_name(rid) << ";\n";
         }
     }
 
@@ -210,7 +225,7 @@ inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report
             os << tid << " [label=\"" << type_name << "\"];\n";
             os << "source_" << report.id << " -> " << tid << " [dir=none];\n";
             for (auto nid : node_ids) {
-                os << tid << " -> n" << nid << ";\n";
+                os << tid << " -> " << incoming_name(nid) << ";\n";
             }
         }
     }
@@ -227,7 +242,7 @@ inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report
             std::string tid = "so_" + std::to_string(report.id) + "_" + std::to_string(so++);
             os << tid << " [label=\"" << type_name << "\"];\n";
             for (auto nid : node_ids) {
-                os << "n" << nid << " -> " << tid << " [dir=none];\n";
+                os << outgoing_name(nid) << " -> " << tid << " [dir=none];\n";
             }
             os << tid << " -> sink_" << report.id << ";\n";
         }
