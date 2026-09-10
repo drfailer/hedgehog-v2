@@ -23,9 +23,11 @@
 #include <optional>
 #include "../tool/helpers.hpp"
 #include "../tool/data.hpp"
-#include "edge.hpp"
 
 namespace hh {
+
+template <typename T>
+struct Edge;
 
 /******************************************************************************/
 /*                                   nodes                                    */

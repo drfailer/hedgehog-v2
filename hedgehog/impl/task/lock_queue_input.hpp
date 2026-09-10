@@ -29,6 +29,9 @@
 namespace hh {
 
 template <typename T>
+struct Edge;
+
+template <typename T>
 struct LockQueueInputPort {
     std::mutex mutex;
     std::queue<data_t<T>> queue;
