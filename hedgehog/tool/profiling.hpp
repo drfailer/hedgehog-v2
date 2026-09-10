@@ -20,13 +20,20 @@
 #define HEDGEHOG_TOOL_PROFILING_H
 
 #include <map>
+#include <vector>
 #include <string>
 #include <cstddef>
+#include <cstdint>
 #include <cmath>
-#include <cstdio>
 #include <chrono>
-#include <mutex>
+#include <sstream>
 #include <limits>
+#include <algorithm>
+
+#ifdef HH_ENABLE_PROFILING
+#include <mutex>
+#include <memory>
+#endif
 
 #include "macros.hpp"
 
@@ -39,10 +46,6 @@
 // internally. User tasks can access the profiler to augment the profile
 // information.
 //
-
-// TODO: add HH_ENABLE_PROFILING in the profiler functions
-
-#define HH_ENABLE_PROFILING
 
 #ifdef HH_ENABLE_PROFILING
 #define HH_PROFILE_REGION(profiler, name) \
@@ -59,7 +62,7 @@ namespace hh {
 
 using Clock = std::chrono::steady_clock;
 using TimePoint = std::chrono::time_point<Clock>;
-using Duration = std::chrono::duration<double, std::nano>; // TODO: de we really want doubles?
+using Duration = std::chrono::duration<double, std::nano>; // TODO: do we really want doubles?
 
 //
 // The measure computes the mean and the stddev using the Welford's algorithm.
@@ -94,44 +97,53 @@ struct Measure {
         this->max = std::max(this->max, m.max);
     }
 
-    double stddev() {
+    double stddev() const {
         return std::sqrt(this->m2 / this->count);
     }
-};
-
-struct ProfileRegion {
-    Measure measure;
-    TimePoint t0;
 };
 
 //
 // Using a union for this might be better, but I don't want to use a variant
 // (too slow) and unions don't work with RAII...
 //
+
+struct ProfileRegion {
+    Measure measure;
+    TimePoint t0;
+};
+
 struct Profile {
-    ProfileRegion region; // profiling region
-    std::string info;     // add information to the report
+    ProfileRegion region;
+    std::string info;
 
     bool begin_region() {
+#ifdef HH_ENABLE_PROFILING
         region.t0 = Clock::now();
+#endif
         return true;
     }
 
     bool end_region() {
+#ifdef HH_ENABLE_PROFILING
         TimePoint t1 = Clock::now();
         Duration duration = t1 - this->region.t0;
         region.measure.add_value(duration.count());
+#endif
         return false;
     }
 
-    void set_info(std::string const &info_str) {
+    void set_info([[maybe_unused]] std::string const &info_str) {
+#ifdef HH_ENABLE_PROFILING
         this->info = info_str;
+#endif
     }
 
     void set_info(auto ...args) {
+#ifdef HH_ENABLE_PROFILING
         std::ostringstream oss;
         (oss << ... << args);
         this->info = oss.str();
+#endif
     }
 
     bool has_info() const { return info.size() > 0; }
@@ -147,7 +159,6 @@ struct Profile {
     }
 };
 
-// TODO: how to make this easily expandable?
 enum class ProfileReportKind {
     Node,
     Edge,
@@ -156,15 +167,23 @@ enum class ProfileReportKind {
 };
 
 struct ProfilerReport {
-    ProfilerReport *parent = nullptr;
-    ProfileReportKind kind;
+    ProfileReportKind kind = ProfileReportKind::Node;
     std::string label = "";
+    uintptr_t id = 0;
+    uintptr_t sender_id = 0;
+    uintptr_t receiver_id = 0;
+
+    struct IOEdge {
+        std::string type_name;
+        uintptr_t node_id;
+    };
+    std::vector<IOEdge> input_edges = {};
+    std::vector<IOEdge> output_edges = {};
     std::map<std::string, Profile> profiles = {};
-    std::vector<ProfilerReport> childs;
+    std::vector<ProfilerReport> children = {};
 
     void add_report(ProfilerReport report) {
-        report.parent = this;
-        childs.push_back(std::move(report));
+        children.push_back(std::move(report));
     }
 
     void add_profile(std::string const &label, Profile const &profile) {
@@ -175,45 +194,23 @@ struct ProfilerReport {
             profiles[label].merge(profile);
         }
     }
-
-    void print() {
-        switch (kind) {
-        case ProfileReportKind::Node: printf("node %s:\n", label.c_str()); break;
-        case ProfileReportKind::Edge: printf("edge %s:\n", label.c_str()); break;
-        case ProfileReportKind::Graph: printf("graph %s:\n", label.c_str()); break;
-        }
-        for (auto &[label, profile] : profiles) {
-            if (profile.has_region()) {
-                printf("- %s: %.3f +- %.3f [%.3f; %.3f] (%ld)\n", label.c_str(),
-                       profile.region.measure.mean, profile.region.measure.stddev(),
-                       profile.region.measure.min, profile.region.measure.max,
-                       profile.region.measure.count);
-            }
-            if (profile.has_info()) {
-                printf("  - %s\n", profile.info.c_str());
-            }
-        }
-        for (auto &child : childs) {
-            child.print();
-        }
-    }
-
-    void to_dot(std::ostream &os, size_t lvl = 0) {
-        // TODO
-    }
 };
 
 // TODO: do we want this struct to be empty when profiling is disabled (make the node smaller)?
 // - we could return a global dummy profile
 struct Profiler {
+#ifdef HH_ENABLE_PROFILING
     std::mutex mutex;
     std::map<std::string, std::unique_ptr<Profile>> profiles;
+#endif
 
     Profiler() = default;
     Profiler(Profiler const &) = delete;
 
     void initialize() {
+#ifdef HH_ENABLE_PROFILING
         profiles.clear();
+#endif
     }
 
     void finalize() {}
@@ -229,21 +226,28 @@ struct Profiler {
     // profiler->region.end();
     //
 
-    Profile *create_profile(std::string const &name) {
+    Profile *create_profile([[maybe_unused]] std::string const &name) {
+#ifdef HH_ENABLE_PROFILING
         std::lock_guard<std::mutex> lock(mutex);
         auto profile = std::make_unique<Profile>();
         auto ptr = profile.get();
         profiles[name] = std::move(profile);
         return ptr;
+#else
+        static Profile dummy;
+        return &dummy;
+#endif
     }
 
     ProfilerReport create_report(std::string const &label, ProfileReportKind kind) {
         ProfilerReport report;
         report.label = label;
         report.kind = kind;
+#ifdef HH_ENABLE_PROFILING
         for (auto &[label, profile] : profiles) {
             report.profiles[label] = *profile.get();
         }
+#endif
         return report;
     }
 };

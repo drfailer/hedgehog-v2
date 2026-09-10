@@ -63,9 +63,10 @@ struct TaskNode : Node, NodeIO<Config> {
             }
         }
 
-        void execute(auto data) {
+        template <typename T>
+        void execute(data_t<T> data) {
             using namespace std::string_literals; // for ""s
-            HH_PROFILE_REGION(profiler, "execute<"s + type_to_string<decltype(data)>() + ">"s)
+            HH_PROFILE_REGION(profiler, "execute<"s + type_to_string<T>() + ">"s)
             {
                 if constexpr (requires { task->execute(&this->context, data); }) {
                     task->execute(&this->context, data);
@@ -161,11 +162,14 @@ struct TaskNode : Node, NodeIO<Config> {
 
     ProfilerReport profile() override {
         ProfilerReport report = Node::profiler().create_report(Node::info().name, ProfileReportKind::Node);
+        report.id = reinterpret_cast<uintptr_t>(static_cast<Node *>(this));
+#ifdef HH_ENABLE_PROFILING
         for (auto &state : states_) {
             for (auto &[label, profile] : state.profiler.profiles) {
                 report.add_profile(label, *profile.get());
             }
         }
+#endif
         return report;
     }
 };

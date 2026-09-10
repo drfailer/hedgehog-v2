@@ -119,11 +119,14 @@ struct Connection {
     Profiler *profiler; // profiler from the edge
     Node *sender;
     Node *receiver;
+    std::string type_name;
 
+    // TODO: we should do this in the edge directly instead of here
     ProfilerReport profile() {
-        std::ostringstream oss;
-        oss << "edge_" << (void *)sender << "_" << (void *)receiver;
-        return profiler->create_report(oss.str(), ProfileReportKind::Edge);
+        auto report = profiler->create_report(type_name, ProfileReportKind::Edge);
+        report.sender_id = reinterpret_cast<uintptr_t>(sender);
+        report.receiver_id = reinterpret_cast<uintptr_t>(receiver);
+        return report;
     }
 };
 

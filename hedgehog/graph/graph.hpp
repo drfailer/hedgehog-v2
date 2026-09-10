@@ -24,11 +24,14 @@
 #include <set>
 #include <sstream>
 
+#include <fstream>
+
 #include "info.hpp"
 #include "node.hpp"
 #include "io.hpp"
 #include "edge.hpp"
 #include "../tool/log.hpp"
+#include "../tool/profiling_report.hpp"
 
 namespace hh {
 
@@ -69,13 +72,24 @@ struct Graph : Node, NodeIO<Config> {
     std::set<std::shared_ptr<Node>> output_nodes_;
     std::vector<Connection> connections_;
 
+    struct IOConnection {
+        Node *node;
+        std::string type_name;
+    };
+    std::vector<IOConnection> input_connections_;
+    std::vector<IOConnection> output_connections_;
+
+#ifdef HH_ENABLE_PROFILING
+    Profile *exec_profile_ = nullptr;
+#endif
+
     Graph(std::shared_ptr<Executor>     executor,
           std::shared_ptr<EdgeBuilder>  edge_builder,
           NodeInfo const               &info)
         : Node(info),
           executor_(std::move(executor)),
-          edge_builder_(std::move(edge_builder))
-        {}
+          edge_builder_(std::move(edge_builder)) {
+    }
 
     std::shared_ptr<Executor> executor() const {  return executor_; }
     std::shared_ptr<EdgeBuilder> edge_builder() const { return edge_builder_; }
@@ -103,11 +117,21 @@ struct Graph : Node, NodeIO<Config> {
         });
 
         initialize(graph_info);
+#ifdef HH_ENABLE_PROFILING
+        exec_profile_ = Node::profiler().create_profile("execution");
+        exec_profile_->begin_region();
+#endif
         execute(ExecutionInfo{0});
     }
 
     void stop() {
-        finalize(GraphInfo{Node::info().name, 0});
+#ifdef HH_ENABLE_PROFILING
+        exec_profile_->end_region();
+#endif
+        HH_PROFILE_REGION(Node::profiler(), "finalization")
+        {
+            finalize(GraphInfo{Node::info().name, 0});
+        }
     }
 
     template <typename T>
@@ -133,11 +157,15 @@ struct Graph : Node, NodeIO<Config> {
     void initialize(GraphInfo const &graph_info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info, &Node::profiler()};
         Node::profiler().initialize(); // TODO: we may need a cleanup system for this?
-        IO::initialize(init_info);
-        for (auto &node : nodes_) {
-            node->initialize(graph_info);
+
+        HH_PROFILE_REGION(Node::profiler(), "initialize")
+        {
+            IO::initialize(init_info);
+            for (auto &node : nodes_) {
+                node->initialize(graph_info);
+            }
+            initialize_component(executor_, init_info);
         }
-        initialize_component(executor_, init_info);
     }
 
     void execute(ExecutionInfo const &) override {
@@ -159,13 +187,19 @@ struct Graph : Node, NodeIO<Config> {
 
     ProfilerReport profile() override {
         ProfilerReport report = Node::profiler().create_report(Node::info().name, ProfileReportKind::Graph);
+        report.id = reinterpret_cast<uintptr_t>(static_cast<Node *>(this));
+        for (auto &conn : input_connections_) {
+            report.input_edges.push_back({conn.type_name, reinterpret_cast<uintptr_t>(conn.node)});
+        }
+        for (auto &conn : output_connections_) {
+            report.output_edges.push_back({conn.type_name, reinterpret_cast<uintptr_t>(conn.node)});
+        }
         for (auto &node : nodes_) {
             report.add_report(node->profile());
         }
         for (auto &connection : connections_) {
             report.add_report(connection.profile());
         }
-        // TODO: we may miss some edges here (input/sink)
         return report;
     }
 
@@ -213,7 +247,7 @@ struct Graph : Node, NodeIO<Config> {
     void draw_edge(auto sender, auto receiver, Edge<T> edge) {
         nodes_.insert(sender);
         nodes_.insert(receiver);
-        connections_.push_back(Connection{edge.profiler.get(), sender.get(), receiver.get()});
+        connections_.push_back(Connection{edge.profiler.get(), sender.get(), receiver.get(), type_to_string<T>()});
         receiver->connect_input_edge(edge);
         sender->connect_output_edge(std::move(edge));
     }
@@ -259,6 +293,7 @@ struct Graph : Node, NodeIO<Config> {
     void connect_input(auto node, Edge<T> edge) {
         nodes_.insert(node);
         input_nodes_.insert(node);
+        input_connections_.push_back({node.get(), type_to_string<T>()});
         IO::connect_input_edge(std::move(edge));
     }
 
@@ -292,6 +327,7 @@ struct Graph : Node, NodeIO<Config> {
     void connect_output(auto node, Edge<T> edge) {
         nodes_.insert(node);
         output_nodes_.insert(node);
+        output_connections_.push_back({node.get(), type_to_string<T>()});
         node->connect_output_edge(std::move(edge));
     }
 
@@ -319,9 +355,10 @@ struct Graph : Node, NodeIO<Config> {
 
     // profiling ///////////////////////////////////////////////////////////////
 
-    void generate_dot_file(std::string const &name) {
+    void generate_dot_file(std::string const &filename) {
         auto report = this->profile();
-        report.print();
+        std::ofstream ofs(filename);
+        report_to_dot(report, ofs);
     }
 };
 
