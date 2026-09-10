@@ -37,11 +37,10 @@ struct LockQueueInputPort {
     std::queue<data_t<T>> queue;
     size_t max_queue_size = 0;
 
-    size_t push(data_t<T> data) {
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
         std::lock_guard<std::mutex> lock(mutex);
         queue.push(std::move(data));
         if (queue.size() > max_queue_size) max_queue_size = queue.size();
-        return queue.size();
     }
 
     std::optional<data_t<T>> pop() {
@@ -60,27 +59,20 @@ struct LockQueueInputPort {
     void connect_edge(Edge<T>) {}
 };
 
-template <typename ...Inputs>
-struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
+struct CondTrigger {
     std::mutex mutex{};
     std::condition_variable cond{};
     bool terminated = false;
+    std::function<bool()> pred;
 
-    void initialize(InitializationInfo const &info) {
-        ([&] { LockQueueInputPort<Inputs>::max_queue_size = 0; }(), ...);
+    void initialize(std::function<bool()> fun) {
+        this->pred = fun;
         terminated = false;
     }
 
-    void finalize(InitializationInfo const &info) {
-        std::lock_guard<std::mutex> lock(mutex); // lock to avoid lost wakeup
+    void finalize() {
         terminated = true;
         cond.notify_all();
-        ([&] {
-            using namespace std::string_literals; // for ""s
-            auto profile = info.profiler->create_profile("LockQueueInputPort<"s + type_to_string<Inputs>() + ">");
-            profile->set_info("MQS = ", LockQueueInputPort<Inputs>::max_queue_size, "\n",
-                              "QS = ", LockQueueInputPort<Inputs>::size());
-        }(), ...);
     }
 
     void signal(SignalOpts const &opts) {
@@ -95,19 +87,35 @@ struct LockQueueNodeInput : NodePorts<LockQueueInputPort, Inputs...> {
     WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
         std::unique_lock<std::mutex> lock(mutex);
         cond.wait(lock, [this]{
-            return has_data() || terminated;
+            return pred() || terminated;
         });
         return WaitResult{terminated, false};
     }
+};
 
-    bool has_data() {
-        return ((LockQueueInputPort<Inputs>::size() > 0) || ...);
+template <typename ...Inputs>
+struct LockQueueNodeInput : CondTrigger, NodePorts<LockQueueInputPort, Inputs...> {
+    void initialize(InitializationInfo const &info) {
+        ([&] { LockQueueInputPort<Inputs>::max_queue_size = 0; }(), ...);
+        CondTrigger::initialize([this]{
+            return ((LockQueueInputPort<Inputs>::size() > 0) || ...);
+        });
+    }
+
+    void finalize(InitializationInfo const &info) {
+        CondTrigger::finalize();
+        ([&] {
+            using namespace std::string_literals; // for ""s
+            auto profile = info.profiler->create_profile("LockQueueInputPort<"s + type_to_string<Inputs>() + ">");
+            profile->set_info("MQS = ", LockQueueInputPort<Inputs>::max_queue_size, "\n",
+                              "QS = ", LockQueueInputPort<Inputs>::size());
+        }(), ...);
     }
 
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
-        size_t queue_size = LockQueueInputPort<T>::push(std::move(data));
-        signal(SignalOpts{info, 1, 0});
+        LockQueueInputPort<T>::push_data(std::move(data), info);
+        CondTrigger::signal(SignalOpts{info, 1, 0});
     }
 
     template <typename Executable>
