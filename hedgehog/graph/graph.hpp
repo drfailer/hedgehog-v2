@@ -127,11 +127,13 @@ struct Graph : Node, NodeIO<Config> {
     void stop() {
 #ifdef HH_ENABLE_PROFILING
         exec_profile_->end_region();
+        auto *fin_profile = Node::profiler().create_profile("finalization");
+        fin_profile->begin_region();
 #endif
-        HH_PROFILE_REGION(Node::profiler(), "finalization")
-        {
-            finalize(GraphInfo{Node::info().name, 0});
-        }
+        finalize(GraphInfo{Node::info().name, 0});
+#ifdef HH_ENABLE_PROFILING
+        fin_profile->end_region();
+#endif
     }
 
     template <typename T>
@@ -156,16 +158,16 @@ struct Graph : Node, NodeIO<Config> {
 
     void initialize(GraphInfo const &graph_info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info, &Node::profiler()};
-        Node::profiler().initialize(); // TODO: we may need a cleanup system for this?
+        Node::profiler().initialize();
 
-        HH_PROFILE_REGION(Node::profiler(), "initialize")
-        {
-            IO::initialize(init_info);
-            for (auto &node : nodes_) {
-                node->initialize(graph_info);
-            }
-            initialize_component(executor_, init_info);
+        auto *init_profile = Node::profiler().create_profile("initialize");
+        init_profile->begin_region();
+        IO::initialize(init_info);
+        for (auto &node : nodes_) {
+            node->initialize(graph_info);
         }
+        initialize_component(executor_, init_info);
+        init_profile->end_region();
     }
 
     void execute(ExecutionInfo const &) override {
