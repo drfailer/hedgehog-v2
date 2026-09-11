@@ -83,16 +83,16 @@ struct Edge {
 struct DirectEdgeBuilder {
     template <typename T>
     Edge<T> make_edge(auto args) {
-        using Receiver = std::remove_pointer_t<decltype(args.receiver)>;
+        using Input = std::remove_reference_t<decltype(args.receiver->input())>;
         using Graph = std::remove_pointer_t<decltype(args.graph)>;
         using Executor = typename Graph::Executor;
 
-        return Edge<T>(args.sender, args.receiver, args.graph, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
-            auto receiver = static_cast<Receiver *>(e->receiver);
+        return Edge<T>(args.sender, &args.receiver->input(), args.graph, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
+            auto receiver = static_cast<Input *>(e->receiver);
             auto graph = static_cast<Graph *>(e->graph);
 
             receiver->push_data(std::move(data), info);
-            if constexpr (HasOnTransfer<Executor, Receiver, RuntimeInfo>) {
+            if constexpr (HasOnTransfer<Executor, Input, RuntimeInfo>) {
                 graph->executor()->on_transfer(receiver, info);
             }
         });

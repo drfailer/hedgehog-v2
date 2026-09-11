@@ -102,15 +102,9 @@ struct TaskNode : Node {
         states_[0].task = std::move(task);
     }
 
-    std::vector<ThreadState> const &states() const { return states_; } // may be usefull for some executors
-
     Input &input() { return input_; }
     Output &output() { return output_; }
-
-    template <typename T> void push_data(data_t<T> data, RuntimeInfo const &info) { input_.push_data(std::move(data), info); }
-    template <typename T> void push_result(data_t<T> data, RuntimeInfo const &info) { output_.push_result(std::move(data), info); }
-    template <typename T> void connect_input_edge(Edge<T> edge) { input_.connect_edge(std::move(edge)); }
-    template <typename T> void connect_output_edge(Edge<T> edge) { output_.connect_edge(std::move(edge)); }
+    std::vector<ThreadState> const &states() const { return states_; } // may be usefull for some executors
 
     // node api ////////////////////////////////////////////////////////////////
 

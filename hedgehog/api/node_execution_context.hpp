@@ -48,12 +48,12 @@ class NodeExecutionContext {
 
     template <typename T>
     void push_data(data_t<T> data) {
-        node_->push_data(std::move(data), info_);
+        node_->input().push_data(std::move(data), info_);
     }
 
     template <typename T>
     void push_result(data_t<T> data) {
-        node_->push_result(std::move(data), info_);
+        node_->output().push_data(std::move(data), info_);
     }
 };
 
