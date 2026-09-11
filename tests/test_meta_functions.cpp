@@ -39,8 +39,10 @@ static_assert(std::is_same_v<hh::type_list_apply<test_list, std::shared_ptr>,
                              hh::type_list<std::shared_ptr<int>, std::shared_ptr<float>>>);
 static_assert(std::is_same_v<hh::type_list_apply_ptr<test_list>, hh::type_list<int *, float *>>);
 
+#ifdef HH_ENABLE_CONCEPTS
 static_assert(hh::NodeInputTrait<hh::LockQueueNodeInput<int, float>, int, float>);
 static_assert(hh::NodeOutputTrait<hh::DirectNodeOutput<int, float>, int, float>);
+#endif
 
 // io types
 using test_io_types = hh::io_types<2, char, int, float, double>;

@@ -26,6 +26,7 @@
 
 #include "node.hpp"
 #include "../api/node_execution_context.hpp"
+#include "../tool/concepts.hpp"
 #include "../tool/helpers.hpp"
 #include "../tool/log.hpp"
 
@@ -56,9 +57,9 @@ struct TaskNode : Node, NodeIO<Config> {
         void initialize(TaskNode<Config> *node, RuntimeInfo const &info) {
             profiler.initialize();
             context.construct(node, info);
-            if constexpr (requires { task->initialize(context); }) {
+            if constexpr (InitializableWith<Task, decltype(context)>) {
                 task->initialize(context);
-            } else if constexpr (requires { task->initialize(); }) {
+            } else if constexpr (Initializable<Task>) {
                 task->initialize();
             }
         }
@@ -68,7 +69,7 @@ struct TaskNode : Node, NodeIO<Config> {
             using namespace std::string_literals; // for ""s
             HH_PROFILE_REGION(profiler, "execute<"s + type_to_string<T>() + ">"s)
             {
-                if constexpr (requires { task->execute(&this->context, data); }) {
+                if constexpr (ExecutableWithContext<Task, decltype(this->context), decltype(data)>) {
                     task->execute(&this->context, data);
                 } else {
                     task->execute(data);
@@ -78,9 +79,9 @@ struct TaskNode : Node, NodeIO<Config> {
 
         void finalize() {
             profiler.finalize();
-            if constexpr (requires { task->initialize(context); }) {
+            if constexpr (FinalizableWith<Task, decltype(context)>) {
                 task->finalize(context);
-            } else if constexpr (requires { task->initialize(); }) {
+            } else if constexpr (Finalizable<Task>) {
                 task->finalize();
             }
         }

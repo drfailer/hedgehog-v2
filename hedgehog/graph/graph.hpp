@@ -30,6 +30,7 @@
 #include "node.hpp"
 #include "io.hpp"
 #include "edge.hpp"
+#include "../tool/concepts.hpp"
 #include "../tool/log.hpp"
 #include "../tool/profiling_report.hpp"
 #include "../impl/graph/graph_input.hpp"
@@ -143,8 +144,8 @@ struct Graph : Node, NodeIO<Config> {
     }
 
     auto get_result() {
-        if constexpr (requires { executor_->on_result(); }) {
-            executor_->on_result(); // important for the serial executor_
+        if constexpr (HasOnResult<Executor>) {
+            executor_->on_result();
         }
         return sink_.get_result();
     }
@@ -254,7 +255,7 @@ struct Graph : Node, NodeIO<Config> {
 
     template <typename T>
     void draw_edge(auto sender, auto receiver) {
-        if constexpr (requires { receiver->input_nodes(); }) {
+        if constexpr (HasInputNodes<typename decltype(receiver)::element_type>) {
             nodes_.insert(sender);
             nodes_.insert(receiver);
             auto& inner_edges = static_cast<GraphInputPort<T>&>(receiver->input()).edges;
@@ -320,7 +321,7 @@ struct Graph : Node, NodeIO<Config> {
         nodes_.insert(node);
         input_nodes_.insert(node);
         input_connections_.push_back({node.get(), type_to_string<T>()});
-        if constexpr (requires { node->input_nodes(); }) {
+        if constexpr (HasInputNodes<typename decltype(node)::element_type>) {
             auto& inner_edges = static_cast<GraphInputPort<T>&>(node->input()).edges;
             for (auto& inner_edge : inner_edges) {
                 Edge<T> forwarded(nullptr, inner_edge.receiver, inner_edge.graph, inner_edge.fun);

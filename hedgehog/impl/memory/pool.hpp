@@ -26,6 +26,7 @@
 #include <new>
 
 #include "index_allocator.hpp"
+#include "../../tool/concepts.hpp"
 
 namespace hh {
 
@@ -77,7 +78,7 @@ struct Pool {
         auto mem_index = reinterpret_cast<uintptr_t>(data) - reinterpret_cast<uintptr_t>(mem_);
         assert(mem_index < (capacity_ * sizeof(T)));
 
-        if constexpr (requires { data->clean_memory(); }) {
+        if constexpr (HasCleanMemory<T>) {
             data->clean_memory();
         }
         index_allocator_.release(mem_index / sizeof(T)); // the compiler should translate `/` into a shift

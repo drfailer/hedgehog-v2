@@ -37,6 +37,7 @@
 #include "impl/memory/index_allocator.hpp"
 #include "impl/memory/pool.hpp"
 
+#include "tool/concepts.hpp"
 #include "tool/config.hpp"
 #include "tool/type_list.hpp"
 #include "tool/helpers.hpp"

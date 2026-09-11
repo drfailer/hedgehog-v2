@@ -20,6 +20,7 @@
 #define HEDGEHOG_TOOL_CONFIG
 
 #include <type_traits>
+#include "concepts.hpp"
 #include "../graph/edge.hpp"
 #include "../tool/type_list.hpp"
 #include "../impl/task/lock_queue_input.hpp"
@@ -53,9 +54,6 @@ using DefaultGraphExecutor = ThreadExecutor;
 
 // Node Input //////////////////////////
 
-template <typename Impl>
-concept HasNodeInput = requires { typename Impl::node_input; };
-
 template <typename Impl, typename Default>
 struct deduce_node_input_type {
     using type = Default;
@@ -67,9 +65,6 @@ struct deduce_node_input_type<Impl, Default> {
 };
 
 // Node Output /////////////////////////
-
-template <typename Impl>
-concept HasNodeOutput = requires { typename Impl::node_output; };
 
 template <typename Impl, typename Default>
 struct deduce_node_output_type {
@@ -83,25 +78,17 @@ struct deduce_node_output_type<Impl, Default> {
 
 // Graph Executor //////////////////////
 
-template <typename Impl>
-concept HasExecutor = requires { typename Impl::executor; };
-
 template <typename Impl, typename Default>
 struct deduce_executor_type {
     using type = Default;
 };
 
-template <HasNodeOutput Impl, typename Default>
+template <HasExecutor Impl, typename Default>
 struct deduce_executor_type<Impl, Default> {
     using type = typename Impl::executor;
 };
 
 // task config /////////////////////////////////////////////////////////////////
-
-template <typename T>
-concept HasIO = requires {
-    typename T::io;
-};
 
 template <typename Impl>
 struct deduce_task_io : Impl {};

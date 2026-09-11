@@ -12,6 +12,11 @@ endif (MSVC)
 include(FetchContent) # Used to download GTEST
 
 option(TEST_HH "Downloads google unit test API and runs google test scripts to test Hedgehog core and api" OFF)
+option(HH_ENABLE_CONCEPTS "Enable concept constraints on template parameters (slower compile)" OFF)
+
+if (HH_ENABLE_CONCEPTS)
+    add_definitions(-DHH_ENABLE_CONCEPTS)
+endif()
 
 set(CACHE_LINE_SIZE 64)
 

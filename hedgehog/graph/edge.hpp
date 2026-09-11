@@ -23,6 +23,7 @@
 #include <memory>
 #include <cassert>
 #include "../tool/data.hpp"
+#include "../tool/concepts.hpp"
 #include "../tool/profiling.hpp"
 #include "info.hpp"
 #include "node.hpp"
@@ -87,14 +88,15 @@ struct DirectEdgeBuilder {
     Edge<T> make_edge(auto args) {
         using Receiver = std::remove_pointer_t<decltype(args.receiver)>;
         using Graph = std::remove_pointer_t<decltype(args.graph)>;
+        using Executor = typename Graph::Executor;
 
         return Edge<T>(args.sender, args.receiver, args.graph, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
             auto receiver = static_cast<Receiver *>(e->receiver);
             auto graph = static_cast<Graph *>(e->graph);
 
             receiver->push_data(std::move(data), info);
-            if constexpr (requires { graph->executor().on_transfer(receiver, info); }) {
-                graph->executor().on_transfer(receiver, info);
+            if constexpr (HasOnTransfer<Executor, Receiver, RuntimeInfo>) {
+                graph->executor()->on_transfer(receiver, info);
             }
         });
     }

@@ -16,67 +16,64 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_TOOL_HELPERS_H
-#define HEDGEHOG_TOOL_HELPERS_H
-
-#include <cassert>
-#include <cstddef>
-#include <new>
-
-#include "concepts.hpp"
+#ifndef HEDGEHOG_TOOL_CONCEPTS_H
+#define HEDGEHOG_TOOL_CONCEPTS_H
 
 namespace hh {
 
-// helper functions ////////////////////////////////////////////////////////////
+// Component lifecycle /////////////////////////////////////////////////////////
 
-template <typename Component>
-std::shared_ptr<Component> copy_component(std::shared_ptr<Component> component) {
-    if constexpr (Copyable<Component>) {
-        return component->copy();
-    } else {
-        return std::make_shared<Component>();
-    }
-}
+template <typename C>
+concept Copyable = requires(C &c) { c.copy(); };
 
-template <typename Component>
-void initialize_component(std::shared_ptr<Component> component, InitializationInfo const &info) {
-    if constexpr (InitializableWith<Component, InitializationInfo const>) {
-        component->initialize(info);
-    } else if constexpr (Initializable<Component>) {
-        component->initialize();
-    }
-}
+template <typename C, typename Info>
+concept InitializableWith = requires(C &c, Info &i) { c.initialize(i); };
 
-template <typename Component>
-void finalize_component(std::shared_ptr<Component> component, InitializationInfo const &info) {
-    if constexpr (FinalizableWith<Component, InitializationInfo const>) {
-        component->finalize(info);
-    } else if constexpr (Finalizable<Component>) {
-        component->finalize();
-    }
-}
+template <typename C>
+concept Initializable = requires(C &c) { c.initialize(); };
 
-template<typename T>
-constexpr auto type_to_string() {
-  std::string_view name, prefix, suffix;
-#ifdef __clang__
-  name = __PRETTY_FUNCTION__;
-  prefix = "auto hh::type_to_string() [T = ";
-  suffix = "]";
-#elif defined(__GNUC__)
-  name = __PRETTY_FUNCTION__;
-  prefix = "constexpr auto hh::type_to_string() [with T = ";
-  suffix = "]";
-#elif defined(_MSC_VER)
-  name = __FUNCSIG__;
-    prefix = "auto __cdecl type_to_string<";
-    suffix = ">(void)";
-#endif
-  name.remove_prefix(prefix.size());
-  name.remove_suffix(suffix.size());
+template <typename C, typename Info>
+concept FinalizableWith = requires(C &c, Info &i) { c.finalize(i); };
 
-  return std::string(name);
-}
+template <typename C>
+concept Finalizable = requires(C &c) { c.finalize(); };
+
+// Task execution //////////////////////////////////////////////////////////////
+
+template <typename T, typename Ctx, typename Data>
+concept ExecutableWithContext = requires(T &t, Ctx *ctx, Data d) { t.execute(ctx, d); };
+
+// Executor capabilities ///////////////////////////////////////////////////////
+
+template <typename E, typename N, typename I>
+concept HasOnTransfer = requires(E &e, N *n, I const &i) { e.on_transfer(n, i); };
+
+template <typename E>
+concept HasOnResult = requires(E &e) { e.on_result(); };
+
+// Graph structure /////////////////////////////////////////////////////////////
+
+template <typename N>
+concept HasInputNodes = requires(N &n) { n.input_nodes(); };
+
+// Memory //////////////////////////////////////////////////////////////////////
+
+template <typename T>
+concept HasCleanMemory = requires(T &t) { t.clean_memory(); };
+
+// Config deduction ////////////////////////////////////////////////////////////
+
+template <typename Impl>
+concept HasNodeInput = requires { typename Impl::node_input; };
+
+template <typename Impl>
+concept HasNodeOutput = requires { typename Impl::node_output; };
+
+template <typename Impl>
+concept HasExecutor = requires { typename Impl::executor; };
+
+template <typename T>
+concept HasIO = requires { typename T::io; };
 
 } // end namespace hh
 
