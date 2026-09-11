@@ -42,9 +42,6 @@ namespace hh {
 // with the edge).
 //
 
-template <typename T>
-struct Edge;
-
 //
 // For user customization purpose, we use an std::function which allow users to
 // capture content when defining custom edges. If the captured content fits in
@@ -116,6 +113,53 @@ struct Connection {
     Node *sender;
     Node *receiver;
     std::string type_name;
+};
+
+// Edge slot ///////////////////////////////////////////////////////////////////
+
+struct Node;
+
+template <typename T>
+struct EdgeSlot {
+    std::vector<Edge<T>> edges_;
+    std::vector<Node*> connected_nodes_;
+};
+
+template <typename ...Types>
+struct EdgeSlots : EdgeSlot<Types>... {
+    std::set<Node*> nodes_;
+
+    void initialize(InitializationInfo const &) {}
+    void finalize(InitializationInfo const &) {}
+
+    template <typename T>
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
+        for (auto &edge : EdgeSlot<T>::edges_) { edge.transfer(data, info); }
+    }
+
+    template <typename T>
+    void connect_edge(Edge<T> edge) {
+        EdgeSlot<T>::edges_.push_back(std::move(edge));
+    }
+
+    template <typename T>
+    void connect_node(Node *node) {
+        nodes_.insert(node);
+        EdgeSlot<T>::connected_nodes_.push_back(node);
+    }
+
+    template <typename T>
+    std::vector<Edge<T>> &edges() { return EdgeSlot<T>::edges_; }
+
+    size_t edge_count() { return (EdgeSlot<Types>::edges_.size() + ...); }
+
+    void for_each_connection(auto &&f) {
+        (([&] {
+            for (auto *node : EdgeSlot<Types>::connected_nodes_) {
+                f.template operator()<Types>(node);
+            }
+        }()), ...);
+    }
 };
 
 } // end namespace hh

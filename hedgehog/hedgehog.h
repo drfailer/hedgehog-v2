@@ -28,9 +28,7 @@
 
 #include "api/task.hpp"
 
-#include "impl/graph/graph_output.hpp"
 #include "impl/graph/thread_executor.hpp"
-#include "impl/graph/graph_input.hpp"
 #include "impl/task/lock_queue_input.hpp"
 #include "impl/task/direct_output.hpp"
 #include "impl/memory/automatic_pool.hpp"
