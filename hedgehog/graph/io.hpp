@@ -35,15 +35,6 @@ struct Edge;
 
 // Concepts ////////////////////////////////////////////////////////////////////
 
-// TODO: rewrite those concepts
-
-//
-// Node input specifications.
-//
-// Those concepts are not used internally because they reduce compile times,
-// but one can use them to verify custom implementations as needed.
-//
-
 struct SignalOpts {
     RuntimeInfo info;    // execution context
     size_t count;        // number of threads to signal
@@ -55,79 +46,50 @@ struct WaitResult {
     bool skip;      // used to skip execution in the thread loop (no data, or defered)
 };
 
+//
+// Node input/output specifications.
+//
+// Those concepts are not used internally to reduce compile times, but one can
+// enable them with HH_ENABLE_CONCEPTS to verify custom implementations.
+//
+
+#ifdef HH_ENABLE_CONCEPTS
+
 template <typename T, typename ...Inputs>
-concept NodeInputTrait = std::default_initializable<T> && requires {
-    //
-    // The input should be initializable/finalizable:
-    //
-    [](T t, InitializationInfo const &info) {
+concept NodeInputTrait = std::default_initializable<T>
+    && requires(T t, InitializationInfo const &info) {
         t.initialize(info);
         t.finalize(info);
-    };
-
-    //
-    // The input must allow threads to wait or be signaled.
-    //
-    [](T t, RuntimeInfo const &info, SignalOpts opts) {
-        WaitResult result = t.wait(info);
+    }
+    && requires(T t, RuntimeInfo const &ri, SignalOpts opts) {
+        { t.wait(ri) } -> std::same_as<WaitResult>;
         t.signal(opts);
-    };
-
-    //
-    // Input is also responsible to pop and execute data.
-    //
-    []<typename Executor>(T t, std::shared_ptr<Executor> exec) {
-        t.execute(exec, RuntimeInfo{});
-    };
-
-    //
-    // Data can be pushed to the input.
-    //
-    ([](T t, data_t<Inputs> data, RuntimeInfo const &info) {
-        t.push_data(data, info);
-     }, ...);
-
-    //
-    // Edges can be connected to the input.
-    //
-    ([](T t, Edge<Inputs> edge) {
-        t.connect_edge(edge);
-        // auto &edges = t.template edges<Inputs>();
-     }, ...);
-};
-
-//
-// Node output specifications.
-//
-// Those concepts are not used internally because they reduce compile times,
-// but one can use them to verify custom implementations as needed.
-//
+    }
+    && requires(T t, void *exec, RuntimeInfo const &ri) {
+        t.execute(exec, ri);
+    }
+    && (requires(T t, data_t<Inputs> d, RuntimeInfo const &i) {
+        t.push_data(std::move(d), i);
+    } && ...)
+    && (requires(T t, Edge<Inputs> e) {
+        t.connect_edge(std::move(e));
+    } && ...);
 
 template <typename T, typename ...Outputs>
-concept NodeOutputTrait = std::default_initializable<T> && requires {
-    //
-    // The output should be initializable/finalizable:
-    //
-    [](T t, InitializationInfo const &info) {
+concept NodeOutputTrait = std::default_initializable<T>
+    && requires(T t, InitializationInfo const &info) {
         t.initialize(info);
         t.finalize(info);
-    };
-
-    //
-    // Result data can be sent through the output
-    //
-    ([](T t, data_t<Outputs> data) {
+    }
+    && (requires(T t, data_t<Outputs> data) {
         t.push_result(data, RuntimeInfo{});
-     }, ...);
+    } && ...)
+    && (requires(T t, Edge<Outputs> e) {
+        t.connect_edge(std::move(e));
+        t.template edges<Outputs>();
+    } && ...);
 
-    //
-    // Edges can be connected to the input.
-    //
-    ([](T t, Edge<Outputs> edge) {
-        t.connect_edge(edge);
-        auto &edges = t.template edges<Outputs>();
-     }, ...);
-};
+#endif // HH_ENABLE_CONCEPTS
 
 // Node I/O ////////////////////////////////////////////////////////////////////
 
@@ -135,7 +97,6 @@ concept NodeOutputTrait = std::default_initializable<T> && requires {
 // Helper for building node (input + output + default api).
 //
 
-// WARN: we avoid concepts here on purpose to reduce compile time (may change later).
 template <typename Config>
 class NodeIO {
   public:
