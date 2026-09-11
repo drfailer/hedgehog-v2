@@ -56,16 +56,12 @@ using EdgeTransfer = std::function<void(Edge<T> *, data_t<T>, RuntimeInfo const 
 
 template <typename T>
 struct Edge {
-    void *sender = nullptr;
     void *receiver = nullptr;
     void *graph = nullptr;
     EdgeTransfer<T> fun;
 
-    Edge(void *sender, void *receiver, void *graph, EdgeTransfer<T> fun)
-        : sender(sender), receiver(receiver), graph(graph), fun(std::move(fun)) {}
-
-    Edge(void *sender, void *receiver, EdgeTransfer<T> fun)
-        : sender(sender), receiver(receiver), fun(std::move(fun)) {}
+    Edge(void *receiver, void *graph, EdgeTransfer<T> fun)
+        : receiver(receiver), graph(graph), fun(std::move(fun)) {}
 
     Edge(void *graph, EdgeTransfer<T> fun)
         : graph(graph), fun(std::move(fun)) {}
@@ -77,25 +73,6 @@ struct Edge {
 
     void transfer(data_t<T> data, RuntimeInfo const &info) {
         fun(this, data, info);
-    }
-};
-
-struct DirectEdgeBuilder {
-    template <typename T>
-    Edge<T> make_edge(auto args) {
-        using Input = std::remove_reference_t<decltype(args.receiver->input())>;
-        using Graph = std::remove_pointer_t<decltype(args.graph)>;
-        using Executor = typename Graph::Executor;
-
-        return Edge<T>(args.sender, &args.receiver->input(), args.graph, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
-            auto receiver = static_cast<Input *>(e->receiver);
-            auto graph = static_cast<Graph *>(e->graph);
-
-            receiver->push_data(std::move(data), info);
-            if constexpr (HasOnTransfer<Executor, Input, RuntimeInfo>) {
-                graph->executor()->on_transfer(receiver, info);
-            }
-        });
     }
 };
 

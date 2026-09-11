@@ -108,10 +108,8 @@ auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph
         using OutputTypes = io::outputs;
         using Sink = type_list_dispatch<OutputTypes, GraphSink>;
         using Executor = Impl;
-        using EdgeBuilder = DirectEdgeBuilder;
     };
-    auto edge_builder = std::make_shared<DirectEdgeBuilder>();
-    return std::make_shared<Graph<Config>>(executor, edge_builder, NodeInfo{name, 0});
+    return std::make_shared<Graph<Config>>(executor, NodeInfo{name, 0});
 }
 
 template <size_t Sep, typename ...Types>
@@ -127,11 +125,9 @@ auto make_serial_graph(std::string const &name = "Graph") {
         using OutputTypes = io::outputs;
         using Sink = type_list_dispatch<OutputTypes, SerialSink>;
         using Executor = SerialExecutor;
-        using EdgeBuilder = DirectEdgeBuilder;
     };
     auto executor = std::make_shared<SerialExecutor>();
-    auto edge_builder = std::make_shared<DirectEdgeBuilder>();
-    return std::make_shared<Graph<Config>>(executor, edge_builder, NodeInfo{name, 0});
+    return std::make_shared<Graph<Config>>(executor, NodeInfo{name, 0});
 }
 
 } // end namespace hh

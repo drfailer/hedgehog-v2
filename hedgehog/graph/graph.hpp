@@ -46,7 +46,6 @@ struct Graph : Node {
     using OutputTypes = Config::OutputTypes;
     using Sink        = Config::Sink;
     using Executor    = Config::Executor;
-    using EdgeBuilder = Config::EdgeBuilder;
     using Input       = type_list_dispatch<InputTypes, EdgeSlots>;
     using Output      = type_list_dispatch<OutputTypes, EdgeSlots>;
 
@@ -71,7 +70,6 @@ struct Graph : Node {
     Input input_   = {};
     Output output_ = {};
     std::shared_ptr<Executor> executor_;
-    std::shared_ptr<EdgeBuilder> edge_builder_;
     Sink sink_;
     std::set<std::shared_ptr<Node>> nodes_;
     std::vector<Connection> connections_;
@@ -81,17 +79,14 @@ struct Graph : Node {
 #endif
 
     Graph(std::shared_ptr<Executor>     executor,
-          std::shared_ptr<EdgeBuilder>  edge_builder,
           NodeInfo const               &info)
         : Node(info),
-          executor_(std::move(executor)),
-          edge_builder_(std::move(edge_builder)) {
+          executor_(std::move(executor)) {
     }
 
     Input &input() { return input_; }
     Output &output() { return output_; }
     std::shared_ptr<Executor> executor() const {  return executor_; }
-    std::shared_ptr<EdgeBuilder> edge_builder() const { return edge_builder_; }
     Sink const &sink() const { return sink_; }
     std::set<std::shared_ptr<Node>> const &nodes() const { return nodes_; }
     std::set<Node*> const &input_nodes() const { return input_.nodes_; }
@@ -214,17 +209,16 @@ struct Graph : Node {
     //
 
     template <typename T>
-    Edge<T> make_edge(auto sender, auto receiver) {
-        return edge_builder_->template make_edge<T>(MakeEdgeArgs{
-            .sender = sender,
-            .receiver = receiver,
-            .graph = this,
-        });
-    }
-
-    template <typename T>
     Edge<T> make_edge(auto receiver) {
-        return make_edge<T>((void *)nullptr, receiver);
+        using Receiver = std::remove_pointer_t<decltype(receiver)>;
+        return Edge<T>(receiver, this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
+            auto receiver = static_cast<Receiver *>(e->receiver);
+            auto graph = static_cast<Graph *>(e->graph);
+            receiver->input().push_data(std::move(data), info);
+            if constexpr (HasOnTransfer<Executor, Receiver, RuntimeInfo>) {
+                graph->executor()->on_transfer(receiver, info);
+            }
+        });
     }
 
     template <typename T>
@@ -261,12 +255,12 @@ struct Graph : Node {
             nodes_.insert(receiver);
             auto& inner_edges = receiver->input().template edges<T>();
             for (auto& inner_edge : inner_edges) {
-                Edge<T> flat(sender.get(), inner_edge.receiver, inner_edge.graph, inner_edge.fun);
+                Edge<T> flat(inner_edge.receiver, inner_edge.graph, inner_edge.fun);
                 connections_.push_back(Connection{sender.get(), receiver.get(), type_to_string<T>()});
                 sender->output().connect_edge(std::move(flat));
             }
         } else {
-            draw_edge(sender, receiver, make_edge<T>(sender.get(), receiver.get()));
+            draw_edge(sender, receiver, make_edge<T>(receiver.get()));
         }
     }
 
