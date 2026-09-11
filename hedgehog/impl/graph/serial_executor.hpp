@@ -64,7 +64,9 @@ struct SerialExecutor {
         }
     }
 
-    void finalize() {
+    void initialize(InitializationInfo const &) {}
+
+    void finalize(InitializationInfo const &) {
         // we finalize the state of the thread 0 for each node
         for (auto node : nodes) {
             node->execute(make_execution_info(ExecutionInfo::Finalize));
