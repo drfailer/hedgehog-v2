@@ -66,6 +66,9 @@ struct Edge {
     Edge(void *graph, EdgeTransfer<T> fun)
         : graph(graph), fun(std::move(fun)) {}
 
+    Edge(EdgeTransfer<T> fun)
+        : fun(std::move(fun)) {}
+
     Edge(Edge<T> const &edge) = default;
     Edge<T> &operator=(Edge<T> const &edge) = default;
     Edge(Edge<T> &&edge) = default;
