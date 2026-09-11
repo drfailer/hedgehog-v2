@@ -22,4 +22,10 @@
 #define HH_CONCAT_INDIRECT(a, b) a##b
 #define HH_CONCAT(a, b) HH_CONCAT_INDIRECT(a, b)
 
+#ifdef HH_ENABLE_CONCEPTS
+#define HH_CONCEPT(C) C
+#else
+#define HH_CONCEPT(C) typename
+#endif
+
 #endif
