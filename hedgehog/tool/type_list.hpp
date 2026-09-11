@@ -42,15 +42,10 @@ struct type_list {};
 //
 
 template <typename L>
-struct type_list_size_impl;
+constexpr size_t type_list_size = 0;
 
 template <typename ...Ts>
-struct type_list_size_impl<type_list<Ts...>> {
-    static constexpr size_t value = sizeof...(Ts);
-};
-
-template <typename L>
-constexpr size_t type_list_size = type_list_size_impl<L>::value;
+constexpr size_t type_list_size<type_list<Ts...>> = sizeof...(Ts);
 
 // append //////////////////////////////////////////////////////////////////////
 
@@ -167,19 +162,11 @@ using type_list_apply_ptr = typename type_list_apply_ptr_impl<L>::type;
 // hh::type_list_contains<list, double> -> false
 //
 
-template <typename T, typename ...Ts>
-constexpr bool types_contain = (std::is_same_v<T, Ts> || ...);
-
 template <typename L, typename T>
-struct type_list_contains_impl;
+constexpr bool type_list_contains = false;
 
 template <typename T, typename ...Ts>
-struct type_list_contains_impl<type_list<Ts...>, T> {
-    static constexpr bool value = types_contain<T, Ts...>;
-};
-
-template <typename L, typename T>
-constexpr bool type_list_contains = type_list_contains_impl<L, T>::value;
+constexpr bool type_list_contains<type_list<Ts...>, T> = (std::is_same_v<T, Ts> || ...);
 
 // map /////////////////////////////////////////////////////////////////////////
 
