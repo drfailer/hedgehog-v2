@@ -39,13 +39,14 @@ namespace hh {
 //
 
 template <typename Config>
-struct TaskNode : Node, NodeIO<Config> {
+struct TaskNode : Node {
     // config //////////////////////////////////////////////////////////////////
 
     using InputTypes  = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
     using Task        = Config::Task;
-    using IO          = NodeIO<Config>;
+    using Input       = Config::Input;
+    using Output      = Config::Output;
 
     // thread state ////////////////////////////////////////////////////////////
 
@@ -89,6 +90,8 @@ struct TaskNode : Node, NodeIO<Config> {
 
     // attributes & constructors ///////////////////////////////////////////////
 
+    Input                    input_      = {};
+    Output                   output_     = {};
     GraphInfo                graph_info_ = {};
     std::vector<ThreadState> states_     = {};
 
@@ -101,13 +104,22 @@ struct TaskNode : Node, NodeIO<Config> {
 
     std::vector<ThreadState> const &states() const { return states_; } // may be usefull for some executors
 
+    Input &input() { return input_; }
+    Output &output() { return output_; }
+
+    template <typename T> void push_data(data_t<T> data, RuntimeInfo const &info) { input_.push_data(std::move(data), info); }
+    template <typename T> void push_result(data_t<T> data, RuntimeInfo const &info) { output_.push_result(std::move(data), info); }
+    template <typename T> void connect_input_edge(Edge<T> edge) { input_.connect_edge(std::move(edge)); }
+    template <typename T> void connect_output_edge(Edge<T> edge) { output_.connect_edge(std::move(edge)); }
+
     // node api ////////////////////////////////////////////////////////////////
 
     void initialize(GraphInfo const &info) override {
         graph_info_ = info;
         Node::profiler().initialize();
         auto init_info = InitializationInfo{Node::info(), graph_info_, &Node::profiler()};
-        IO::initialize(init_info);
+        input_.initialize(init_info);
+        output_.initialize(init_info);
     }
 
     void execute(ExecutionInfo const &info) override {
@@ -126,7 +138,7 @@ struct TaskNode : Node, NodeIO<Config> {
                 state->initialize(this, RuntimeInfo{Node::info(), graph_info_, info, &state->profiler});
                 break;
             case ExecutionInfo::Execute:
-                IO::execute(state, state->context.info());
+                input_.execute(state, state->context.info());
                 break;
             case ExecutionInfo::Finalize:
                 state->finalize();
@@ -145,11 +157,11 @@ struct TaskNode : Node, NodeIO<Config> {
             for (;;) {
                 HH_PROFILE_REGION(state->profiler, "wait")
                 {
-                    wait_result = IO::wait(state->context.info());
+                    wait_result = input_.wait(state->context.info());
                 }
                 if (wait_result.terminate) break;
                 if (wait_result.skip) continue;
-                IO::execute(state, state->context.info());
+                input_.execute(state, state->context.info());
             }
             state->finalize();
         }
@@ -157,7 +169,8 @@ struct TaskNode : Node, NodeIO<Config> {
 
     void finalize(GraphInfo const &info) override {
         auto init_info = InitializationInfo{Node::info(), graph_info_, &Node::profiler()};
-        IO::finalize(init_info);
+        input_.finalize(init_info);
+        output_.finalize(init_info);
         Node::profiler().finalize();
     }
 

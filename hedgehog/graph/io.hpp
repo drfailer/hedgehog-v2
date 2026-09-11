@@ -20,7 +20,6 @@
 #define HEDGEHOG_GRAPH_IO_H
 
 #include <type_traits>
-#include <optional>
 #include "../tool/helpers.hpp"
 #include "../tool/data.hpp"
 
@@ -90,84 +89,6 @@ concept NodeOutputTrait = std::default_initializable<T>
     } && ...);
 
 #endif // HH_ENABLE_CONCEPTS
-
-// Node I/O ////////////////////////////////////////////////////////////////////
-
-//
-// Helper for building node (input + output + default api).
-//
-
-template <typename Config>
-class NodeIO {
-  public:
-    using Input = Config::Input;
-    using Output = Config::Output;
-
-  private:
-    //
-    // We use std::optional to defer the object construction (so this class remains default constructible).
-    //
-    std::optional<Input> input_;
-    std::optional<Output> output_;
-
-  public:
-    Input &input() { return *input_; }
-    Input const &input() const { return *input_; }
-
-    Output &output() { return *output_; }
-    Output const &output() const { return *output_; }
-
-    template <typename ...Args>
-    void construct_input(Args &&...args) {
-        input_.emplace(std::forward<Args>(args)...);
-    }
-
-    template <typename ...Args>
-    void construct_output(Args &&...args) {
-        output_.emplace(std::forward<Args>(args)...);
-    }
-
-    void initialize(InitializationInfo const &info) {
-        assert(input_.has_value() && "the input was not constructed");
-        assert(output_.has_value() && "the output was not constructed");
-        input_->initialize(info);
-        output_->initialize(info);
-    }
-
-    void finalize(InitializationInfo const &info) {
-        input_->finalize(info);
-        output_->finalize(info);
-    }
-
-    template <typename T>
-    void connect_input_edge(Edge<T> edge) {
-        input_->connect_edge(std::move(edge));
-    }
-
-    template <typename T>
-    void connect_output_edge(Edge<T> edge) {
-        output_->connect_edge(std::move(edge));
-    }
-
-    template <typename T>
-    void push_data(data_t<T> data, RuntimeInfo const &info) {
-        input_->push_data(std::move(data), info);
-    }
-
-    template <typename T>
-    void push_result(data_t<T> data, RuntimeInfo const &info) {
-        output_->push_result(std::move(data), info);
-    }
-
-    WaitResult wait(RuntimeInfo const &info) {
-        return input_->wait(info);
-    }
-
-    template <typename Executable>
-    void execute(Executable exec, RuntimeInfo const &info) {
-        input_->execute(exec, info);
-    }
-};
 
 // Node ports //////////////////////////////////////////////////////////////////
 
