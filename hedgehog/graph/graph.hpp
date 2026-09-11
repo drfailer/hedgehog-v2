@@ -200,9 +200,6 @@ struct Graph : Node, NodeIO<Config> {
         for (auto &node : nodes_) {
             report.add_report(node->profile());
         }
-        for (auto &connection : connections_) {
-            report.add_report(connection.profile());
-        }
         return report;
     }
 
@@ -250,7 +247,7 @@ struct Graph : Node, NodeIO<Config> {
     void draw_edge(auto sender, auto receiver, Edge<T> edge) {
         nodes_.insert(sender);
         nodes_.insert(receiver);
-        connections_.push_back(Connection{edge.profiler.get(), sender.get(), receiver.get(), type_to_string<T>()});
+        connections_.push_back(Connection{sender.get(), receiver.get(), type_to_string<T>()});
         receiver->connect_input_edge(edge);
         sender->connect_output_edge(std::move(edge));
     }
@@ -263,7 +260,7 @@ struct Graph : Node, NodeIO<Config> {
             auto& inner_edges = static_cast<GraphInputPort<T>&>(receiver->input()).edges;
             for (auto& inner_edge : inner_edges) {
                 Edge<T> flat(sender.get(), inner_edge.receiver, inner_edge.graph, inner_edge.fun);
-                connections_.push_back(Connection{flat.profiler.get(), sender.get(), receiver.get(), type_to_string<T>()});
+                connections_.push_back(Connection{sender.get(), receiver.get(), type_to_string<T>()});
                 sender->connect_output_edge(std::move(flat));
             }
         } else {

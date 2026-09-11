@@ -58,11 +58,6 @@ using EdgeTransfer = std::function<void(Edge<T> *, data_t<T>, RuntimeInfo const 
 
 template <typename T>
 struct Edge {
-    // Since the edge is stored by copy inside node inputs/outputs, we use a
-    // shared pointer for the profiler. Note that this involves sharing the
-    // profiler between multiple threads which is not a problem performance
-    // wise because threads should operate on different profiles independently.
-    std::shared_ptr<Profiler> profiler = std::make_shared<Profiler>();
     void *sender = nullptr;
     void *receiver = nullptr;
     void *graph = nullptr;
@@ -116,18 +111,9 @@ struct DirectEdgeBuilder {
 //
 
 struct Connection {
-    Profiler *profiler; // profiler from the edge
     Node *sender;
     Node *receiver;
     std::string type_name;
-
-    // TODO: we should do this in the edge directly instead of here
-    ProfilerReport profile() {
-        auto report = profiler->create_report(type_name, ProfileReportKind::Edge);
-        report.sender_id = reinterpret_cast<uintptr_t>(sender);
-        report.receiver_id = reinterpret_cast<uintptr_t>(receiver);
-        return report;
-    }
 };
 
 } // end namespace hh
