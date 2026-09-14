@@ -38,7 +38,7 @@ struct Task {
     }
 };
 
-TEST(compile_test, compile_test) {
+TEST(graph, simple) {
     auto node1 = hh::make_task<Task>(2, "task1");
     auto node2 = hh::make_task<Task>(2, "task2");
     auto graph = hh::make_graph<2, int, float, int, float>();
@@ -68,20 +68,22 @@ TEST(compile_test, compile_test) {
     std::visit(test_value, graph->get_result());
     graph->stop();
 
-    graph->generate_dot_file("test");
+    graph->generate_dot_file("basic.dot");
 }
 
-TEST(sub_graph, edge_flattening) {
+TEST(graph, sub_graph) {
     auto inner1 = hh::make_task<Task>(1, "inner1");
     auto inner2 = hh::make_task<Task>(1, "inner2");
 
     auto subgraph = hh::make_graph<2, int, float, int, float>("subgraph");
+    // auto subgraph = hh::make_serial_graph<2, int, float, int, float>("subgraph");
     subgraph->connect_inputs(inner1);
     subgraph->draw_edges(inner1, inner2);
     subgraph->connect_outputs(inner2);
 
     auto outer_in = hh::make_task<Task>(1, "outer_in");
     auto graph = hh::make_graph<2, int, float, int, float>("main");
+    // auto graph = hh::make_serial_graph<2, int, float, int, float>("main");
     graph->connect_inputs(outer_in);
     graph->draw_edges(outer_in, subgraph);
     graph->connect_outputs(subgraph);
@@ -102,7 +104,7 @@ TEST(sub_graph, edge_flattening) {
     std::visit(check, graph->get_result());
     graph->stop();
 
-    graph->generate_dot_file("test_subgraph");
+    graph->generate_dot_file("sub_graph.dot");
 }
 
 TEST(memory, pool) {

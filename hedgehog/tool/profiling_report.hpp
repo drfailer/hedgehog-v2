@@ -147,105 +147,51 @@ inline void write_node_label(std::ostream &os, ProfilerReport const &report, std
     os << "</table>";
 }
 
-inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report, double max_exec) {
-    // collect graph child IDs so edges to/from sub-graphs can target
-    // their source/sink nodes instead of a nonexistent node
-    std::set<uintptr_t> graph_ids;
-    for (auto &child : report.children) {
-        if (child.kind == ProfileReportKind::Graph) {
-            graph_ids.insert(child.id);
-        }
-    }
-    auto incoming_name = [&](uintptr_t id) {
-        return graph_ids.count(id) ? "source_" + std::to_string(id) : "n" + std::to_string(id);
-    };
-    auto outgoing_name = [&](uintptr_t id) {
-        return graph_ids.count(id) ? "sink_" + std::to_string(id) : "n" + std::to_string(id);
-    };
 
-    // group edges by (sender_id, type_name) for intermediate type nodes
-    struct TypeNode {
-        uintptr_t sender_id;
-        std::string type_name;
-        std::vector<uintptr_t> receiver_ids;
-    };
-    std::map<std::pair<uintptr_t, std::string>, TypeNode> type_nodes;
-
-    for (auto &child : report.children) {
-        if (child.kind == ProfileReportKind::Edge && !child.label.empty()) {
-            auto key = std::make_pair(child.sender_id, child.label);
-            auto &tn = type_nodes[key];
-            tn.sender_id = child.sender_id;
-            tn.type_name = child.label;
-            tn.receiver_ids.push_back(child.receiver_id);
+inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report, uintptr_t graph_id, double max_exec) {
+    switch (report.kind) {
+    case ProfileReportKind::Node: {
+        auto color = compute_node_color(report, max_exec);
+        os << "node_" << report.id << " [shape=none, margin=0, label=<";
+        write_node_label(os, report, color);
+        os << ">];\n";
+    } break;
+    case ProfileReportKind::Edge: {
+        using namespace std::string_literals; // for ""s
+        if (report.sender_id == 0) { // connected to source
+            auto source = "source_"s + std::to_string(graph_id);
+            auto edge = "edge_"s + std::to_string(report.id) + "_"s + std::to_string(graph_id) + "_"s + std::to_string(report.receiver_id);
+            auto node = "node_"s + std::to_string(report.receiver_id);
+            os << source << " -> " << edge << " [dir=none];\n";
+            os << edge << " [label=\"" << report.label << "\"];\n";
+            os << edge << " -> " << node << ";\n";
+        } else if (report.receiver_id == 0) { // connected to sink
+            auto node = "node_"s + std::to_string(report.sender_id);
+            auto edge = "edge_"s + std::to_string(report.id) + "_"s + std::to_string(report.sender_id) + "_"s + std::to_string(graph_id);
+            auto sink = "sink_"s + std::to_string(graph_id);
+            os << node << " -> " << edge << " [dir=none];\n";
+            os << edge << "[label=\"" << report.label << "\"];\n";
+            os << edge << " -> " << sink << ";\n";
+        } else { // standard edge
+            auto sender = "node_"s + std::to_string(report.sender_id);
+            auto receiver = "node_"s + std::to_string(report.receiver_id);
+            auto edge = "edge_"s + std::to_string(report.id) + "_"s + std::to_string(report.sender_id) + "_"s + std::to_string(report.receiver_id);
+            os << sender << " -> " << edge << " [dir=none];\n";
+            os << edge << "[label=\"" << report.label << "\"];\n";
+            os << edge << " -> " << receiver << ";\n";
         }
-    }
-
-    // render nodes
-    for (auto &child : report.children) {
-        switch (child.kind) {
-        case ProfileReportKind::Node: {
-            auto color = compute_node_color(child, max_exec);
-            os << "n" << child.id << " [shape=none, margin=0, label=<";
-            write_node_label(os, child, color);
-            os << ">];\n";
-            break;
+    } break;
+    case ProfileReportKind::Graph: {
+        os << "subgraph cluster_" << std::to_string(report.id) << " {\n";
+        os << "label=\"" << report.label << "\";\n";
+        os << "source_" << std::to_string(report.id) << " [label=\"\", width=.1, shape=circle];\n";
+        for (auto child : report.children) {
+            report_content_to_dot(os, child, report.id, max_exec);
         }
-        case ProfileReportKind::Graph:
-            os << "subgraph cluster_" << child.id << " {\n";
-            os << "label=\"" << child.label << "\";\n";
-            report_content_to_dot(os, child, max_exec);
-            os << "}\n";
-            break;
-        default: break;
-        }
-    }
-
-    // render edges with intermediate type nodes
-    size_t idx = 0;
-    for (auto &[key, tn] : type_nodes) {
-        std::string tid = "t" + std::to_string(tn.sender_id) + "_" + std::to_string(idx++);
-        os << tid << " [label=\"" << tn.type_name << "\"];\n";
-        os << outgoing_name(tn.sender_id) << " -> " << tid << " [dir=none];\n";
-        for (auto rid : tn.receiver_ids) {
-            os << tid << " -> " << incoming_name(rid) << ";\n";
-        }
-    }
-
-    // source with intermediate type nodes (grouped by type_name)
-    if (!report.input_edges.empty()) {
-        std::map<std::string, std::vector<uintptr_t>> source_groups;
-        for (auto &e : report.input_edges) {
-            source_groups[e.type_name].push_back(e.node_id);
-        }
-        os << "source_" << report.id << " [label=\"\", width=.1, shape=circle];\n";
-        size_t si = 0;
-        for (auto &[type_name, node_ids] : source_groups) {
-            std::string tid = "si_" + std::to_string(report.id) + "_" + std::to_string(si++);
-            os << tid << " [label=\"" << type_name << "\"];\n";
-            os << "source_" << report.id << " -> " << tid << " [dir=none];\n";
-            for (auto nid : node_ids) {
-                os << tid << " -> " << incoming_name(nid) << ";\n";
-            }
-        }
-    }
-
-    // sink with intermediate type nodes (grouped by type_name)
-    if (!report.output_edges.empty()) {
-        std::map<std::string, std::vector<uintptr_t>> sink_groups;
-        for (auto &e : report.output_edges) {
-            sink_groups[e.type_name].push_back(e.node_id);
-        }
-        os << "sink_" << report.id << " [label=\"\", width=.1, shape=point];\n";
-        size_t so = 0;
-        for (auto &[type_name, node_ids] : sink_groups) {
-            std::string tid = "so_" + std::to_string(report.id) + "_" + std::to_string(so++);
-            os << tid << " [label=\"" << type_name << "\"];\n";
-            for (auto nid : node_ids) {
-                os << outgoing_name(nid) << " -> " << tid << " [dir=none];\n";
-            }
-            os << tid << " -> sink_" << report.id << ";\n";
-        }
+        os << "sink_" << std::to_string(report.id) << " [label=\"\", width=.1, shape=point];\n";
+        os << "}\n";
+    } break;
+    case ProfileReportKind::Pipeline: assert(false && "unimplemented"); break;
     }
 }
 
@@ -257,7 +203,11 @@ inline void report_to_dot(ProfilerReport const &report, std::ostream &os) {
     os << "label=<";
     write_node_label(os, report);
     os << ">;\n";
-    report_content_to_dot(os, report, max_exec);
+    os << "source_" << std::to_string(report.id) << " [label=\"\", width=.1, shape=circle];\n";
+    for (auto child : report.children) {
+        report_content_to_dot(os, child, report.id, max_exec);
+    }
+    os << "sink_" << std::to_string(report.id) << " [label=\"\", width=.1, shape=point];\n";
     os << "}\n";
 }
 

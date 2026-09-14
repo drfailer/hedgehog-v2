@@ -172,15 +172,13 @@ struct ProfilerReport {
     uintptr_t id = 0;
     uintptr_t sender_id = 0;
     uintptr_t receiver_id = 0;
-
-    struct IOEdge {
-        std::string type_name;
-        uintptr_t node_id;
-    };
-    std::vector<IOEdge> input_edges = {};
-    std::vector<IOEdge> output_edges = {};
     std::map<std::string, Profile> profiles = {};
     std::vector<ProfilerReport> children = {};
+
+    ProfilerReport() = default;
+
+    ProfilerReport(uintptr_t id, uintptr_t sender_id, uintptr_t receiver_id, std::string const &label)
+        : kind(ProfileReportKind::Edge), label(label), id(id), sender_id(sender_id), receiver_id(receiver_id) {}
 
     void add_report(ProfilerReport report) {
         children.push_back(std::move(report));
