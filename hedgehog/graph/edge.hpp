@@ -102,13 +102,10 @@ struct Node;
 template <typename T>
 struct EdgeSlot {
     std::vector<Edge<T>> edges_;
-    std::vector<Node*> connected_nodes_;
 };
 
 template <typename ...Types>
 struct EdgeSlots : EdgeSlot<Types>... {
-    std::set<Node*> nodes_;
-
     void initialize(InitializationInfo const &) {}
     void finalize(InitializationInfo const &) {}
 
@@ -123,23 +120,9 @@ struct EdgeSlots : EdgeSlot<Types>... {
     }
 
     template <typename T>
-    void connect_node(Node *node) {
-        nodes_.insert(node);
-        EdgeSlot<T>::connected_nodes_.push_back(node);
-    }
-
-    template <typename T>
     std::vector<Edge<T>> &edges() { return EdgeSlot<T>::edges_; }
 
     size_t edge_count() { return (EdgeSlot<Types>::edges_.size() + ...); }
-
-    void for_each_connection(auto &&f) {
-        (([&] {
-            for (auto *node : EdgeSlot<Types>::connected_nodes_) {
-                f.template operator()<Types>(node);
-            }
-        }()), ...);
-    }
 };
 
 } // end namespace hh

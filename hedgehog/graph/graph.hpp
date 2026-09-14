@@ -72,6 +72,8 @@ struct Graph : Node {
     std::shared_ptr<Executor> executor_;
     Sink sink_;
     std::set<std::shared_ptr<Node>> nodes_;
+    std::set<std::shared_ptr<Node>> input_nodes_;
+    std::set<std::shared_ptr<Node>> output_nodes_;
     std::vector<Connection> connections_;
 
 #ifdef HH_ENABLE_PROFILING
@@ -89,8 +91,8 @@ struct Graph : Node {
     std::shared_ptr<Executor> executor() const {  return executor_; }
     Sink const &sink() const { return sink_; }
     std::set<std::shared_ptr<Node>> const &nodes() const { return nodes_; }
-    std::set<Node*> const &input_nodes() const { return input_.nodes_; }
-    std::set<Node*> const &output_nodes() const { return output_.nodes_; }
+    std::set<std::shared_ptr<Node>> const &input_nodes() const { return input_nodes_; }
+    std::set<std::shared_ptr<Node>> const &output_nodes() const { return output_nodes_; }
     std::vector<Connection> const &connections() const { return connections_; }
 
     // user functions //////////////////////////////////////////////////////////
@@ -188,14 +190,15 @@ struct Graph : Node {
     ProfilerReport profile() override {
         ProfilerReport report = Node::profiler().create_report(Node::info().name, ProfileReportKind::Graph);
         report.id = reinterpret_cast<uintptr_t>(static_cast<Node *>(this));
-        input_.for_each_connection([&]<typename T>(Node *node) {
-            report.input_edges.push_back({type_to_string<T>(), reinterpret_cast<uintptr_t>(node)});
-        });
-        output_.for_each_connection([&]<typename T>(Node *node) {
-            report.output_edges.push_back({type_to_string<T>(), reinterpret_cast<uintptr_t>(node)});
-        });
         for (auto &node : nodes_) {
             report.add_report(node->profile());
+        }
+        uintptr_t edge_id = 0;
+        for (auto conn : connections_) {
+            report.add_report(ProfilerReport(edge_id++,
+                                             reinterpret_cast<uintptr_t>(conn.sender),
+                                             reinterpret_cast<uintptr_t>(conn.receiver),
+                                             conn.type_name));
         }
         return report;
     }
@@ -221,10 +224,16 @@ struct Graph : Node {
         });
     }
 
+    // TODO: output edges should be edge builder / edge setup functions that
+    //       connects a given edge to the captured sender
+    //       ex:
+    //       - sub_graph_output_node.connect_edge(edge) (edge sends to outer receiver)
+    //       - graph_output.connect_edge(edge) (edge sends to sink)
     template <typename T>
     Edge<T> make_output_edge() {
+        using GraphType = decltype(this);
         return Edge<T>(this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
-            static_cast<Graph<Config> *>(e->graph)->output().template push_data<T>(std::move(data), info);
+            static_cast<GraphType>(e->graph)->output().template push_data<T>(std::move(data), info);
         });
     }
 
@@ -306,14 +315,16 @@ struct Graph : Node {
     template <typename T>
     void connect_input(auto node, Edge<T> edge) {
         nodes_.insert(node);
-        input_.template connect_node<T>(node.get());
+        input_nodes_.insert(node);
+        connections_.push_back(Connection{nullptr, node.get(), type_to_string<T>()});
         input_.connect_edge(std::move(edge));
     }
 
     template <typename T>
     void connect_input(auto node) {
         nodes_.insert(node);
-        input_.template connect_node<T>(node.get());
+        input_nodes_.insert(node);
+        connections_.push_back(Connection{nullptr, node.get(), type_to_string<T>()});
         if constexpr (HasInputNodes<typename decltype(node)::element_type>) {
             auto& inner_edges = node->input().template edges<T>();
             for (auto& inner_edge : inner_edges) {
@@ -352,7 +363,8 @@ struct Graph : Node {
     template <typename T>
     void connect_output(auto node, Edge<T> edge) {
         nodes_.insert(node);
-        output_.template connect_node<T>(node.get());
+        output_nodes_.insert(node);
+        connections_.push_back(Connection{node.get(), nullptr, type_to_string<T>()});
         node->output().connect_edge(std::move(edge));
     }
 
