@@ -180,6 +180,13 @@ struct TaskNode : Node {
 #endif
         return report;
     }
+
+    // io //////////////////////////////////////////////////////////////////////
+
+    template <typename T>
+    void push_data(data_t<T> data, RuntimeInfo const &info = {}) {
+        input_.push_data(std::move(data), {});
+    }
 };
 
 } // end namespace hh
