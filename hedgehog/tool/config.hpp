@@ -24,7 +24,6 @@
 #include "../graph/edge.hpp"
 #include "../tool/type_list.hpp"
 #include "../impl/task/lock_queue_input.hpp"
-#include "../impl/task/direct_output.hpp"
 #include "../impl/graph/thread_executor.hpp"
 #include "../impl/graph/graph_sink.hpp"
 #include "../impl/graph/serial_sink.hpp"
@@ -38,7 +37,7 @@ template <typename InputList>
 using DefaultNodeInput = type_list_dispatch<InputList, LockQueueNodeInput>;
 
 template <typename OutputList>
-using DefaultNodeOutput = type_list_dispatch<OutputList, DirectNodeOutput>;
+using DefaultNodeOutput = type_list_dispatch<OutputList, EdgeSlots>;
 
 using DefaultGraphExecutor = ThreadExecutor;
 
