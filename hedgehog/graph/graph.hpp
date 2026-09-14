@@ -102,7 +102,7 @@ struct Graph : Node {
 
     // user functions //////////////////////////////////////////////////////////
 
-    void start() {
+    void start(int rank = 0) {
         if (output_.edge_count()) {
             // TODO: add the source location
             printf("error: starting a sub-graph is not allowed\n");
@@ -123,7 +123,9 @@ struct Graph : Node {
         exec_profile_ = Node::profiler().profile("execution");
         exec_profile_->begin_region();
 #endif
-        execute(ExecutionInfo{0});
+        ExecutionInfo exec_info = {0};
+        exec_info.rank = rank;
+        execute(exec_info);
     }
 
     void stop() {
@@ -173,8 +175,8 @@ struct Graph : Node {
         init_profile->end_region();
     }
 
-    void execute(ExecutionInfo const &) override {
-        executor_->execute(nodes_);
+    void execute(ExecutionInfo const &info) override {
+        executor_->execute(nodes_, info);
     }
 
     void finalize(GraphInfo const &) override {
