@@ -238,6 +238,8 @@ struct Graph : Node {
     //       ex:
     //       - sub_graph_output_node.connect_edge(edge) (edge sends to outer receiver)
     //       - graph_output.connect_edge(edge) (edge sends to sink)
+    // TODO: Maybe the graph output should not be an edge slot, but an edge
+    //       connector that connects a given edge to node outputs
     template <typename T>
     Edge<T> make_output_edge() {
         using GraphType = decltype(this);
