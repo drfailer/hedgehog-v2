@@ -67,6 +67,9 @@ struct Graph : Node {
 
     // attributes & constructors ///////////////////////////////////////////////
 
+    static inline int graph_id_gen_ = 0;
+
+    GraphInfo graph_info_;
     Input input_   = {};
     Output output_ = {};
     std::shared_ptr<Executor> executor_;
@@ -84,6 +87,8 @@ struct Graph : Node {
           NodeInfo const               &info)
         : Node(info),
           executor_(std::move(executor)) {
+        graph_info_.name = info.name;
+        graph_info_.id = graph_id_gen_++;
     }
 
     Input &input() { return input_; }
@@ -103,10 +108,9 @@ struct Graph : Node {
             printf("error: starting a sub-graph is not allowed\n");
             return;
         }
-        auto graph_info = GraphInfo{Node::info().name, 0};
 
         // intialize the sink_
-        sink_.initialize(InitializationInfo{&Node::info(), &graph_info, nullptr});
+        sink_.initialize(InitializationInfo{&Node::info(), &graph_info_, nullptr});
         auto &graph_sink = sink_;
         type_list_map<OutputTypes>([&]<typename T>() {
             output_.connect_edge(Edge<T>(this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
@@ -114,7 +118,7 @@ struct Graph : Node {
             }));
         });
 
-        initialize(graph_info);
+        initialize(graph_info_);
 #ifdef HH_ENABLE_PROFILING
         exec_profile_ = Node::profiler().profile("execution");
         exec_profile_->begin_region();
@@ -154,8 +158,8 @@ struct Graph : Node {
 
     // node api ////////////////////////////////////////////////////////////////
 
-    void initialize(GraphInfo const &graph_info) override {
-        auto init_info = InitializationInfo{&Node::info(), &graph_info, &Node::profiler()};
+    void initialize(GraphInfo const &) override {
+        auto init_info = InitializationInfo{&Node::info(), &graph_info_, &Node::profiler()};
         Node::profiler().initialize();
 
         auto *init_profile = Node::profiler().profile("initialize");
@@ -163,7 +167,7 @@ struct Graph : Node {
         input_.initialize(init_info);
         output_.initialize(init_info);
         for (auto &node : nodes_) {
-            node->initialize(graph_info);
+            node->initialize(graph_info_);
         }
         executor_->initialize(init_info);
         init_profile->end_region();
@@ -173,10 +177,10 @@ struct Graph : Node {
         executor_->execute(nodes_);
     }
 
-    void finalize(GraphInfo const &graph_info) override {
-        auto init_info = InitializationInfo{&Node::info(), &graph_info, &Node::profiler()};
+    void finalize(GraphInfo const &) override {
+        auto init_info = InitializationInfo{&Node::info(), &graph_info_, &Node::profiler()};
         for (auto &node : nodes_) {
-            node->finalize(graph_info);
+            node->finalize(graph_info_);
         }
         executor_->finalize(init_info);
         input_.finalize(init_info);
@@ -215,7 +219,7 @@ struct Graph : Node {
         return Edge<T>(receiver, this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
             auto receiver = static_cast<Receiver *>(e->receiver);
             auto graph = static_cast<Graph *>(e->graph);
-            receiver->input().push_data(std::move(data), info);
+            receiver->push_data(std::move(data), info);
             if constexpr (HasOnTransfer<Executor, Receiver, RuntimeInfo>) {
                 graph->executor()->on_transfer(receiver, info);
             }
