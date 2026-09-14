@@ -41,10 +41,10 @@ class NodeExecutionContext {
     std::string const &graph_name() const { return info_.graph->name; }
     int graph_id() const { return info_.graph->id; }
     size_t number_thread() const { return info_.node->number_threads; }
-    size_t thread_index() const { return info_.exec->thread_index; }
-    int numa_id() const { return info_.exec->numa_id; }
-    int rank() const { return info_.exec->rank; }
-    int device_id() const { return info_.exec->device_id; }
+    size_t thread_index() const { return info_.exec.thread_index; }
+    int numa_id() const { return info_.exec.pipeline.numa_id; }
+    int device_id() const { return info_.exec.pipeline.device_id; }
+    int rank() const { return info_.exec.rank; }
 
     template <typename T>
     void push_data(data_t<T> data) {

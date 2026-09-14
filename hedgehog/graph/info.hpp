@@ -38,6 +38,15 @@ namespace hh {
 // GraphInfo //////////////////////////////////////////////////////////////////
 
 //
+// Information about the pipeline.
+//
+
+struct PipelineInfo {
+    int numa_id;
+    int device_id;
+};
+
+//
 // Information about the graph.
 //
 
@@ -66,8 +75,7 @@ struct NodeInfo {
 struct ExecutionInfo {
     size_t thread_index;
     int rank;
-    int numa_id;
-    int device_id;
+    PipelineInfo pipeline;
     bool direct;
     enum { Initialize, Execute, Finalize } direct_phase;
 };
@@ -97,7 +105,7 @@ struct InitializationInfo {
 struct RuntimeInfo {
     NodeInfo const *node;
     GraphInfo const *graph;
-    ExecutionInfo const *exec;
+    ExecutionInfo exec;
     Profiler *profiler;
 };
 

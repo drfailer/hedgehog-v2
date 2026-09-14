@@ -33,17 +33,14 @@ struct SerialExecutor {
     bool executing_;
 
     ExecutionInfo make_execution_info(auto phase) {
-        return ExecutionInfo{
-            .thread_index = 0,
-            .rank = 0,
-            .numa_id = 0,
-            .device_id = 0,
-            .direct = true,
-            .direct_phase = phase,
-        };
+        ExecutionInfo info = {0};
+        info.thread_index = 0;
+        info.direct = true;
+        info.direct_phase = phase;
+        return info;
     }
 
-    void execute(std::set<std::shared_ptr<Node>> const &nodes) {
+    void execute(std::set<std::shared_ptr<Node>> const &nodes, ExecutionInfo const &) {
         // graphs are executed only once (a graph node never ends up in the
         // ready list) so here we simply initialize the tasks and sub-graphs
         nodes_ = &nodes;

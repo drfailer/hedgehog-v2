@@ -129,7 +129,7 @@ struct TaskNode : Node {
 
             switch (info.direct_phase) {
             case ExecutionInfo::Initialize:
-                state->initialize(this, RuntimeInfo{&Node::info(), &graph_info_, &info, &state->profiler});
+                state->initialize(this, RuntimeInfo{&Node::info(), &graph_info_, info, &state->profiler});
                 break;
             case ExecutionInfo::Execute:
                 input_.execute(state, state->context.info());
@@ -146,7 +146,7 @@ struct TaskNode : Node {
             // run loop until the graph terminates.
             //
 
-            state->initialize(this, RuntimeInfo{&Node::info(), &graph_info_, &info, &state->profiler});
+            state->initialize(this, RuntimeInfo{&Node::info(), &graph_info_, info, &state->profiler});
             WaitResult wait_result;
             for (;;) {
                 HH_PROFILE_REGION(state->profiler, "wait")

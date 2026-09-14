@@ -29,16 +29,11 @@ struct ThreadExecutor {
 
     void initialize(InitializationInfo const &) {}
 
-    void execute(std::set<std::shared_ptr<Node>> const &nodes) {
+    void execute(std::set<std::shared_ptr<Node>> const &nodes, ExecutionInfo const &info) {
+        auto exec_info = info;
+
+        exec_info.direct = false;
         for (auto node : nodes) {
-            auto exec_info = ExecutionInfo{
-                .thread_index = 0,
-                .rank = 0,
-                .numa_id = 0,
-                .device_id = 0,
-                .direct = false,
-                .direct_phase = ExecutionInfo::Execute,
-            };
             if (node->info().number_threads == 0) {
                 node->execute(exec_info);
             } else {
