@@ -19,7 +19,7 @@
 #ifndef HEDGEHOG_TOOL_PROFILING_H
 #define HEDGEHOG_TOOL_PROFILING_H
 
-#include <map>
+#include <unordered_map>
 #include <vector>
 #include <string>
 #include <cstddef>
@@ -49,7 +49,7 @@
 
 #ifdef HH_ENABLE_PROFILING
 #define HH_PROFILE_REGION(profiler, name) \
-    thread_local static auto HH_CONCAT(_profile_, __LINE__) = (profiler).create_profile((name)); \
+    thread_local static auto HH_CONCAT(_profile_, __LINE__) = (profiler).profile((name)); \
     for (bool \
          HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->begin_region(); \
          HH_CONCAT(_prof_, __LINE__); \
@@ -172,7 +172,7 @@ struct ProfilerReport {
     uintptr_t id = 0;
     uintptr_t sender_id = 0;
     uintptr_t receiver_id = 0;
-    std::map<std::string, Profile> profiles = {};
+    std::unordered_map<std::string, Profile> profiles = {};
     std::vector<ProfilerReport> children = {};
 
     ProfilerReport() = default;
@@ -199,7 +199,7 @@ struct ProfilerReport {
 struct Profiler {
 #ifdef HH_ENABLE_PROFILING
     std::mutex mutex;
-    std::map<std::string, std::unique_ptr<Profile>> profiles;
+    std::unordered_map<std::string, std::unique_ptr<Profile>> profiles;
 #endif
 
     Profiler() = default;
@@ -218,13 +218,13 @@ struct Profiler {
     // hash map lookups during the computation. Here is the intended way to use
     // this profiling system:
     //
-    // thread_local static Profile *profile = profiler.create_profile(); // an id has to be created beforehand
+    // thread_local static Profile *profile = profiler.profile(); // an id has to be created beforehand
     // profile->region.begin();
     // ...
     // profiler->region.end();
     //
 
-    Profile *create_profile([[maybe_unused]] std::string const &name) {
+    Profile *profile([[maybe_unused]] std::string const &name) {
 #ifdef HH_ENABLE_PROFILING
         std::lock_guard<std::mutex> lock(mutex);
         auto profile = std::make_unique<Profile>();

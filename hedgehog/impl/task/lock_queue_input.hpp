@@ -107,7 +107,7 @@ struct LockQueueNodeInput : CondTrigger, NodePorts<LockQueueInputPort, Inputs...
 #ifdef HH_ENABLE_PROFILING
         ([&] {
             using namespace std::string_literals; // for ""s
-            auto profile = info.profiler->create_profile("LockQueueInputPort<"s + type_to_string<Inputs>() + ">");
+            auto profile = info.profiler->profile("LockQueueInputPort<"s + type_to_string<Inputs>() + ">");
             profile->set_info("MQS = ", LockQueueInputPort<Inputs>::max_queue_size, " | ", "QS = ", LockQueueInputPort<Inputs>::size());
         }(), ...);
 #endif

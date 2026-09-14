@@ -116,7 +116,7 @@ struct Graph : Node {
 
         initialize(graph_info);
 #ifdef HH_ENABLE_PROFILING
-        exec_profile_ = Node::profiler().create_profile("execution");
+        exec_profile_ = Node::profiler().profile("execution");
         exec_profile_->begin_region();
 #endif
         execute(ExecutionInfo{0});
@@ -125,7 +125,7 @@ struct Graph : Node {
     void stop() {
 #ifdef HH_ENABLE_PROFILING
         exec_profile_->end_region();
-        auto *fin_profile = Node::profiler().create_profile("finalization");
+        auto *fin_profile = Node::profiler().profile("finalization");
         fin_profile->begin_region();
 #endif
         finalize(GraphInfo{Node::info().name, 0});
@@ -158,7 +158,7 @@ struct Graph : Node {
         auto init_info = InitializationInfo{&Node::info(), &graph_info, &Node::profiler()};
         Node::profiler().initialize();
 
-        auto *init_profile = Node::profiler().create_profile("initialize");
+        auto *init_profile = Node::profiler().profile("initialize");
         init_profile->begin_region();
         input_.initialize(init_info);
         output_.initialize(init_info);
