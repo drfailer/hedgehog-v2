@@ -170,3 +170,67 @@ TEST(memory, pool) {
 
     // memory should be cleaned up even if the data is not released.
 }
+
+struct PipelineTask {
+    using inputs = hh::type_list<int, float>;
+    using outputs = hh::type_list<int, float>;
+
+    void execute(auto ctx, hh::data_t<int> data) {
+        printf("%s::execute<int>(%d)[%ld]{%d, %d}\n", ctx->name().c_str(), *data,
+               ctx->thread_index(), ctx->numa_id(), ctx->device_id());
+        ASSERT_EQ(ctx->numa_id(), 1);
+        ASSERT_EQ(ctx->device_id(), 2);
+        ctx->push_result(data);
+    }
+
+    void execute(auto ctx, hh::data_t<float> data) {
+        printf("%s::execute<float>(%d)[%f]{%d, %d}\n", ctx->name().c_str(), *data,
+               ctx->thread_index(), ctx->numa_id(), ctx->device_id());
+        ASSERT_EQ(ctx->numa_id(), 3);
+        ASSERT_EQ(ctx->device_id(), 4);
+        ctx->push_result(data);
+    }
+};
+
+struct Pipeline {
+    auto make_graph(size_t) {
+        auto node1 = hh::make_task<PipelineTask>(2, "task1");
+        auto node2 = hh::make_task<PipelineTask>(2, "task2");
+        auto graph = hh::make_graph<2, int, float, int, float>();
+
+        graph->connect_inputs(node1);
+        graph->draw_edges(node1, node2);
+        graph->connect_outputs(node2);
+        return graph;
+    }
+
+    size_t send_to(hh::data_t<int>) {
+        return 0;
+    }
+
+    size_t send_to(hh::data_t<float>) {
+        return 1;
+    }
+};
+
+TEST(pipeline, simple) {
+    auto pipeline = hh::make_pipeline<Pipeline>({{1, 2}, {3, 4}});
+    auto graph = hh::make_graph<2, int, float, int, float>("PipelineGraph");
+    graph->connect_inputs(pipeline);
+    graph->connect_outputs(pipeline);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(4));
+    graph->push_data(hh::make_data<float>(3.14f));
+    auto test_value = [&](auto value) {
+        using value_type = decltype(value);
+        if constexpr (std::is_same_v<value_type, std::shared_ptr<int>>) {
+            ASSERT_EQ(*value, 4) << "int received";
+        } else if constexpr (std::is_same_v<value_type, std::shared_ptr<float>>) {
+            ASSERT_EQ(*value, 3.14f) << "float received";
+        }
+    };
+    std::visit(test_value, graph->get_result());
+    std::visit(test_value, graph->get_result());
+    graph->stop();
+}

@@ -16,29 +16,32 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_H
-#define HEDGEHOG_H
+#ifndef HEDGEHOG_API_PIPELINE_H
+#define HEDGEHOG_API_PIPELINE_H
 
+#include <type_traits>
 
-#include "graph/graph.hpp"
-#include "graph/node.hpp"
-#include "graph/info.hpp"
-#include "graph/edge.hpp"
-#include "graph/task_node.hpp"
-#include "graph/pipeline_node.hpp"
+#include "../graph/pipeline_node.hpp"
 
-#include "api/task.hpp"
-#include "api/pipeline.hpp"
+namespace hh {
 
-#include "impl/graph/thread_executor.hpp"
-#include "impl/task/lock_queue_input.hpp"
-#include "impl/memory/automatic_pool.hpp"
-#include "impl/memory/index_allocator.hpp"
-#include "impl/memory/pool.hpp"
+template <typename P>
+auto make_pipeline(std::shared_ptr<P> pipeline, std::vector<PipelineInfo> const &configs, std::string const &name = "Pipeline") {
+    using G = std::invoke_result_t<decltype(&P::make_graph), P, size_t>::element_type;
+    struct Config {
+        using InputTypes = G::InputTypes;
+        using OutputTypes = G::OutputTypes;
+        using Pipeline = P;
+        using GraphType = G;
+    };
+    return std::make_shared<PipelineNode<Config>>(pipeline, NodeInfo{name, 0}, configs);
+}
 
-#include "tool/concepts.hpp"
-#include "tool/config.hpp"
-#include "tool/type_list.hpp"
-#include "tool/helpers.hpp"
+template <typename P>
+auto make_pipeline(std::vector<PipelineInfo> const &configs, std::string const &name = "Pipeline") {
+    return make_pipeline(std::make_shared<P>(), configs, name);
+}
+
+} // end namespace hh
 
 #endif
