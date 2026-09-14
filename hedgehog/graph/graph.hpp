@@ -141,11 +141,6 @@ struct Graph : Node {
     }
 
     template <typename T>
-    void connect_input_edge(Edge<T> edge) {
-        input_.connect_edge(std::move(edge));
-    }
-
-    template <typename T>
     void connect_output_edge(Edge<T> edge) {
         output_.connect_edge(std::move(edge));
     }
@@ -267,7 +262,6 @@ struct Graph : Node {
         nodes_.insert(sender);
         nodes_.insert(receiver);
         connections_.push_back(Connection{sender.get(), receiver.get(), type_to_string<T>()});
-        receiver->connect_input_edge(edge);
         sender->connect_output_edge(std::move(edge));
     }
 

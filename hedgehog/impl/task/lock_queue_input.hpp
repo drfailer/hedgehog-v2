@@ -55,8 +55,6 @@ struct LockQueueInputPort {
         std::lock_guard<std::mutex> lock(mutex); // this is comment out in hh??
         return queue.size();
     }
-
-    void connect_edge(Edge<T>) {}
 };
 
 struct CondTrigger {

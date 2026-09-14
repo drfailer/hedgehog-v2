@@ -184,11 +184,6 @@ struct TaskNode : Node {
     // io //////////////////////////////////////////////////////////////////////
 
     template <typename T>
-    void connect_input_edge(Edge<T> edge) {
-        input_.connect_edge(std::move(edge));
-    }
-
-    template <typename T>
     void connect_output_edge(Edge<T> edge) {
         output_.connect_edge(std::move(edge));
     }
