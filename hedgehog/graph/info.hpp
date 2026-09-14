@@ -83,8 +83,8 @@ struct ExecutionInfo {
 //
 
 struct InitializationInfo {
-    NodeInfo node;
-    GraphInfo graph;
+    NodeInfo const *node;
+    GraphInfo const *graph;
     Profiler *profiler;
 };
 
@@ -95,9 +95,9 @@ struct InitializationInfo {
 //
 
 struct RuntimeInfo {
-    NodeInfo node;
-    GraphInfo graph;
-    ExecutionInfo exec;
+    NodeInfo const *node;
+    GraphInfo const *graph;
+    ExecutionInfo const *exec;
     Profiler *profiler;
 };
 

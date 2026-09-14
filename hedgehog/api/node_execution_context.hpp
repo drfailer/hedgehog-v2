@@ -34,17 +34,17 @@ class NodeExecutionContext {
     }
 
     NodeType &node() { return *node_; }
-    RuntimeInfo const &info() { return info_; }
+    RuntimeInfo const &info() const { return info_; }
     Profiler &profiler() { return *info_.profiler; }
 
-    std::string const &name() { return info_.node.name; }
-    std::string const &graph_name() { return info_.graph.name; }
-    int &graph_id() { return info_.graph.id; }
-    size_t number_thread() { return info_.node.number_threads; }
-    size_t thread_index() { return info_.exec.thread_index; }
-    int numa_id() { return info_.exec.numa_id; }
-    int rank() { return info_.exec.rank; }
-    int device_id() { return info_.exec.device_id; }
+    std::string const &name() const { return info_.node->name; }
+    std::string const &graph_name() const { return info_.graph->name; }
+    int graph_id() const { return info_.graph->id; }
+    size_t number_thread() const { return info_.node->number_threads; }
+    size_t thread_index() const { return info_.exec->thread_index; }
+    int numa_id() const { return info_.exec->numa_id; }
+    int rank() const { return info_.exec->rank; }
+    int device_id() const { return info_.exec->device_id; }
 
     template <typename T>
     void push_data(data_t<T> data) {

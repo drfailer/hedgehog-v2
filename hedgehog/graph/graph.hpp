@@ -104,7 +104,7 @@ struct Graph : Node {
         auto graph_info = GraphInfo{Node::info().name, 0};
 
         // intialize the sink_
-        sink_.initialize(InitializationInfo{Node::info(), graph_info, nullptr});
+        sink_.initialize(InitializationInfo{&Node::info(), &graph_info, nullptr});
         auto &graph_sink = sink_;
         type_list_map<OutputTypes>([&]<typename T>() {
             output_.connect_edge(Edge<T>(this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
@@ -153,7 +153,7 @@ struct Graph : Node {
     // node api ////////////////////////////////////////////////////////////////
 
     void initialize(GraphInfo const &graph_info) override {
-        auto init_info = InitializationInfo{Node::info(), graph_info, &Node::profiler()};
+        auto init_info = InitializationInfo{&Node::info(), &graph_info, &Node::profiler()};
         Node::profiler().initialize();
 
         auto *init_profile = Node::profiler().create_profile("initialize");
@@ -174,7 +174,7 @@ struct Graph : Node {
     }
 
     void finalize(GraphInfo const &graph_info) override {
-        auto init_info = InitializationInfo{Node::info(), graph_info, &Node::profiler()};
+        auto init_info = InitializationInfo{&Node::info(), &graph_info, &Node::profiler()};
         for (auto &node : nodes_) {
             node->finalize(graph_info);
         }
