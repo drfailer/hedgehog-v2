@@ -141,6 +141,16 @@ struct Graph : Node {
     }
 
     template <typename T>
+    void connect_input_edge(Edge<T> edge) {
+        input_.connect_edge(std::move(edge));
+    }
+
+    template <typename T>
+    void connect_output_edge(Edge<T> edge) {
+        output_.connect_edge(std::move(edge));
+    }
+
+    template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info = {}) {
         input_.push_data(std::move(data), info);
     }
@@ -257,8 +267,8 @@ struct Graph : Node {
         nodes_.insert(sender);
         nodes_.insert(receiver);
         connections_.push_back(Connection{sender.get(), receiver.get(), type_to_string<T>()});
-        receiver->input().connect_edge(edge);
-        sender->output().connect_edge(std::move(edge));
+        receiver->connect_input_edge(edge);
+        sender->connect_output_edge(std::move(edge));
     }
 
     template <typename T>
@@ -270,7 +280,7 @@ struct Graph : Node {
             for (auto& inner_edge : inner_edges) {
                 Edge<T> flat(inner_edge.receiver, inner_edge.graph, inner_edge.fun);
                 connections_.push_back(Connection{sender.get(), receiver.get(), type_to_string<T>()});
-                sender->output().connect_edge(std::move(flat));
+                sender->connect_output_edge(std::move(flat));
             }
         } else {
             draw_edge(sender, receiver, make_edge<T>(receiver.get()));
@@ -369,7 +379,7 @@ struct Graph : Node {
         nodes_.insert(node);
         output_nodes_.insert(node);
         connections_.push_back(Connection{node.get(), nullptr, type_to_string<T>()});
-        node->output().connect_edge(std::move(edge));
+        node->connect_output_edge(std::move(edge));
     }
 
     template <typename T>
