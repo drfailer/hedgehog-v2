@@ -19,7 +19,7 @@
 #ifndef HEDGEHOG_IMPL_GRAPH_SERIAL_EXECUTOR_H
 #define HEDGEHOG_IMPL_GRAPH_SERIAL_EXECUTOR_H
 
-#include <vector>
+#include <set>
 #include <queue>
 #include <thread>
 #include <cstdio>
@@ -28,8 +28,9 @@
 namespace hh {
 
 struct SerialExecutor {
-    std::vector<Node *> nodes;
-    std::queue<Node *> ready_nodes;
+    std::set<std::shared_ptr<Node>> const *nodes_ = nullptr;
+    std::queue<Node *> ready_nodes_;
+    bool executing_;
 
     ExecutionInfo make_execution_info(auto phase) {
         return ExecutionInfo{
@@ -42,36 +43,52 @@ struct SerialExecutor {
         };
     }
 
-    void execute(Node *node) {
-        // we register the nodes and initialize the state of the thread 0
-        nodes.push_back(node);
-        node->execute(make_execution_info(ExecutionInfo::Initialize));
+    void execute(std::set<std::shared_ptr<Node>> const &nodes) {
+        // graphs are executed only once (a graph node never ends up in the
+        // ready list) so here we simply initialize the tasks and sub-graphs
+        nodes_ = &nodes;
+        for (auto &node : nodes) {
+            node->execute(make_execution_info(ExecutionInfo::Initialize));
+        }
     }
 
     void on_transfer(Node *node, RuntimeInfo const &) {
         // we don't execute the node directly here, otherwize cyclic graphs
         // with a lot of data would stack overflow.
-        ready_nodes.push(node);
+        ready_nodes_.push(node);
+        execute_ready_nodes(); // we can try to start the execution
+    }
+
+    void execute_ready_nodes() {
+        if (executing_) {
+            // here, we already are in the execution loop and we must leave to
+            // prevent recursion
+            return;
+        }
+        executing_ = true;
+        while (!ready_nodes_.empty()) {
+            auto node = ready_nodes_.front();
+            ready_nodes_.pop();
+            node->execute(make_execution_info(ExecutionInfo::Execute));
+        }
+        executing_ = false;
     }
 
     void on_result() {
-        // the graph execution is triggered in get_result (we make sure the
-        // graph executes before trying to pop the sink).
-        while (!ready_nodes.empty()) {
-            auto node = ready_nodes.front();
-            ready_nodes.pop();
-            node->execute(make_execution_info(ExecutionInfo::Execute));
-        }
+        execute_ready_nodes();
     }
 
-    void initialize(InitializationInfo const &) {}
+    void initialize(InitializationInfo const &) {
+        nodes_ = nullptr;
+        executing_ = false;
+    }
 
     void finalize(InitializationInfo const &) {
         // we finalize the state of the thread 0 for each node
-        for (auto node : nodes) {
+        for (auto &node : *nodes_) {
             node->execute(make_execution_info(ExecutionInfo::Finalize));
         }
-        nodes.clear();
+        nodes_ = nullptr;
     }
 };
 

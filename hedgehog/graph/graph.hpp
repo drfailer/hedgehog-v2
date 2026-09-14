@@ -165,14 +165,12 @@ struct Graph : Node {
         for (auto &node : nodes_) {
             node->initialize(graph_info);
         }
-        initialize_component(executor_, init_info);
+        executor_->initialize(init_info);
         init_profile->end_region();
     }
 
     void execute(ExecutionInfo const &) override {
-        for (auto &node : nodes_) {
-            executor_->execute(node.get());
-        }
+        executor_->execute(nodes_);
     }
 
     void finalize(GraphInfo const &graph_info) override {

@@ -29,25 +29,27 @@ struct ThreadExecutor {
 
     void initialize(InitializationInfo const &) {}
 
-    void execute(Node *node) {
-        auto exec_info = ExecutionInfo{
-            .thread_index = 0,
-            .rank = 0,
-            .numa_id = 0,
-            .device_id = 0,
-            .direct = false,
-            .direct_phase = ExecutionInfo::Execute,
-        };
-        if (node->info().number_threads == 0) {
-            node->execute(exec_info);
-        } else {
-            for (size_t i = 0; i < node->info().number_threads; ++i) {
-                exec_info.thread_index = i;
-                threads.push_back(
-                    std::thread([node, exec_info]() {
-                        node->execute(exec_info);
-                    })
-                );
+    void execute(std::set<std::shared_ptr<Node>> const &nodes) {
+        for (auto node : nodes) {
+            auto exec_info = ExecutionInfo{
+                .thread_index = 0,
+                .rank = 0,
+                .numa_id = 0,
+                .device_id = 0,
+                .direct = false,
+                .direct_phase = ExecutionInfo::Execute,
+            };
+            if (node->info().number_threads == 0) {
+                node->execute(exec_info);
+            } else {
+                for (size_t i = 0; i < node->info().number_threads; ++i) {
+                    exec_info.thread_index = i;
+                    threads.push_back(
+                        std::thread([node, exec_info]() {
+                            node->execute(exec_info);
+                        })
+                    );
+                }
             }
         }
     }

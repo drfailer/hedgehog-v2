@@ -76,14 +76,12 @@ TEST(graph, sub_graph) {
     auto inner2 = hh::make_task<Task>(1, "inner2");
 
     auto subgraph = hh::make_graph<2, int, float, int, float>("subgraph");
-    // auto subgraph = hh::make_serial_graph<2, int, float, int, float>("subgraph");
     subgraph->connect_inputs(inner1);
     subgraph->draw_edges(inner1, inner2);
     subgraph->connect_outputs(inner2);
 
     auto outer_in = hh::make_task<Task>(1, "outer_in");
     auto graph = hh::make_graph<2, int, float, int, float>("main");
-    // auto graph = hh::make_serial_graph<2, int, float, int, float>("main");
     graph->connect_inputs(outer_in);
     graph->draw_edges(outer_in, subgraph);
     graph->connect_outputs(subgraph);
@@ -105,6 +103,38 @@ TEST(graph, sub_graph) {
     graph->stop();
 
     graph->generate_dot_file("sub_graph.dot");
+}
+
+TEST(serial_executor, sub_graph) {
+    auto inner1 = hh::make_task<Task>(1, "inner1");
+    auto inner2 = hh::make_task<Task>(1, "inner2");
+
+    auto subgraph = hh::make_serial_graph<2, int, float, int, float>("subgraph");
+    subgraph->connect_inputs(inner1);
+    subgraph->draw_edges(inner1, inner2);
+    subgraph->connect_outputs(inner2);
+
+    auto outer_in = hh::make_task<Task>(1, "outer_in");
+    auto graph = hh::make_serial_graph<2, int, float, int, float>("main");
+    graph->connect_inputs(outer_in);
+    graph->draw_edges(outer_in, subgraph);
+    graph->connect_outputs(subgraph);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(42));
+    graph->push_data(hh::make_data<float>(2.71f));
+
+    auto check = [](auto value) {
+        using V = decltype(value);
+        if constexpr (std::is_same_v<V, std::shared_ptr<int>>) {
+            EXPECT_EQ(*value, 42);
+        } else if constexpr (std::is_same_v<V, std::shared_ptr<float>>) {
+            EXPECT_FLOAT_EQ(*value, 2.71f);
+        }
+    };
+    std::visit(check, graph->get_result());
+    std::visit(check, graph->get_result());
+    graph->stop();
 }
 
 TEST(memory, pool) {
