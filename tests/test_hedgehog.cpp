@@ -274,4 +274,5 @@ TEST(pipeline, simple) {
     std::visit(test_value, graph->get_result());
     std::visit(test_value, graph->get_result());
     graph->stop();
+    graph->generate_dot_file("pipeline.dot");
 }
