@@ -20,6 +20,7 @@
 #define HEDGEHOG_TOOL_DATA_H
 
 #include <memory>
+#include <type_traits>
 
 //
 // The new version of Hedgehog doesn't force users to use shared pointers. One
@@ -32,7 +33,11 @@ namespace hh {
 
 #ifdef HH_VALUE_MODE
 
-// TODO: test this
+/******************************************************************************/
+/*                                 value mode                                 */
+/******************************************************************************/
+
+//
 // In value mode, we allow to use a pointer like API for compatibility with
 // other modes (some things like type lists may need to change though).
 //
@@ -71,7 +76,24 @@ data_t<T> make_data(auto &&...args) {
     return data_t<T>(std::forward<decltype(args)>(args)...);
 }
 
+// data type accessor //////////////////////////////////////////////////////////
+
+template <typename T>
+struct data_type_impl;
+
+template <typename T>
+struct data_type_impl<data_t<T>> {
+    using type = T;
+};
+
+template <typename T>
+using data_type = typename data_type_impl<T>::type;
+
 #elifdef HH_POINTER_MODE
+
+/******************************************************************************/
+/*                                pointer mode                                */
+/******************************************************************************/
 
 template <typename T>
 using data_t = T*;
@@ -83,7 +105,16 @@ data_t<T> make_data(auto &&...args) {
     return new T(std::forward<decltype(args)>(args)...);
 }
 
+// data type accessor //////////////////////////////////////////////////////////
+
+template <typename T>
+using data_type = std::remove_pointer_t<T>;
+
 #else
+
+/******************************************************************************/
+/*                              shared_ptr mode                               */
+/******************************************************************************/
 
 //
 // We default to shared pointers like in the previous version (slower but easier
@@ -97,6 +128,10 @@ template <typename T>
 data_t<T> make_data(auto &&...args) {
     return std::make_shared<T>(std::forward<decltype(args)>(args)...);
 }
+// data type accessor //////////////////////////////////////////////////////////
+
+template <typename T>
+using data_type = typename T::element_type;
 
 #endif
 
