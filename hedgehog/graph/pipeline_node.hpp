@@ -71,8 +71,20 @@ struct PipelineNode : Node {
     }
 
     ProfilerReport profile() override {
-        assert(false && "TODO");
-        return {};
+        ProfilerReport report = Node::profiler().create_report(
+            Node::info().name, ProfileReportKind::Pipeline);
+        report.id = reinterpret_cast<uintptr_t>(static_cast<Node *>(this));
+
+        for (size_t i = 0; i < graphs_.size(); ++i) {
+            graphs_[i]->create_input_connections();
+            auto graph_report = graphs_[i]->profile();
+            auto &cfg = configs_[i];
+            graph_report.label += " [NUMA: " + std::to_string(cfg.numa_id)
+                               + ", Device: " + std::to_string(cfg.device_id) + "]";
+            report.add_report(std::move(graph_report));
+        }
+        report.merge_children_profiles();
+        return report;
     }
 
     // io //////////////////////////////////////////////////////////////////////

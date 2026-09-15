@@ -194,6 +194,14 @@ struct ProfilerReport {
             profiles[label].merge(profile);
         }
     }
+
+    void merge_children_profiles() {
+        for (auto &child : children) {
+            for (auto &[label, profile] : child.profiles) {
+                add_profile(label, profile);
+            }
+        }
+    }
 };
 
 // TODO: do we want this struct to be empty when profiling is disabled (make the node smaller)?

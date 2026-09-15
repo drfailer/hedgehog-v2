@@ -102,7 +102,8 @@ inline double find_max_exec(ProfilerReport const &report) {
     for (auto &child : report.children) {
         if (child.kind == ProfileReportKind::Node) {
             max_exec = std::max(max_exec, compute_node_exec_time(child));
-        } else if (child.kind == ProfileReportKind::Graph) {
+        } else if (child.kind == ProfileReportKind::Graph
+                || child.kind == ProfileReportKind::Pipeline) {
             max_exec = std::max(max_exec, find_max_exec(child));
         }
     }
@@ -174,7 +175,41 @@ inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report
         }
         os << "}\n";
     } break;
-    case ProfileReportKind::Pipeline: assert(false && "unimplemented"); break;
+    case ProfileReportKind::Pipeline: {
+        using namespace std::string_literals;
+
+        os << "subgraph cluster_" << std::to_string(report.id) << " {\n";
+        os << "style=filled;\n";
+        os << "fillcolor=\"#e8e8e8\";\n";
+        os << "label=<";
+        write_node_label(os, report);
+        os << ">;\n";
+
+        os << "node_" << report.id
+           << " [label=\"\", shape=diamond, width=.3, style=filled, fillcolor=\"#606060\"];\n";
+
+        for (auto &child : report.children) {
+            if (child.kind == ProfileReportKind::Graph) {
+                os << "subgraph cluster_" << std::to_string(child.id) << " {\n";
+                os << "label=<";
+                write_node_label(os, child);
+                os << ">;\n";
+                os << "node_" << child.sender_id
+                   << " [label=\"\", width=.1, shape=circle];\n";
+                os << "node_" << child.receiver_id
+                   << " [label=\"\", width=.1, shape=point];\n";
+                for (auto &gc : child.children) {
+                    report_content_to_dot(os, gc, child.id, max_exec);
+                }
+                os << "}\n";
+                os << "node_" << report.id << " -> node_"
+                   << child.sender_id << ";\n";
+            } else {
+                report_content_to_dot(os, child, report.id, max_exec);
+            }
+        }
+        os << "}\n";
+    } break;
     }
 }
 

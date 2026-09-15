@@ -110,10 +110,7 @@ struct Graph : Node {
         });
     }
 
-    void start(int rank = 0) {
-        // TODO: sub-graph check
-
-        // create input connections (this is mainly for the dot file)
+    void create_input_connections() {
         type_list_map<InputTypes>([&]<typename T>() {
             auto edges = input_.template edges<T>();
             for (auto &edge : edges) {
@@ -124,6 +121,11 @@ struct Graph : Node {
                 });
             }
         });
+    }
+
+    void start(int rank = 0) {
+        // TODO: sub-graph check
+        create_input_connections();
 
         // intialize the sink
         sink_.initialize(InitializationInfo{&Node::info(), &graph_info_, nullptr});
@@ -168,7 +170,7 @@ struct Graph : Node {
         return sink_.get_result();
     }
 
-    void eat_resutls(size_t count = 1) {
+    void eat_results(size_t count = 1) {
         for (size_t i = 0; i < count; ++i) {
             auto _ = get_result();
         }
@@ -230,7 +232,8 @@ struct Graph : Node {
     //
     // Input-side edge flattening: draw_edge<T> and connect_input<T> detect
     // when the receiver/node is a Graph and bypass GraphInput by reusing inner
-    // edge transfer functions. Output-side flattening is not yet implemented.
+    // edge transfer functions. Output-side flattening uses deferred
+    // EdgeConnectors that chain through sub-graph boundaries.
     //
 
     template <typename T>

@@ -33,8 +33,11 @@ template <typename Component>
 std::shared_ptr<Component> copy_component(std::shared_ptr<Component> component) {
     if constexpr (Copyable<Component>) {
         return component->copy();
-    } else {
+    } else if constexpr (std::is_default_constructible_v<Component>) {
         return std::make_shared<Component>();
+    } else {
+        assert(false && "copy_component called on non-copyable, non-default-constructible type");
+        return nullptr;
     }
 }
 
