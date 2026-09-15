@@ -69,9 +69,6 @@ concept NodeInputTrait = std::default_initializable<T>
     }
     && (requires(T t, data_t<Inputs> d, RuntimeInfo const &i) {
         t.push_data(std::move(d), i);
-    } && ...)
-    && (requires(T t, Edge<Inputs> e) {
-        t.connect_edge(std::move(e));
     } && ...);
 
 template <typename T, typename ...Outputs>
