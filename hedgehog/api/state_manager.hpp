@@ -50,6 +50,43 @@ struct StateManager {
     }
 };
 
+template <typename Impl>
+auto make_state_manager(std::shared_ptr<Impl> state, std::string const &name = "StateManager") {
+    using Config = make_task_config<Impl>;
+    return std::make_shared<TaskNode<Config>>(std::make_shared<StateManager>(std::move(state)),
+                                              NodeInfo{name, 1});
+}
+
+template <typename State>
+struct LockStateManager {
+    using inputs = State::inputs;
+    using outputs = State::outputs;
+
+    std::mutex mutex_;
+    std::shared_ptr<State> state_;
+
+    LockStateManager(std::shared_ptr<State> state) : state_(state) {}
+
+    void execute(auto ctx, auto data) {
+        mutex_.lock();
+        state_->execute(ctx, data);
+        mutex_.unlock();
+    }
+
+    std::shared_ptr<Node> *copy() {
+        // TODO: use log to print a proper error message and crash using exit
+        throw "a state manager should not be copied";
+    }
+};
+
+
+template <typename Impl>
+auto make_lock_state_manager(std::shared_ptr<Impl> state, std::string const &name = "StateManager") {
+    using Config = make_task_config<Impl>;
+    return std::make_shared<TaskNode<Config>>(std::make_shared<LockStateManager>(std::move(state)),
+                                              NodeInfo{name, 1});
+}
+
 } // end namespace hh
 
 #endif
