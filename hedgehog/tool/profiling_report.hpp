@@ -147,7 +147,6 @@ inline void write_node_label(std::ostream &os, ProfilerReport const &report, std
     os << "</table>";
 }
 
-
 inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report, uintptr_t graph_id, double max_exec) {
     switch (report.kind) {
     case ProfileReportKind::Node: {
@@ -158,37 +157,21 @@ inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report
     } break;
     case ProfileReportKind::Edge: {
         using namespace std::string_literals; // for ""s
-        if (report.sender_id == 0) { // connected to source
-            auto source = "source_"s + std::to_string(graph_id);
-            auto edge = "edge_"s + std::to_string(report.id) + "_"s + std::to_string(graph_id) + "_"s + std::to_string(report.receiver_id);
-            auto node = "node_"s + std::to_string(report.receiver_id);
-            os << source << " -> " << edge << " [dir=none];\n";
-            os << edge << " [label=\"" << report.label << "\"];\n";
-            os << edge << " -> " << node << ";\n";
-        } else if (report.receiver_id == 0) { // connected to sink
-            auto node = "node_"s + std::to_string(report.sender_id);
-            auto edge = "edge_"s + std::to_string(report.id) + "_"s + std::to_string(report.sender_id) + "_"s + std::to_string(graph_id);
-            auto sink = "sink_"s + std::to_string(graph_id);
-            os << node << " -> " << edge << " [dir=none];\n";
-            os << edge << "[label=\"" << report.label << "\"];\n";
-            os << edge << " -> " << sink << ";\n";
-        } else { // standard edge
-            auto sender = "node_"s + std::to_string(report.sender_id);
-            auto receiver = "node_"s + std::to_string(report.receiver_id);
-            auto edge = "edge_"s + std::to_string(report.id) + "_"s + std::to_string(report.sender_id) + "_"s + std::to_string(report.receiver_id);
-            os << sender << " -> " << edge << " [dir=none];\n";
-            os << edge << "[label=\"" << report.label << "\"];\n";
-            os << edge << " -> " << receiver << ";\n";
-        }
+
+        auto sender = "node_"s + std::to_string(report.sender_id);
+        auto receiver = "node_"s + std::to_string(report.receiver_id);
+        auto edge = "edge_"s + std::to_string(report.id) + "_"s + std::to_string(report.sender_id) + "_"s + std::to_string(report.receiver_id);
+
+        os << sender << " -> " << edge << " [dir=none];\n";
+        os << edge << "[label=\"" << report.label << "\"];\n";
+        os << edge << " -> " << receiver << ";\n";
     } break;
     case ProfileReportKind::Graph: {
         os << "subgraph cluster_" << std::to_string(report.id) << " {\n";
         os << "label=\"" << report.label << "\";\n";
-        os << "source_" << std::to_string(report.id) << " [label=\"\", width=.1, shape=circle];\n";
         for (auto child : report.children) {
             report_content_to_dot(os, child, report.id, max_exec);
         }
-        os << "sink_" << std::to_string(report.id) << " [label=\"\", width=.1, shape=point];\n";
         os << "}\n";
     } break;
     case ProfileReportKind::Pipeline: assert(false && "unimplemented"); break;
@@ -203,11 +186,11 @@ inline void report_to_dot(ProfilerReport const &report, std::ostream &os) {
     os << "label=<";
     write_node_label(os, report);
     os << ">;\n";
-    os << "source_" << std::to_string(report.id) << " [label=\"\", width=.1, shape=circle];\n";
+    os << "node_" << std::to_string(report.sender_id) << " [label=\"\", width=.1, shape=circle];\n";
+    os << "node_" << std::to_string(report.receiver_id) << " [label=\"\", width=.1, shape=point];\n";
     for (auto child : report.children) {
         report_content_to_dot(os, child, report.id, max_exec);
     }
-    os << "sink_" << std::to_string(report.id) << " [label=\"\", width=.1, shape=point];\n";
     os << "}\n";
 }
 

@@ -168,6 +168,7 @@ enum class ProfileReportKind {
 
 struct ProfilerReport {
     ProfileReportKind kind = ProfileReportKind::Node;
+    ProfilerReport *parent = nullptr;
     std::string label = "";
     uintptr_t id = 0;
     uintptr_t sender_id = 0;
@@ -181,6 +182,7 @@ struct ProfilerReport {
         : kind(ProfileReportKind::Edge), label(label), id(id), sender_id(sender_id), receiver_id(receiver_id) {}
 
     void add_report(ProfilerReport report) {
+        report.parent = this;
         children.push_back(std::move(report));
     }
 

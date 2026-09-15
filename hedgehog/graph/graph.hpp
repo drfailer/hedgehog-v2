@@ -47,7 +47,7 @@ struct Graph : Node {
     using Sink        = Config::Sink;
     using Executor    = Config::Executor;
     using Input       = type_list_dispatch<InputTypes, EdgeSlots>;
-    using Output      = type_list_dispatch<OutputTypes, EdgeSlots>;
+    using Output      = type_list_dispatch<OutputTypes, EdgeConnectors>;
 
     //
     // Argument struct to pass to the edge builder. We use a struct because it
@@ -102,47 +102,58 @@ struct Graph : Node {
 
     // user functions //////////////////////////////////////////////////////////
 
-    void start(int rank = 0) {
-        if (output_.edge_count()) {
-            // TODO: add the source location
-            printf("error: starting a sub-graph is not allowed\n");
-            return;
-        }
-
-        // intialize the sink_
-        sink_.initialize(InitializationInfo{&Node::info(), &graph_info_, nullptr});
-        auto &graph_sink = sink_;
-        type_list_map<OutputTypes>([&]<typename T>() {
-            output_.connect_edge(Edge<T>(this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
-                static_cast<decltype(this)>(e->graph)->sink_.push_data(data, info);
+    void connect_sink() {
+        type_list_map<OutputTypes>([this]<typename T>() {
+            output_.connect(Edge<T>(&sink_, this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
+                static_cast<Sink *>(e->receiver)->push_data(data, info);
             }));
         });
+    }
+
+    void start(int rank = 0) {
+        // TODO: sub-graph check
+
+        // create input connections (this is mainly for the dot file)
+        type_list_map<InputTypes>([&]<typename T>() {
+            auto edges = input_.template edges<T>();
+            for (auto &edge : edges) {
+                connections_.push_back(Connection{
+                    .sender = this,
+                    .receiver = reinterpret_cast<Node *>(edge.receiver),
+                    .type_name = type_to_string<T>(),
+                });
+            }
+        });
+
+        // intialize the sink
+        sink_.initialize(InitializationInfo{&Node::info(), &graph_info_, nullptr});
+        connect_sink();
 
         initialize(graph_info_);
-#ifdef HH_ENABLE_PROFILING
+        #ifdef HH_ENABLE_PROFILING
         exec_profile_ = Node::profiler().profile("execution");
         exec_profile_->begin_region();
-#endif
+        #endif
         ExecutionInfo exec_info = {0};
         exec_info.rank = rank;
         execute(exec_info);
     }
 
     void stop() {
-#ifdef HH_ENABLE_PROFILING
+        #ifdef HH_ENABLE_PROFILING
         exec_profile_->end_region();
         auto *fin_profile = Node::profiler().profile("finalization");
         fin_profile->begin_region();
-#endif
+        #endif
         finalize(GraphInfo{Node::info().name, 0});
-#ifdef HH_ENABLE_PROFILING
+        #ifdef HH_ENABLE_PROFILING
         fin_profile->end_region();
-#endif
+        #endif
     }
 
     template <typename T>
     void connect_output_edge(Edge<T> edge) {
-        output_.connect_edge(std::move(edge));
+        output_.connect(std::move(edge));
     }
 
     template <typename T>
@@ -199,6 +210,8 @@ struct Graph : Node {
     ProfilerReport profile() override {
         ProfilerReport report = Node::profiler().create_report(Node::info().name, ProfileReportKind::Graph);
         report.id = reinterpret_cast<uintptr_t>(static_cast<Node *>(this));
+        report.sender_id = reinterpret_cast<uintptr_t>(static_cast<Node *>(this));
+        report.receiver_id = reinterpret_cast<uintptr_t>(&sink_);
         for (auto &node : nodes_) {
             report.add_report(node->profile());
         }
@@ -230,21 +243,6 @@ struct Graph : Node {
             if constexpr (HasOnTransfer<Executor, Receiver, RuntimeInfo>) {
                 graph->executor()->on_transfer(receiver, info);
             }
-        });
-    }
-
-    // TODO: output edges should be edge builder / edge setup functions that
-    //       connects a given edge to the captured sender
-    //       ex:
-    //       - sub_graph_output_node.connect_edge(edge) (edge sends to outer receiver)
-    //       - graph_output.connect_edge(edge) (edge sends to sink)
-    // TODO: Maybe the graph output should not be an edge slot, but an edge
-    //       connector that connects a given edge to node outputs
-    template <typename T>
-    Edge<T> make_output_edge() {
-        using GraphType = decltype(this);
-        return Edge<T>(this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
-            static_cast<GraphType>(e->graph)->output().template push_data<T>(std::move(data), info);
         });
     }
 
@@ -329,7 +327,6 @@ struct Graph : Node {
     void connect_input(auto node, Edge<T> edge) {
         nodes_.insert(node);
         input_nodes_.insert(node);
-        connections_.push_back(Connection{nullptr, node.get(), type_to_string<T>()});
         input_.connect_edge(std::move(edge));
     }
 
@@ -337,12 +334,10 @@ struct Graph : Node {
     void connect_input(auto node) {
         nodes_.insert(node);
         input_nodes_.insert(node);
-        connections_.push_back(Connection{nullptr, node.get(), type_to_string<T>()});
         if constexpr (HasInputNodes<typename decltype(node)::element_type>) {
-            auto& inner_edges = node->input().template edges<T>();
-            for (auto& inner_edge : inner_edges) {
-                Edge<T> forwarded(nullptr, inner_edge.receiver, inner_edge.graph, inner_edge.fun);
-                input_.connect_edge(std::move(forwarded));
+            auto& input_edges = node->input().template edges<T>();
+            for (auto& input_edge : input_edges) {
+                input_.connect_edge(input_edge);
             }
         } else {
             input_.connect_edge(make_edge<T>(node.get()));
@@ -374,32 +369,28 @@ struct Graph : Node {
     //
 
     template <typename T>
-    void connect_output(auto node, Edge<T> edge) {
+    void connect_output(auto node) {
         nodes_.insert(node);
         output_nodes_.insert(node);
-        connections_.push_back(Connection{node.get(), nullptr, type_to_string<T>()});
-        node->connect_output_edge(std::move(edge));
-    }
-
-    template <typename T>
-    void connect_output(auto node) {
-        connect_output(node, make_output_edge<T>());
-    }
-
-    template <typename Node>
-    void connect_outputs(std::shared_ptr<Node> node, auto create_edge) {
-        using node_outputs = Node::OutputTypes;
-        type_list_map<OutputTypes>([&]<typename T>() {
-            if constexpr (type_list_contains<node_outputs, T>) {
-                connect_output(node, create_edge.template operator()<T>(node));
+        output_.template add_connect<T>([node, this](Edge<T> edge) {
+            if constexpr (!HasInputNodes<typename decltype(node)::element_type>) {
+                connections_.push_back(Connection{
+                    .sender = node.get(),
+                    .receiver = static_cast<Node *>(edge.receiver),
+                    .type_name = type_to_string<T>(),
+                });
             }
+            node->connect_output_edge(std::move(edge));
         });
     }
 
     template <typename Node>
     void connect_outputs(std::shared_ptr<Node> node) {
-        connect_outputs(node, [&]<typename T>(auto node) -> Edge<T> {
-            return make_output_edge<T>();
+        using node_outputs = Node::OutputTypes;
+        type_list_map<OutputTypes>([&]<typename T>() {
+            if constexpr (type_list_contains<node_outputs, T>) {
+                connect_output<T>(node);
+            }
         });
     }
 

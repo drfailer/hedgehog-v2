@@ -97,7 +97,10 @@ struct Connection {
 
 // Edge slot ///////////////////////////////////////////////////////////////////
 
-struct Node;
+//
+// An edge slot is just a collection of edges. This type can be used as graph
+// input or task node output.
+//
 
 template <typename T>
 struct EdgeSlot {
@@ -123,6 +126,46 @@ struct EdgeSlots : EdgeSlot<Types>... {
     std::vector<Edge<T>> &edges() { return EdgeSlot<T>::edges_; }
 
     size_t edge_count() { return (EdgeSlot<Types>::edges_.size() + ...); }
+};
+
+
+// Edge connector //////////////////////////////////////////////////////////////
+
+//
+// The edge connector is used to defer edge connection. This is mainly used to
+// connect graph output nodes as it allows making straight connections accross
+// sub-graph boundaries.
+//
+// Note that we could use interfaces instead of this (we don't need optimal
+// performance for the graph initialization machinery), but std::function
+// allows to do this witout adding extra inheritance layer in every node
+// implementation.
+//
+
+template <typename T>
+using ConnectFunction = std::function<void(Edge<T>)>;
+
+template <typename T>
+struct EdgeConnector {
+    std::vector<ConnectFunction<T>> connects_;
+};
+
+template <typename ...Types>
+struct EdgeConnectors : EdgeConnector<Types>... {
+    void initialize(InitializationInfo const &) {}
+    void finalize(InitializationInfo const &) {}
+
+    template <typename T>
+    void connect(Edge<T> edge) {
+        for (auto &connect : EdgeConnector<T>::connects_) {
+            connect(edge);
+        }
+    }
+
+    template <typename T>
+    void add_connect(ConnectFunction<T> connect) {
+        EdgeConnector<T>::connects_.push_back(std::move(connect));
+    }
 };
 
 } // end namespace hh
