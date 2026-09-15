@@ -62,7 +62,7 @@ namespace hh {
 
 using Clock = std::chrono::steady_clock;
 using TimePoint = std::chrono::time_point<Clock>;
-using Duration = std::chrono::duration<double, std::nano>; // TODO: do we really want doubles?
+using Duration = std::chrono::duration<double, std::nano>;
 
 //
 // The measure computes the mean and the stddev using the Welford's algorithm.
@@ -204,8 +204,6 @@ struct ProfilerReport {
     }
 };
 
-// TODO: do we want this struct to be empty when profiling is disabled (make the node smaller)?
-// - we could return a global dummy profile
 struct Profiler {
 #ifdef HH_ENABLE_PROFILING
     std::mutex mutex;
