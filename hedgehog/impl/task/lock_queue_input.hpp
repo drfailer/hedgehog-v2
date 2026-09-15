@@ -69,7 +69,10 @@ struct CondTrigger {
     }
 
     void finalize() {
-        terminated = true;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            terminated = true;
+        }
         cond.notify_all();
     }
 
