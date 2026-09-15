@@ -44,16 +44,16 @@ struct StateManager {
         state_->execute(ctx, data);
     }
 
-    std::shared_ptr<Node> *copy() {
-        // TODO: use log to print a proper error message and crash using exit
+    std::shared_ptr<StateManager> copy() {
         throw "a state manager should not be copied";
     }
 };
 
 template <typename Impl>
 auto make_state_manager(std::shared_ptr<Impl> state, std::string const &name = "StateManager") {
-    using Config = make_task_config<Impl>;
-    return std::make_shared<TaskNode<Config>>(std::make_shared<StateManager>(std::move(state)),
+    using BaseConfig = make_task_config<Impl>;
+    struct Config : BaseConfig { using Task = StateManager<Impl>; };
+    return std::make_shared<TaskNode<Config>>(std::make_shared<StateManager<Impl>>(std::move(state)),
                                               NodeInfo{name, 1});
 }
 
@@ -73,8 +73,7 @@ struct LockStateManager {
         mutex_.unlock();
     }
 
-    std::shared_ptr<Node> *copy() {
-        // TODO: use log to print a proper error message and crash using exit
+    std::shared_ptr<LockStateManager> copy() {
         throw "a state manager should not be copied";
     }
 };
@@ -82,8 +81,9 @@ struct LockStateManager {
 
 template <typename Impl>
 auto make_lock_state_manager(std::shared_ptr<Impl> state, std::string const &name = "StateManager") {
-    using Config = make_task_config<Impl>;
-    return std::make_shared<TaskNode<Config>>(std::make_shared<LockStateManager>(std::move(state)),
+    using BaseConfig = make_task_config<Impl>;
+    struct Config : BaseConfig { using Task = LockStateManager<Impl>; };
+    return std::make_shared<TaskNode<Config>>(std::make_shared<LockStateManager<Impl>>(std::move(state)),
                                               NodeInfo{name, 1});
 }
 
