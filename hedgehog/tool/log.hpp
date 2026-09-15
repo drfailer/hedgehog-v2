@@ -19,12 +19,75 @@
 #ifndef HEDGEHOG_TOOL_LOG_H
 #define HEDGEHOG_TOOL_LOG_H
 
-#include <cstdio>
+#include <mutex>
+#include <iostream>
+#include <cstdlib>
+#include <source_location>
 
 namespace hh::log {
 
-// TODO
-// - i don't have access to C++23/println on the NIST machines which is quite unfortunate
+std::mutex LOG_MUTEX;
+
+//
+// Trick to capture message and the source location.
+//
+struct LocatedMessage {
+    std::source_location loc;
+    std::string_view message;
+
+    LocatedMessage(const char *message, std::source_location loc = std::source_location::current())
+        : message(message) {}
+
+    LocatedMessage(std::string const &message, std::source_location loc = std::source_location::current())
+        : message(message) {}
+};
+
+void info(std::source_location loc, auto &&...args) {
+    std::lock_guard<std::mutex> lock(LOG_MUTEX);
+    std::cout << "HH  INFO  " << loc.file_name() << "(" << loc.line() << ":" << loc.column() << "): ";
+    (std::cout << ... << args);
+    std::cout << std::endl;
+}
+
+void info(LocatedMessage lm, auto &&...args) {
+    info(lm.loc, lm.message, std::forward<decltype(args)>(args)...);
+}
+
+void warning(std::source_location loc, auto &&...args) {
+    std::lock_guard<std::mutex> lock(LOG_MUTEX);
+    std::cerr << "HH  WARN  " << loc.file_name() << "(" << loc.line() << ":" << loc.column() << "): ";
+    (std::cerr << ... << args);
+    std::cerr << std::endl;
+}
+
+void warning(LocatedMessage lm, auto &&...args) {
+    warning(lm.loc, lm.message, std::forward<decltype(args)>(args)...);
+}
+
+void error(std::source_location loc, auto &&...args) {
+    std::lock_guard<std::mutex> lock(LOG_MUTEX);
+    std::cerr << "HH  ERROR  " << loc.file_name() << "(" << loc.line() << ":" << loc.column() << "): ";
+    (std::cerr << ... << args);
+    std::cerr << std::endl;
+}
+
+void error(LocatedMessage lm, auto &&...args) {
+    error(lm.loc, lm.message, std::forward<decltype(args)>(args)...);
+}
+
+[[noreturn]] void fatal(std::source_location loc, auto &&...args) {
+    {
+        std::lock_guard<std::mutex> lock(LOG_MUTEX);
+        std::cerr << "HH  FATAL  " << loc.file_name() << "(" << loc.line() << ":" << loc.column() << "): ";
+        (std::cerr << ... << args);
+        std::cerr << std::endl;
+    }
+    std::abort();
+}
+
+void fatal(LocatedMessage lm, auto &&...args) {
+    fatal(lm.loc, lm.message, std::forward<decltype(args)>(args)...);
+}
 
 } // end namespace hh::log
 
