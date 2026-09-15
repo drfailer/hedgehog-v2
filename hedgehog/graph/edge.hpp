@@ -75,7 +75,7 @@ struct Edge {
     Edge<T> &operator=(Edge<T> &&edge) = default;
 
     void transfer(data_t<T> data, RuntimeInfo const &info) {
-        fun(this, data, info);
+        fun(this, std::move(data), info);
     }
 };
 
@@ -114,7 +114,13 @@ struct EdgeSlots : EdgeSlot<Types>... {
 
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
-        for (auto &edge : EdgeSlot<T>::edges_) { edge.transfer(data, info); }
+        auto &edges = EdgeSlot<T>::edges_;
+        for (size_t i = 0, n = edges.size(); i + 1 < n; ++i) {
+            edges[i].transfer(data, info);
+        }
+        if (!edges.empty()) {
+            edges.back().transfer(std::move(data), info);
+        }
     }
 
     template <typename T>

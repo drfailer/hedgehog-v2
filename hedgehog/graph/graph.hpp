@@ -93,7 +93,7 @@ struct Graph : Node {
 
     Input &input() { return input_; }
     Output &output() { return output_; }
-    std::shared_ptr<Executor> executor() const {  return executor_; }
+    Executor *executor() const { return executor_.get(); }
     Sink const &sink() const { return sink_; }
     std::set<std::shared_ptr<Node>> const &nodes() const { return nodes_; }
     std::set<std::shared_ptr<Node>> const &input_nodes() const { return input_nodes_; }
@@ -105,7 +105,7 @@ struct Graph : Node {
     void connect_sink() {
         type_list_map<OutputTypes>([this]<typename T>() {
             output_.connect(Edge<T>(&sink_, this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
-                static_cast<Sink *>(e->receiver)->push_data(data, info);
+                static_cast<Sink *>(e->receiver)->push_data(std::move(data), info);
             }));
         });
     }
@@ -218,7 +218,7 @@ struct Graph : Node {
             report.add_report(node->profile());
         }
         uintptr_t edge_id = 0;
-        for (auto conn : connections_) {
+        for (auto const &conn : connections_) {
             report.add_report(ProfilerReport(edge_id++,
                                              reinterpret_cast<uintptr_t>(conn.sender),
                                              reinterpret_cast<uintptr_t>(conn.receiver),

@@ -71,9 +71,9 @@ struct TaskNode : Node {
             HH_PROFILE_REGION(profiler, "execute<"s + type_to_string<T>() + ">"s)
             {
                 if constexpr (ExecutableWithContext<Task, decltype(this->context), decltype(data)>) {
-                    task->execute(&this->context, data);
+                    task->execute(&this->context, std::move(data));
                 } else {
-                    task->execute(data);
+                    task->execute(std::move(data));
                 }
             }
         }

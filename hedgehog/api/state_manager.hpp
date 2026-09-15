@@ -41,7 +41,7 @@ struct StateManager {
     StateManager(std::shared_ptr<State> state) : state_(state) {}
 
     void execute(auto ctx, auto data) {
-        state_->execute(ctx, data);
+        state_->execute(ctx, std::move(data));
     }
 
     std::shared_ptr<StateManager> copy() {
@@ -69,7 +69,7 @@ struct LockStateManager {
 
     void execute(auto ctx, auto data) {
         mutex_.lock();
-        state_->execute(ctx, data);
+        state_->execute(ctx, std::move(data));
         mutex_.unlock();
     }
 

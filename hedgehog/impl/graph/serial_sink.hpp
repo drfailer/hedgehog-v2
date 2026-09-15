@@ -45,7 +45,7 @@ struct SerialSink {
         if (results.empty()) {
             assert(false && "todo: proper log message");
         }
-        auto data = results.front();
+        auto data = std::move(results.front());
         results.pop();
         return data;
     }
