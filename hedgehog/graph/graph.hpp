@@ -272,11 +272,14 @@ struct Graph : Node {
         if constexpr (HasInputNodes<typename decltype(receiver)::element_type>) {
             nodes_.insert(sender);
             nodes_.insert(receiver);
-            auto& inner_edges = receiver->input().template edges<T>();
-            for (auto& inner_edge : inner_edges) {
-                Edge<T> flat(inner_edge.receiver, inner_edge.graph, inner_edge.fun);
-                connections_.push_back(Connection{sender.get(), receiver.get(), type_to_string<T>()});
-                sender->connect_output_edge(std::move(flat));
+            auto& input_edges = receiver->input().template edges<T>();
+            for (auto& input_edge : input_edges) {
+                sender->connect_output_edge(input_edge);
+                connections_.push_back(Connection{
+                    .sender = sender.get(),
+                    .receiver = reinterpret_cast<Node *>(input_edge.receiver),
+                    .type_name = type_to_string<T>(),
+                });
             }
         } else {
             draw_edge(sender, receiver, make_edge<T>(receiver.get()));
