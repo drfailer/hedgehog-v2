@@ -45,7 +45,7 @@ struct StateManager {
     }
 
     std::shared_ptr<StateManager> copy() {
-        throw "a state manager should not be copied";
+        log::fatal("A state manager should not be copied.");
     }
 };
 
@@ -74,7 +74,7 @@ struct LockStateManager {
     }
 
     std::shared_ptr<LockStateManager> copy() {
-        throw "a state manager should not be copied";
+        log::fatal("A state manager should not be copied.");
     }
 };
 
