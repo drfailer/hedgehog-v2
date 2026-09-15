@@ -105,6 +105,47 @@ TEST(graph, sub_graph) {
     graph->generate_dot_file("sub_graph.dot");
 }
 
+
+TEST(graph, nested_sub_graph) {
+    auto inner1 = hh::make_task<Task>(1, "inner1");
+    auto inner2 = hh::make_task<Task>(1, "inner2");
+
+    auto subgraph1 = hh::make_graph<2, int, float, int, float>("subgraph1");
+    subgraph1->connect_inputs(inner1);
+    subgraph1->draw_edges(inner1, inner2);
+    subgraph1->connect_outputs(inner2);
+
+    auto subgraph2 = hh::make_graph<2, int, float, int, float>("subgraph2");
+    subgraph2->connect_inputs(subgraph1);
+    subgraph2->connect_outputs(subgraph1);
+
+    auto outer_in = hh::make_task<Task>(1, "outer_in");
+    auto outer_out = hh::make_task<Task>(1, "outer_out");
+    auto graph = hh::make_graph<2, int, float, int, float>("main");
+    graph->connect_inputs(outer_in);
+    graph->draw_edges(outer_in, subgraph2);
+    graph->draw_edges(subgraph2, outer_out);
+    graph->connect_outputs(outer_out);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(42));
+    graph->push_data(hh::make_data<float>(2.71f));
+
+    auto check = [](auto value) {
+        using V = decltype(value);
+        if constexpr (std::is_same_v<V, std::shared_ptr<int>>) {
+            EXPECT_EQ(*value, 42);
+        } else if constexpr (std::is_same_v<V, std::shared_ptr<float>>) {
+            EXPECT_FLOAT_EQ(*value, 2.71f);
+        }
+    };
+    std::visit(check, graph->get_result());
+    std::visit(check, graph->get_result());
+    graph->stop();
+
+    graph->generate_dot_file("nested_sub_graph.dot");
+}
+
 TEST(serial_executor, sub_graph) {
     auto inner1 = hh::make_task<Task>(1, "inner1");
     auto inner2 = hh::make_task<Task>(1, "inner2");
