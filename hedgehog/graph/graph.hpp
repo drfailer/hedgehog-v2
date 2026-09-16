@@ -123,8 +123,13 @@ struct Graph : Node {
         });
     }
 
-    void start(int rank = 0) {
+    void start(int rank = 0, HH_LOC) {
         // TODO: sub-graph check
+
+        if (log::error_count() > 0) {
+            log::fatal(loc, "graph start aborted due to errors.");
+        }
+
         create_input_connections();
 
         // intialize the sink
@@ -299,25 +304,45 @@ struct Graph : Node {
     //
 
     template <typename Sender, typename Receiver>
-    void draw_edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver, auto create_edge) {
+    void draw_edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver, auto create_edge, HH_LOC) {
         using sender_outputs = Sender::OutputTypes;
         using receiver_inputs = Receiver::InputTypes;
+        size_t new_edge_count = 0;
+
         type_list_map<sender_outputs>([&]<typename T>() {
             if constexpr (type_list_contains<receiver_inputs, T>) {
                 draw_edge(sender, receiver, create_edge.template operator()<T>(sender, receiver));
+                ++new_edge_count;
             }
         });
+
+        if (new_edge_count == 0) {
+            log::warning(loc, "failed to draw edges between `", type_to_string<Sender>(),
+                         "` and `", type_to_string<Receiver>(), "` (no common types: `",
+                         type_to_string<sender_outputs>(), "` and `",
+                         type_to_string<receiver_inputs>(), "`).");
+        }
     }
 
     template <typename Sender, typename Receiver>
-    void draw_edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver) {
+    void draw_edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver, HH_LOC) {
         using sender_outputs = Sender::OutputTypes;
         using receiver_inputs = Receiver::InputTypes;
+        size_t new_edge_count = 0;
+
         type_list_map<sender_outputs>([&]<typename T>() {
             if constexpr (type_list_contains<receiver_inputs, T>) {
                 draw_edge<T>(sender, receiver);
+                ++new_edge_count;
             }
         });
+
+        if (new_edge_count == 0) {
+            log::warning(loc, "failed to draw edges between `", type_to_string<Sender>(),
+                         "` and `", type_to_string<Receiver>(), "` (no common types: `",
+                         type_to_string<sender_outputs>(), "` and `",
+                         type_to_string<receiver_inputs>(), "`).");
+        }
     }
 
     // inputs & outputs ////////////////////////////////////////////////////////
@@ -348,23 +373,41 @@ struct Graph : Node {
     }
 
     template <typename Node>
-    void connect_inputs(std::shared_ptr<Node> node, auto create_edge) {
+    void connect_inputs(std::shared_ptr<Node> node, auto create_edge, HH_LOC) {
         using node_inputs = Node::InputTypes;
+        size_t new_connection_count = 0;
+
         type_list_map<InputTypes>([&]<typename T>() {
             if constexpr (type_list_contains<node_inputs, T>) {
                 connect_input(node, create_edge.template operator()<T>(node));
+                ++new_connection_count;
             }
         });
+
+        if (new_connection_count == 0) {
+            log::warning(loc, "failed to connect node `", type_to_string<Node>(),
+                         "` as input (no common types: `", type_to_string<node_inputs>(),
+                         "` and `", type_to_string<InputTypes>(), "`).");
+        }
     }
 
     template <typename Node>
-    void connect_inputs(std::shared_ptr<Node> node) {
+    void connect_inputs(std::shared_ptr<Node> node, HH_LOC) {
         using node_inputs = Node::InputTypes;
+        size_t new_connection_count = 0;
+
         type_list_map<InputTypes>([&]<typename T>() {
             if constexpr (type_list_contains<node_inputs, T>) {
                 connect_input<T>(node);
+                ++new_connection_count;
             }
         });
+
+        if (new_connection_count == 0) {
+            log::warning(loc, "failed to connect node `", type_to_string<Node>(),
+                         "` as input (no common types: `", type_to_string<node_inputs>(),
+                         "` and `", type_to_string<InputTypes>(), "`).");
+        }
     }
 
     //
@@ -388,13 +431,22 @@ struct Graph : Node {
     }
 
     template <typename Node>
-    void connect_outputs(std::shared_ptr<Node> node) {
+    void connect_outputs(std::shared_ptr<Node> node, HH_LOC) {
         using node_outputs = Node::OutputTypes;
+        size_t new_connection_count = 0;
+
         type_list_map<OutputTypes>([&]<typename T>() {
             if constexpr (type_list_contains<node_outputs, T>) {
                 connect_output<T>(node);
+                ++new_connection_count;
             }
         });
+
+        if (new_connection_count == 0) {
+            log::warning(loc, "failed to connect node `", type_to_string<Node>(),
+                         "` as output (no common types: `", type_to_string<node_outputs>(),
+                         "` and `", type_to_string<OutputTypes>(), "`).");
+        }
     }
 
     // profiling ///////////////////////////////////////////////////////////////

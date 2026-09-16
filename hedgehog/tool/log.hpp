@@ -22,12 +22,31 @@
 #include <mutex>
 #include <iostream>
 #include <cstdlib>
+#include <cstdint>
 #include <source_location>
+
+#define HH_LOC std::source_location loc = std::source_location::current()
 
 namespace hh::log {
 
 std::mutex LOG_MUTEX;
-size_t ERROR_COUNT;
+size_t ERROR_COUNT = 0;
+
+// log level ///////////////////////////////////////////////////////////////////
+
+enum class LogLevel {
+    Info    = 0,
+    Warning = 1,
+    Error   = 2,
+};
+LogLevel LOG_LEVEL = LogLevel::Warning;
+
+void set_level(LogLevel level) {
+    std::lock_guard<std::mutex> lock(LOG_MUTEX);
+    LOG_LEVEL = level;
+}
+
+// messages  ///////////////////////////////////////////////////////////////////
 
 //
 // Trick to capture message and the source location.
@@ -47,6 +66,7 @@ struct LocatedMessage {
 
 void info(std::source_location loc, auto &&...args) {
     std::lock_guard<std::mutex> lock(LOG_MUTEX);
+    if (LOG_LEVEL > LogLevel::Info) return;
     std::cout << "HH  INFO  " << loc.file_name() << "(" << loc.line() << ":" << loc.column() << "): ";
     (std::cout << ... << args);
     std::cout << std::endl;
@@ -60,6 +80,7 @@ void info(LocatedMessage lm, auto &&...args) {
 
 void warning(std::source_location loc, auto &&...args) {
     std::lock_guard<std::mutex> lock(LOG_MUTEX);
+    if (LOG_LEVEL > LogLevel::Warning) return;
     std::cerr << "HH  WARN  " << loc.file_name() << "(" << loc.line() << ":" << loc.column() << "): ";
     (std::cerr << ... << args);
     std::cerr << std::endl;
@@ -73,6 +94,7 @@ void warning(LocatedMessage lm, auto &&...args) {
 
 void error(std::source_location loc, auto &&...args) {
     std::lock_guard<std::mutex> lock(LOG_MUTEX);
+    if (LOG_LEVEL > LogLevel::Error) return;
     std::cerr << "HH  ERROR  " << loc.file_name() << "(" << loc.line() << ":" << loc.column() << "): ";
     (std::cerr << ... << args);
     std::cerr << std::endl;
