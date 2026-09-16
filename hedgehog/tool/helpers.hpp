@@ -24,40 +24,11 @@
 #include <new>
 
 #include "concepts.hpp"
+#include "log.hpp"
 
 namespace hh {
 
 // helper functions ////////////////////////////////////////////////////////////
-
-template <typename Component>
-std::shared_ptr<Component> copy_component(std::shared_ptr<Component> component) {
-    if constexpr (Copyable<Component>) {
-        return component->copy();
-    } else if constexpr (std::is_default_constructible_v<Component>) {
-        return std::make_shared<Component>();
-    } else {
-        assert(false && "copy_component called on non-copyable, non-default-constructible type");
-        return nullptr;
-    }
-}
-
-template <typename Component>
-void initialize_component(std::shared_ptr<Component> component, InitializationInfo const &info) {
-    if constexpr (InitializableWith<Component, InitializationInfo const>) {
-        component->initialize(info);
-    } else if constexpr (Initializable<Component>) {
-        component->initialize();
-    }
-}
-
-template <typename Component>
-void finalize_component(std::shared_ptr<Component> component, InitializationInfo const &info) {
-    if constexpr (FinalizableWith<Component, InitializationInfo const>) {
-        component->finalize(info);
-    } else if constexpr (Finalizable<Component>) {
-        component->finalize();
-    }
-}
 
 template<typename T>
 constexpr auto type_to_string() {
@@ -79,6 +50,35 @@ constexpr auto type_to_string() {
   name.remove_suffix(suffix.size());
 
   return std::string(name);
+}
+
+template <typename Component>
+std::shared_ptr<Component> copy_component(std::shared_ptr<Component> component) {
+    if constexpr (Copyable<Component>) {
+        return component->copy();
+    } else if constexpr (std::is_default_constructible_v<Component>) {
+        return std::make_shared<Component>();
+    } else {
+        log::fatal("Failed to copy component `", type_to_string<Component>(), "` (does not implement copy and is not default constructible).");
+    }
+}
+
+template <typename Component>
+void initialize_component(std::shared_ptr<Component> component, InitializationInfo const &info) {
+    if constexpr (InitializableWith<Component, InitializationInfo const>) {
+        component->initialize(info);
+    } else if constexpr (Initializable<Component>) {
+        component->initialize();
+    }
+}
+
+template <typename Component>
+void finalize_component(std::shared_ptr<Component> component, InitializationInfo const &info) {
+    if constexpr (FinalizableWith<Component, InitializationInfo const>) {
+        component->finalize(info);
+    } else if constexpr (Finalizable<Component>) {
+        component->finalize();
+    }
 }
 
 } // end namespace hh

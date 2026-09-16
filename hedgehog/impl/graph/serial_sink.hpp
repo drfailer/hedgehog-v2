@@ -19,14 +19,16 @@
 #ifndef HEDGEHOG_IMPL_GRAPH_SERIAL_SINK_H
 #define HEDGEHOG_IMPL_GRAPH_SERIAL_SINK_H
 
-namespace hh {
-
 #include <queue>
 #include <variant>
 #include <mutex>
 #include <semaphore>
 #include <cassert>
 #include <cstdio>
+
+#include "../../tool/log.hpp"
+
+namespace hh {
 
 template <typename ...Outputs>
 struct SerialSink {
@@ -43,7 +45,7 @@ struct SerialSink {
 
     VariantType get_result() {
         if (results.empty()) {
-            assert(false && "todo: proper log message");
+            log::fatal("the serial sink has no result");
         }
         auto data = std::move(results.front());
         results.pop();

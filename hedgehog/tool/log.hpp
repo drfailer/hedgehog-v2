@@ -27,6 +27,7 @@
 namespace hh::log {
 
 std::mutex LOG_MUTEX;
+size_t ERROR_COUNT;
 
 //
 // Trick to capture message and the source location.
@@ -42,6 +43,8 @@ struct LocatedMessage {
         : message(message) {}
 };
 
+// info ////////////////////////////////////////////////////////////////////////
+
 void info(std::source_location loc, auto &&...args) {
     std::lock_guard<std::mutex> lock(LOG_MUTEX);
     std::cout << "HH  INFO  " << loc.file_name() << "(" << loc.line() << ":" << loc.column() << "): ";
@@ -52,6 +55,8 @@ void info(std::source_location loc, auto &&...args) {
 void info(LocatedMessage lm, auto &&...args) {
     info(lm.loc, lm.message, std::forward<decltype(args)>(args)...);
 }
+
+// warning /////////////////////////////////////////////////////////////////////
 
 void warning(std::source_location loc, auto &&...args) {
     std::lock_guard<std::mutex> lock(LOG_MUTEX);
@@ -64,16 +69,26 @@ void warning(LocatedMessage lm, auto &&...args) {
     warning(lm.loc, lm.message, std::forward<decltype(args)>(args)...);
 }
 
+// error ///////////////////////////////////////////////////////////////////////
+
 void error(std::source_location loc, auto &&...args) {
     std::lock_guard<std::mutex> lock(LOG_MUTEX);
     std::cerr << "HH  ERROR  " << loc.file_name() << "(" << loc.line() << ":" << loc.column() << "): ";
     (std::cerr << ... << args);
     std::cerr << std::endl;
+    ERROR_COUNT++;
 }
 
 void error(LocatedMessage lm, auto &&...args) {
     error(lm.loc, lm.message, std::forward<decltype(args)>(args)...);
 }
+
+size_t error_count() {
+    std::lock_guard<std::mutex> lock(LOG_MUTEX);
+    return ERROR_COUNT;
+}
+
+// fatal ///////////////////////////////////////////////////////////////////////
 
 [[noreturn]] void fatal(std::source_location loc, auto &&...args) {
     {
@@ -85,7 +100,7 @@ void error(LocatedMessage lm, auto &&...args) {
     std::abort();
 }
 
-void fatal(LocatedMessage lm, auto &&...args) {
+[[noreturn]] void fatal(LocatedMessage lm, auto &&...args) {
     fatal(lm.loc, lm.message, std::forward<decltype(args)>(args)...);
 }
 
