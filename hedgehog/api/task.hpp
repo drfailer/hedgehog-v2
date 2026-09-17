@@ -42,6 +42,12 @@ auto make_task(size_t number_threads = 1, std::string const &name = "Task") {
 
 // lambda task /////////////////////////////////////////////////////////////////
 
+//
+// Execution core of the lambda task which forwards the input data to the
+// configured lambda (this assumes that the lambda is configured, otherwise,
+// invoking the lambda will raise an exception).
+//
+
 template <typename T>
 using LambdaExecute = std::function<void(LambdaExecutionContext<T> *, data_t<T>)>;
 
@@ -58,7 +64,7 @@ struct LambdaTask {
     }
 
     template <typename T>
-    void set_lambda(LambdaExecute<T> execute) {
+    void set_execute(LambdaExecute<T> execute) {
         std::get<LambdaExecute<T>>(executes_) = std::move(execute);
     }
 
@@ -69,10 +75,29 @@ struct LambdaTask {
     }
 };
 
+//
+// Lambda task node use to simplify the api (give direct access to set_execute).
+//
+
+template <typename Config>
+struct LambdaTaskNode : TaskNode<Config> {
+    LambdaTaskNode(std::shared_ptr<typename Config::Task> task, NodeInfo const &info)
+        : TaskNode<Config>(std::move(task), info) {}
+
+    template <typename T>
+    void set_execute(LambdaExecute<T> execute) {
+        TaskNode<Config>::task()->template set_execute<T>(std::move(execute));
+    }
+};
+
+//
+// Make functions.
+//
+
 template <typename Config>
 auto make_lambda_task(size_t number_threads = 1, std::string const &name = "LambdaTask") {
     auto lambda_task = std::make_shared<typename Config::Task>();
-    return std::make_shared<TaskNode<Config>>(lambda_task, NodeInfo{name, number_threads});
+    return std::make_shared<LambdaTaskNode<Config>>(lambda_task, NodeInfo{name, number_threads});
 }
 
 template <size_t Sep, typename ...Types>

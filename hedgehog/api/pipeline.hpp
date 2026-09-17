@@ -47,6 +47,10 @@ auto make_pipeline(std::vector<PipelineInfo> const &configs, std::string const &
 
 // lambda pipeline /////////////////////////////////////////////////////////////
 
+//
+// Execution core of the lambda pipline (using lambdas).
+//
+
 template <typename T>
 using LambdaSendTo = std::function<size_t(data_t<T> const &)>;
 
@@ -75,10 +79,33 @@ struct LambdaPipeline {
     }
 
     template <typename T>
-    void set_lambda(LambdaSendTo<T> send_to) {
+    void set_send_to(LambdaSendTo<T> send_to) {
         std::get<LambdaSendTo<T>>(send_tos_) = std::move(send_to);
     }
 };
+
+//
+// Lambda pipeline node that is used to make the interface nicer (give access
+// to the set_send_to function directly).
+//
+
+template <typename Config>
+struct LambdaPipelineNode : PipelineNode<Config> {
+    LambdaPipelineNode(std::shared_ptr<typename Config::Pipeline> pipeline,
+                       NodeInfo const &info,
+                       std::vector<PipelineInfo> const &configs)
+        : PipelineNode<Config>(std::move(pipeline), info, configs) {}
+
+    template <typename T>
+    void set_send_to(LambdaSendTo<T> send_to) {
+        PipelineNode<Config>::pipeline()->set_send_to(std::move(send_to));
+    }
+};
+
+//
+// Make function: the input/output types of the pipeline will match the ones of
+// the graph returned by make_graph.
+//
 
 auto make_lambda_pipeline(std::vector<PipelineInfo> const &configs, auto make_graph,
                           std::string const &name = "Pipeline") {
@@ -90,7 +117,7 @@ auto make_lambda_pipeline(std::vector<PipelineInfo> const &configs, auto make_gr
         using GraphType = G;
     };
     auto lambda_pipeline = std::make_shared<LambdaPipeline<G>>(std::move(make_graph));
-    return std::make_shared<PipelineNode<Config>>(lambda_pipeline, NodeInfo{name, 0}, configs);
+    return std::make_shared<LambdaPipelineNode<Config>>(lambda_pipeline, NodeInfo{name, 0}, configs);
 }
 
 } // end namespace hh
