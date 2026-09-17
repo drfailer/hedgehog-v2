@@ -59,7 +59,7 @@ struct LambdaTask {
 
     template <typename T>
     void set_lambda(LambdaExecute<T> execute) {
-        std::get<LambdaExecute<T>>(executes_) = execute;
+        std::get<LambdaExecute<T>>(executes_) = std::move(execute);
     }
 
     auto copy() {
