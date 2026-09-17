@@ -23,6 +23,8 @@ set(CACHE_LINE_SIZE 64)
 find_package(Threads REQUIRED)
 find_package(CUDAToolkit QUIET)
 
+add_compile_options(-Wall -Wextra -Wno-unused-local-typedefs)
+
 link_libraries(Threads::Threads)
 
 # TODO: don't need this right now

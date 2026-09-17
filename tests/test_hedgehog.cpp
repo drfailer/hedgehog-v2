@@ -185,7 +185,7 @@ TEST(lambda_task, simple) {
         ctx->push_result(data);
     });
     node->task()->template set_lambda<float>([](auto ctx, auto data) {
-        printf("%s::execute<float>(%d)[%f]\n", ctx->name().c_str(), *data, ctx->thread_index());
+        printf("%s::execute<float>(%f)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
         ctx->push_result(data);
     });
 
@@ -262,7 +262,7 @@ struct PipelineTask {
     }
 
     void execute(auto ctx, hh::data_t<float> data) {
-        printf("%s::execute<float>(%d)[%f]{%d, %d}\n", ctx->name().c_str(), *data,
+        printf("%s::execute<float>(%f)[%ld]{%d, %d}\n", ctx->name().c_str(), *data,
                ctx->thread_index(), ctx->numa_id(), ctx->device_id());
         ASSERT_EQ(ctx->numa_id(), 3);
         ASSERT_EQ(ctx->device_id(), 4);

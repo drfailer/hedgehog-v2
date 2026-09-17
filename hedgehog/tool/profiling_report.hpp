@@ -148,7 +148,7 @@ inline void write_node_label(std::ostream &os, ProfilerReport const &report, std
     os << "</table>";
 }
 
-inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report, uintptr_t graph_id, double max_exec) {
+inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report, double max_exec) {
     switch (report.kind) {
     case ProfileReportKind::Node: {
         auto color = compute_node_color(report, max_exec);
@@ -171,7 +171,7 @@ inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report
         os << "subgraph cluster_" << std::to_string(report.id) << " {\n";
         os << "label=\"" << report.label << "\";\n";
         for (auto child : report.children) {
-            report_content_to_dot(os, child, report.id, max_exec);
+            report_content_to_dot(os, child, max_exec);
         }
         os << "}\n";
     } break;
@@ -199,13 +199,13 @@ inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report
                 os << "node_" << child.receiver_id
                    << " [label=\"\", width=.1, shape=point];\n";
                 for (auto &gc : child.children) {
-                    report_content_to_dot(os, gc, child.id, max_exec);
+                    report_content_to_dot(os, gc, max_exec);
                 }
                 os << "}\n";
                 os << "node_" << report.id << " -> node_"
                    << child.sender_id << ";\n";
             } else {
-                report_content_to_dot(os, child, report.id, max_exec);
+                report_content_to_dot(os, child, max_exec);
             }
         }
         os << "}\n";
@@ -224,7 +224,7 @@ inline void report_to_dot(ProfilerReport const &report, std::ostream &os) {
     os << "node_" << std::to_string(report.sender_id) << " [label=\"\", width=.1, shape=circle];\n";
     os << "node_" << std::to_string(report.receiver_id) << " [label=\"\", width=.1, shape=point];\n";
     for (auto child : report.children) {
-        report_content_to_dot(os, child, report.id, max_exec);
+        report_content_to_dot(os, child, max_exec);
     }
     os << "}\n";
 }

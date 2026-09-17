@@ -163,7 +163,7 @@ struct TaskNode : Node {
         }
     }
 
-    void finalize(GraphInfo const &info) override {
+    void finalize(GraphInfo const &) override {
         auto init_info = InitializationInfo{&Node::info(), &graph_info_, &Node::profiler()};
         input_.finalize(init_info);
         output_.finalize(init_info);
@@ -192,7 +192,7 @@ struct TaskNode : Node {
 
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info = {}) {
-        input_.push_data(std::move(data), {});
+        input_.push_data(std::move(data), info);
     }
 };
 

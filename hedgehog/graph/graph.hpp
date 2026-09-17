@@ -141,8 +141,7 @@ struct Graph : Node {
         exec_profile_ = Node::profiler().profile("execution");
         exec_profile_->begin_region();
         #endif
-        ExecutionInfo exec_info = {0};
-        exec_info.rank = rank;
+        ExecutionInfo exec_info = {0, rank, {0, 0}, false, ExecutionInfo::Execute};
         execute(exec_info);
     }
 

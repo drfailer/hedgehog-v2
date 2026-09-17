@@ -52,14 +52,14 @@ void set_level(LogLevel level) {
 // Trick to capture message and the source location.
 //
 struct LocatedMessage {
-    std::source_location loc;
     std::string_view message;
+    std::source_location loc;
 
     LocatedMessage(const char *message, std::source_location loc = std::source_location::current())
-        : message(message) {}
+        : message(message), loc(loc) {}
 
     LocatedMessage(std::string const &message, std::source_location loc = std::source_location::current())
-        : message(message) {}
+        : message(message), loc(loc) {}
 };
 
 // info ////////////////////////////////////////////////////////////////////////

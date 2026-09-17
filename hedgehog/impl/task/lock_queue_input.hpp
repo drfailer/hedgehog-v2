@@ -37,7 +37,7 @@ struct LockQueueInputPort {
     std::queue<data_t<T>> queue;
     size_t max_queue_size = 0;
 
-    void push_data(data_t<T> data, RuntimeInfo const &info) {
+    void push_data(data_t<T> data, RuntimeInfo const &) {
         std::lock_guard<std::mutex> lock(mutex);
         queue.push(std::move(data));
         if (queue.size() > max_queue_size) max_queue_size = queue.size();
@@ -96,14 +96,14 @@ struct CondTrigger {
 
 template <typename ...Inputs>
 struct LockQueueNodeInput : CondTrigger, NodePorts<LockQueueInputPort, Inputs...> {
-    void initialize(InitializationInfo const &info) {
+    void initialize(InitializationInfo const &) {
         ([&] { LockQueueInputPort<Inputs>::max_queue_size = 0; }(), ...);
         CondTrigger::initialize([this]{
             return ((LockQueueInputPort<Inputs>::size() > 0) || ...);
         });
     }
 
-    void finalize(InitializationInfo const &info) {
+    void finalize([[maybe_unused]] InitializationInfo const &info) {
         CondTrigger::finalize();
 #ifdef HH_ENABLE_PROFILING
         ([&] {
