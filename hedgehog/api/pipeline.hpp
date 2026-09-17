@@ -20,10 +20,13 @@
 #define HEDGEHOG_API_PIPELINE_H
 
 #include <type_traits>
+#include <tuple>
 
 #include "../graph/pipeline_node.hpp"
 
 namespace hh {
+
+// pipeline ////////////////////////////////////////////////////////////////////
 
 template <typename P>
 auto make_pipeline(std::shared_ptr<P> pipeline, std::vector<PipelineInfo> const &configs, std::string const &name = "Pipeline") {
@@ -40,6 +43,54 @@ auto make_pipeline(std::shared_ptr<P> pipeline, std::vector<PipelineInfo> const 
 template <typename P>
 auto make_pipeline(std::vector<PipelineInfo> const &configs, std::string const &name = "Pipeline") {
     return make_pipeline(std::make_shared<P>(), configs, name);
+}
+
+// lambda pipeline /////////////////////////////////////////////////////////////
+
+template <typename T>
+using LambdaSendTo = std::function<size_t(data_t<T> const &)>;
+
+template <typename ...Types>
+using LambdaSendTos = std::tuple<std::function<size_t(data_t<Types> const &)>...>;
+
+template <typename G>
+using LambdaMakeGraph = std::function<std::shared_ptr<G>(size_t)>;
+
+template <typename GraphType>
+struct LambdaPipeline {
+    using SendToList = type_list_dispatch<typename GraphType::InputTypes, LambdaSendTos>;
+
+    SendToList send_tos_ = {};
+    LambdaMakeGraph<GraphType> make_graph_ = {};
+
+    LambdaPipeline(LambdaMakeGraph<GraphType> make_graph) : make_graph_(std::move(make_graph)) {}
+
+    std::shared_ptr<GraphType> make_graph(size_t index) {
+        return make_graph_(index);
+    }
+
+    template <typename T>
+    size_t send_to(data_t<T> const &data) {
+        return std::get<LambdaSendTo<T>>(send_tos_)(data);
+    }
+
+    template <typename T>
+    void set_lambda(LambdaSendTo<T> send_to) {
+        std::get<LambdaSendTo<T>>(send_tos_) = std::move(send_to);
+    }
+};
+
+auto make_lambda_pipeline(std::vector<PipelineInfo> const &configs, auto make_graph,
+                          std::string const &name = "Pipeline") {
+    using G = std::invoke_result_t<decltype(make_graph), size_t>::element_type;
+    struct Config {
+        using InputTypes = G::InputTypes;
+        using OutputTypes = G::OutputTypes;
+        using Pipeline = LambdaPipeline<G>;
+        using GraphType = G;
+    };
+    auto lambda_pipeline = std::make_shared<LambdaPipeline<G>>(std::move(make_graph));
+    return std::make_shared<PipelineNode<Config>>(lambda_pipeline, NodeInfo{name, 0}, configs);
 }
 
 } // end namespace hh

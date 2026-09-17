@@ -313,3 +313,41 @@ TEST(pipeline, simple) {
     graph->stop();
     graph->generate_dot_file("pipeline.dot");
 }
+
+TEST(pipeline, lambda) {
+    auto pipeline = hh::make_lambda_pipeline({{1, 2}, {3, 4}}, [](size_t) {
+        auto node1 = hh::make_task<PipelineTask>(2, "task1");
+        auto node2 = hh::make_task<PipelineTask>(2, "task2");
+        auto graph = hh::make_graph<2, int, float, int, float>();
+
+        graph->connect_inputs(node1);
+        graph->draw_edges(node1, node2);
+        graph->connect_outputs(node2);
+        return graph;
+    });
+    pipeline->pipeline()->template set_lambda<int>([](auto) -> size_t {
+        return 0;
+    });
+    pipeline->pipeline()->template set_lambda<float>([](auto) -> size_t {
+        return 1;
+    });
+    auto graph = hh::make_graph<2, int, float, int, float>("PipelineGraph");
+    graph->connect_inputs(pipeline);
+    graph->connect_outputs(pipeline);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(4));
+    graph->push_data(hh::make_data<float>(3.14f));
+    auto test_value = [&](auto value) {
+        using value_type = decltype(value);
+        if constexpr (std::is_same_v<value_type, std::shared_ptr<int>>) {
+            ASSERT_EQ(*value, 4) << "int received";
+        } else if constexpr (std::is_same_v<value_type, std::shared_ptr<float>>) {
+            ASSERT_EQ(*value, 3.14f) << "float received";
+        }
+    };
+    std::visit(test_value, graph->get_result());
+    std::visit(test_value, graph->get_result());
+    graph->stop();
+    graph->generate_dot_file("pipeline.dot");
+}

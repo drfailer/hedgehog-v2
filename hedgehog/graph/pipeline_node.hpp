@@ -47,6 +47,10 @@ struct PipelineNode : Node {
         }
     }
 
+    std::shared_ptr<Pipeline> pipeline() { return pipeline_; }
+    std::vector<std::shared_ptr<GraphType>> graphs() { return graphs_; }
+    std::vector<PipelineInfo> configs() { return configs_; }
+
     // node api ////////////////////////////////////////////////////////////////
 
     void initialize(GraphInfo const &info) override {
