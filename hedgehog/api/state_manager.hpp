@@ -22,7 +22,6 @@
 #include <mutex>
 
 #include "../graph/node.hpp"
-#include "../graph/io.hpp"
 
 namespace hh {
 

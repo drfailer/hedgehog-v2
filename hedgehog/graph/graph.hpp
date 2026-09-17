@@ -28,8 +28,8 @@
 
 #include "info.hpp"
 #include "node.hpp"
-#include "io.hpp"
 #include "edge.hpp"
+#include "../tool/helpers.hpp"
 #include "../tool/concepts.hpp"
 #include "../tool/log.hpp"
 #include "../tool/profiling_report.hpp"

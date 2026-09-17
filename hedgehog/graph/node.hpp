@@ -22,6 +22,7 @@
 #include <memory>
 #include "../tool/type_list.hpp"
 #include "../tool/profiling.hpp"
+#include "../tool/data.hpp"
 #include "info.hpp"
 
 namespace hh {
@@ -45,6 +46,76 @@ class Node {
     virtual void execute(ExecutionInfo const &info) = 0;
     virtual void finalize(GraphInfo const &info) = 0;
     virtual ProfilerReport profile() = 0;
+};
+
+// Node IO /////////////////////////////////////////////////////////////////////
+
+template <typename T>
+struct Edge;
+
+struct SignalOpts {
+    RuntimeInfo info;    // execution context
+    size_t count;        // number of threads to signal
+    size_t thread_index; // signal a particular thread
+};
+
+struct WaitResult {
+    bool terminate; // used to leave the thread loop
+    bool skip;      // used to skip execution in the thread loop (no data, or defered)
+};
+
+//
+// Node input/output specifications.
+//
+// Those concepts are not used internally to reduce compile times, but one can
+// enable them with HH_ENABLE_CONCEPTS to verify custom implementations.
+//
+
+#ifdef HH_ENABLE_CONCEPTS
+
+template <typename T, typename ...Inputs>
+concept NodeInputTrait = std::default_initializable<T>
+    && requires(T t, InitializationInfo const &info) {
+        t.initialize(info);
+        t.finalize(info);
+    }
+    && requires(T t, RuntimeInfo const &ri, SignalOpts opts) {
+        { t.wait(ri) } -> std::same_as<WaitResult>;
+        t.signal(opts);
+    }
+    && requires(T t, void *exec, RuntimeInfo const &ri) {
+        t.execute(exec, ri);
+    }
+    && (requires(T t, data_t<Inputs> d, RuntimeInfo const &i) {
+        t.push_data(std::move(d), i);
+    } && ...);
+
+template <typename T, typename ...Outputs>
+concept NodeOutputTrait = std::default_initializable<T>
+    && requires(T t, InitializationInfo const &info) {
+        t.initialize(info);
+        t.finalize(info);
+    }
+    && (requires(T t, data_t<Outputs> data) {
+        t.push_result(data, RuntimeInfo{});
+    } && ...)
+    && (requires(T t, Edge<Outputs> e) {
+        t.connect_edge(std::move(e));
+        t.template edges<Outputs>();
+    } && ...);
+
+#endif // HH_ENABLE_CONCEPTS
+
+//
+// Helper for dispatching ports.
+//
+
+template <template <typename> class PortType, typename ...Types>
+struct NodePorts : PortType<Types>... {
+    template <typename T>
+    void connect_edge(Edge<T> data) {
+        PortType<T>::connect_edge(std::move(data));
+    }
 };
 
 } // end namespace hh
