@@ -25,7 +25,7 @@
 #include <map>
 
 #include "node.hpp"
-#include "../api/node_execution_context.hpp"
+#include "../api/execution_context.hpp"
 #include "../tool/concepts.hpp"
 #include "../tool/helpers.hpp"
 #include "../tool/log.hpp"
@@ -96,19 +96,21 @@ struct TaskNode : Node {
     std::vector<ThreadState> states_     = {};
 
     TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), states_(info.number_threads) {
-        for (size_t i = 1; i < info.number_threads; ++i) {
-            states_[i].task = copy_component(task);
-        }
         states_[0].task = std::move(task);
     }
 
     Input &input() { return input_; }
     Output &output() { return output_; }
     std::vector<ThreadState> const &states() const { return states_; } // may be usefull for some executors
+    std::shared_ptr<Task> task() { return states_[0].task; } // should not be used after execute
 
     // node api ////////////////////////////////////////////////////////////////
 
     void initialize(GraphInfo const &info) override {
+        // copy the user task
+        for (size_t i = 1; i < states_.size(); ++i) {
+            states_[i].task = copy_component(states_[0].task);
+        }
         graph_info_ = info;
         Node::profiler().initialize();
         auto init_info = InitializationInfo{&Node::info(), &graph_info_, &Node::profiler()};

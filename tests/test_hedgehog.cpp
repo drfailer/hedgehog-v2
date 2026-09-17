@@ -23,7 +23,6 @@
 #include "../hedgehog/hedgehog.h"
 
 struct Task {
-    // using io = hh::io_types<2, int, float, int, float>;
     using inputs = hh::type_list<int, float>;
     using outputs = hh::type_list<int, float>;
 
@@ -42,7 +41,6 @@ TEST(graph, simple) {
     auto node1 = hh::make_task<Task>(2, "task1");
     auto node2 = hh::make_task<Task>(2, "task2");
     auto graph = hh::make_graph<2, int, float, int, float>();
-    // auto graph = hh::make_serial_graph<2, int, float, int, float>();
 
     printf("running first test\n");
 
@@ -176,6 +174,45 @@ TEST(serial_executor, sub_graph) {
     std::visit(check, graph->get_result());
     std::visit(check, graph->get_result());
     graph->stop();
+}
+
+TEST(lambda_task, simple) {
+    auto node = hh::make_lambda_task<2, int, float, int, float>(2, "lambda_task");
+    auto graph = hh::make_graph<2, int, float, int, float>();
+
+    node->task()->template set_lambda<int>([](auto ctx, auto data) {
+        printf("%s::execute<int>(%d)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
+        ctx->push_result(data);
+    });
+    node->task()->template set_lambda<float>([](auto ctx, auto data) {
+        printf("%s::execute<float>(%d)[%f]\n", ctx->name().c_str(), *data, ctx->thread_index());
+        ctx->push_result(data);
+    });
+
+    printf("running first test\n");
+
+    graph->connect_inputs(node);
+    graph->connect_outputs(node);
+
+    graph->start();
+    graph->push_data(hh::make_data<float>(3.14));
+    graph->push_data(hh::make_data<int>(4));
+    auto test_value = [&](auto value) {
+        using value_type = decltype(value);
+        printf("value_type = %s\n", hh::type_to_string<value_type>().c_str());
+        if constexpr (std::is_same_v<value_type, std::shared_ptr<int>>) {
+            printf("value received %d\n", *value);
+            ASSERT_EQ(*value, 4) << "int received";
+        } else if constexpr (std::is_same_v<value_type, std::shared_ptr<float>>) {
+            printf("value received %f\n", *value);
+            ASSERT_EQ(*value, 3.14f) << "float received";
+        }
+    };
+    std::visit(test_value, graph->get_result());
+    std::visit(test_value, graph->get_result());
+    graph->stop();
+
+    graph->generate_dot_file("basic.dot");
 }
 
 TEST(memory, pool) {

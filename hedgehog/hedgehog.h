@@ -30,7 +30,7 @@
 #include "api/task.hpp"
 #include "api/state_manager.hpp"
 #include "api/pipeline.hpp"
-#include "api/node_execution_context.hpp"
+#include "api/execution_context.hpp"
 
 #include "impl/graph/thread_executor.hpp"
 #include "impl/task/lock_queue_input.hpp"

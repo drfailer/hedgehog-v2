@@ -21,8 +21,13 @@
 
 #include "../graph/task_node.hpp"
 #include "../tool/config.hpp"
+#include "execution_context.hpp"
+
+#include <tuple>
 
 namespace hh {
+
+// make_task ///////////////////////////////////////////////////////////////////
 
 template <typename Impl>
 auto make_task(std::shared_ptr<Impl> task, size_t number_threads = 1, std::string const &name = "Task") {
@@ -33,6 +38,54 @@ auto make_task(std::shared_ptr<Impl> task, size_t number_threads = 1, std::strin
 template <typename Impl>
 auto make_task(size_t number_threads = 1, std::string const &name = "Task") {
     return make_task(std::make_shared<Impl>(), number_threads, name);
+}
+
+// lambda task /////////////////////////////////////////////////////////////////
+
+template <typename T>
+using LambdaExecute = std::function<void(LambdaExecutionContext<T> *, data_t<T>)>;
+
+template <typename ...Inputs>
+struct LambdaTask {
+    using ExecuteList = std::tuple<LambdaExecute<Inputs>...>;
+
+    ExecuteList executes_ = {};
+
+    template <typename T>
+    void execute(auto ctx, data_t<T> data) {
+        LambdaExecutionContext<T> lctx(ctx);
+        std::get<LambdaExecute<T>>(executes_)(&lctx, std::move(data));
+    }
+
+    template <typename T>
+    void set_lambda(LambdaExecute<T> execute) {
+        std::get<LambdaExecute<T>>(executes_) = execute;
+    }
+
+    auto copy() {
+        auto cpy = std::make_shared<LambdaTask<Inputs...>>();
+        cpy->executes_ = this->executes_;
+        return cpy;
+    }
+};
+
+template <typename Config>
+auto make_lambda_task(size_t number_threads = 1, std::string const &name = "LambdaTask") {
+    auto lambda_task = std::make_shared<typename Config::Task>();
+    return std::make_shared<TaskNode<Config>>(lambda_task, NodeInfo{name, number_threads});
+}
+
+template <size_t Sep, typename ...Types>
+auto make_lambda_task(size_t number_threads = 1, std::string const &name = "LambdaTask") {
+    using io = io_types<Sep, Types...>;
+    struct Config {
+        using InputTypes  = io::inputs;
+        using OutputTypes = io::outputs;
+        using Input  = DefaultNodeInput<InputTypes>;
+        using Output = DefaultNodeOutput<OutputTypes>;
+        using Task = type_list_dispatch<typename io::inputs, LambdaTask>;
+    };
+    return make_lambda_task<Config>(number_threads, name);
 }
 
 } // end namespace hh
