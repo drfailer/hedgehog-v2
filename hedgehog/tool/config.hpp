@@ -34,7 +34,7 @@ namespace hh {
 // Defaults ////////////////////////////////////////////////////////////////////
 
 template <typename InputList>
-using DefaultNodeInput = type_list_dispatch<InputList, LockQueueNodeInput>;
+using DefaultNodeInput = type_list_dispatch<InputList, LockQueueSemaNodeInput>; // LockQueueNodeInput, LockQueueSemaNodeInput
 
 template <typename OutputList>
 using DefaultNodeOutput = type_list_dispatch<OutputList, EdgeSlots>;
