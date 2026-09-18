@@ -24,6 +24,7 @@
 #include "../graph/edge.hpp"
 #include "../tool/type_list.hpp"
 #include "../impl/task/lock_queue_input.hpp"
+#include "../impl/task/bounded_lock_free_input.hpp"
 #include "../impl/graph/thread_executor.hpp"
 #include "../impl/graph/graph_sink.hpp"
 #include "../impl/graph/serial_sink.hpp"
@@ -34,7 +35,7 @@ namespace hh {
 // Defaults ////////////////////////////////////////////////////////////////////
 
 template <typename InputList>
-using DefaultNodeInput = type_list_dispatch<InputList, LockQueueSemaNodeInput>; // LockQueueNodeInput, LockQueueSemaNodeInput
+using DefaultNodeInput = type_list_dispatch<InputList, BoundedLockFreeQueueInput>; // LockQueueNodeInput, LockQueueSemaNodeInput, BoundedLockFreeQueueInput
 
 template <typename OutputList>
 using DefaultNodeOutput = type_list_dispatch<OutputList, EdgeSlots>;

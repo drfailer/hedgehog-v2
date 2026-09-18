@@ -28,4 +28,18 @@
 #define HH_CONCEPT(C) typename
 #endif
 
+#if defined(_MSC_VER)
+    #include <intrin.h>
+    #if defined(_M_IX86) || defined(_M_X64)
+        #define hh_cross_platform_yield() _mm_pause()
+    #else
+        #define hh_cross_platform_yield() YieldProcessor()
+    #endif
+#elif defined(__x86_64__) || defined(__i386__)
+    #include <emmintrin.h>
+    #define hh_cross_platform_yield() _mm_pause()
+#else
+    #define hh_cross_platform_yield() asm volatile("yield")
+#endif
+
 #endif
