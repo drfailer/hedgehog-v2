@@ -180,11 +180,11 @@ TEST(lambda_task, simple) {
     auto node = hh::make_lambda_task<2, int, float, int, float>(2, "lambda_task");
     auto graph = hh::make_graph<2, int, float, int, float>();
 
-    node->template set_execute<int>([](auto ctx, auto data) {
+    node->set_execute<int>([](auto ctx, auto data) {
         printf("%s::execute<int>(%d)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
         ctx->push_result(data);
     });
-    node->template set_execute<float>([](auto ctx, auto data) {
+    node->set_execute<float>([](auto ctx, auto data) {
         printf("%s::execute<float>(%f)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
         ctx->push_result(data);
     });
@@ -325,10 +325,10 @@ TEST(pipeline, lambda) {
         graph->connect_outputs(node2);
         return graph;
     });
-    pipeline->template set_send_to<int>([](auto) -> size_t {
+    pipeline->set_send_to<int>([](auto) -> size_t {
         return 0;
     });
-    pipeline->template set_send_to<float>([](auto) -> size_t {
+    pipeline->set_send_to<float>([](auto) -> size_t {
         return 1;
     });
     auto graph = hh::make_graph<2, int, float, int, float>("PipelineGraph");
