@@ -107,6 +107,7 @@ auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph
         using OutputTypes = io::outputs;
         using Sink = type_list_dispatch<OutputTypes, GraphSink>;
         using Executor = Impl;
+        using EdgeBuilder = DirectEdgeBuilder;
     };
     return std::make_shared<Graph<Config>>(executor, NodeInfo{name, 0});
 }
@@ -124,6 +125,7 @@ auto make_serial_graph(std::string const &name = "Graph") {
         using OutputTypes = io::outputs;
         using Sink = type_list_dispatch<OutputTypes, SerialSink>;
         using Executor = SerialExecutor;
+        using EdgeBuilder = DirectEdgeBuilder;
     };
     auto executor = std::make_shared<SerialExecutor>();
     return std::make_shared<Graph<Config>>(executor, NodeInfo{name, 0});

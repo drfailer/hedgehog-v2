@@ -46,6 +46,7 @@ struct Graph : Node {
     using OutputTypes = Config::OutputTypes;
     using Sink        = Config::Sink;
     using Executor    = Config::Executor;
+    using EdgeBuilder = Config::EdgeBuilder;
     using Input       = type_list_dispatch<InputTypes, EdgeSlots>;
     using Output      = type_list_dispatch<OutputTypes, EdgeConnectors>;
 
@@ -79,9 +80,9 @@ struct Graph : Node {
     std::set<std::shared_ptr<Node>> output_nodes_;
     std::vector<Connection> connections_;
 
-#ifdef HH_ENABLE_PROFILING
+    #ifdef HH_ENABLE_PROFILING
     Profile *exec_profile_ = nullptr;
-#endif
+    #endif
 
     Graph(std::shared_ptr<Executor>     executor,
           NodeInfo const               &info)
@@ -241,16 +242,8 @@ struct Graph : Node {
     //
 
     template <typename T>
-    Edge<T> make_edge(auto receiver) {
-        using Receiver = std::remove_pointer_t<decltype(receiver)>;
-        return Edge<T>(receiver, this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
-            auto receiver = static_cast<Receiver *>(e->receiver);
-            auto graph = static_cast<Graph *>(e->graph);
-            receiver->push_data(std::move(data), info);
-            if constexpr (HasOnTransfer<Executor, Receiver, RuntimeInfo>) {
-                graph->executor()->on_transfer(receiver, info);
-            }
-        });
+    Edge<T> make_edge(auto sender, auto receiver) {
+        return EdgeBuilder::template make_edge<T>(MakeEdgeArgs{sender, receiver, this});
     }
 
     //
@@ -287,7 +280,7 @@ struct Graph : Node {
                 });
             }
         } else {
-            draw_edge(sender, receiver, make_edge<T>(receiver.get()));
+            draw_edge(sender, receiver, make_edge<T>(sender.get(), receiver.get()));
         }
     }
 
@@ -303,14 +296,14 @@ struct Graph : Node {
     //
 
     template <typename Sender, typename Receiver>
-    void draw_edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver, auto create_edge, HH_LOC) {
+    void draw_edges(std::shared_ptr<Sender> sender, std::shared_ptr<Receiver> receiver, auto make_edge_fun, HH_LOC) {
         using sender_outputs = Sender::OutputTypes;
         using receiver_inputs = Receiver::InputTypes;
         size_t new_edge_count = 0;
 
         type_list_map<sender_outputs>([&]<typename T>() {
             if constexpr (type_list_contains<receiver_inputs, T>) {
-                draw_edge(sender, receiver, create_edge.template operator()<T>(sender, receiver));
+                draw_edge(sender, receiver, make_edge_fun.template operator()<T>(MakeEdgeArgs{sender.get(), receiver.get(), this}));
                 ++new_edge_count;
             }
         });
@@ -349,6 +342,12 @@ struct Graph : Node {
     //
     // Set graph inputs.
     //
+    // When the connected node is a task, the edge transfering data to this
+    // task is added to the edge slot list. When it is a sub-graph and no edge
+    // is specified, the input edges of the sub-graph are added to the input
+    // edge list of the current graph to guaranty direct data transfer to the
+    // sub-graph's input nodes.
+    //
 
     template <typename T>
     void connect_input(auto node, Edge<T> edge) {
@@ -367,18 +366,18 @@ struct Graph : Node {
                 input_.connect_edge(input_edge);
             }
         } else {
-            input_.connect_edge(make_edge<T>(node.get()));
+            input_.connect_edge(make_edge<T>((Node *)nullptr, node.get()));
         }
     }
 
     template <typename Node>
-    void connect_inputs(std::shared_ptr<Node> node, auto create_edge, HH_LOC) {
+    void connect_inputs(std::shared_ptr<Node> node, auto make_edge_fun, HH_LOC) {
         using node_inputs = Node::InputTypes;
         size_t new_connection_count = 0;
 
         type_list_map<InputTypes>([&]<typename T>() {
             if constexpr (type_list_contains<node_inputs, T>) {
-                connect_input(node, create_edge.template operator()<T>(node));
+                connect_input(node, make_edge_fun.template operator()<T>(MakeEdgeArgs{(Node*)nullptr, node.get(), this}));
                 ++new_connection_count;
             }
         });
@@ -411,6 +410,12 @@ struct Graph : Node {
 
     //
     // Set graph outputs.
+    //
+    // Graph output doesn't add edges, instead it registers a lambda that will
+    // connect given edges to the output node (the edge connection is deferred
+    // because the receiver is not known yet). This allows creating direct
+    // connections between sub-graphs output nodes and nodes in the parent
+    // graph.
     //
 
     template <typename T>
