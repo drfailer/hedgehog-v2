@@ -70,15 +70,15 @@ struct Graph : Node {
 
     static inline int graph_id_gen_ = 0;
 
-    GraphInfo graph_info_;
+    GraphInfo graph_info_ = {};
     Input input_   = {};
     Output output_ = {};
-    std::shared_ptr<Executor> executor_;
-    Sink sink_;
-    std::set<std::shared_ptr<Node>> nodes_;
-    std::set<std::shared_ptr<Node>> input_nodes_;
-    std::set<std::shared_ptr<Node>> output_nodes_;
-    std::vector<Connection> connections_;
+    std::shared_ptr<Executor> executor_ = {};
+    Sink sink_ = {};
+    std::set<std::shared_ptr<Node>> nodes_ = {};
+    std::set<std::shared_ptr<Node>> input_nodes_ = {};
+    std::set<std::shared_ptr<Node>> output_nodes_ = {};
+    std::vector<Connection> connections_ = {};
 
     #ifdef HH_ENABLE_PROFILING
     Profile *exec_profile_ = nullptr;
@@ -125,7 +125,9 @@ struct Graph : Node {
     }
 
     void start(int rank = 0, HH_LOC) {
-        // TODO: sub-graph check
+        if (this->parent() != nullptr) {
+            log::fatal(loc, "a sub-graph cannot be started");
+        }
 
         if (log::error_count() > 0) {
             log::fatal(loc, "graph start aborted due to errors.");
@@ -246,6 +248,12 @@ struct Graph : Node {
         return EdgeBuilder::template make_edge<T>(MakeEdgeArgs{sender, receiver, this});
     }
 
+    void register_node(std::shared_ptr<Node> node) {
+        if (node->parent() != nullptr) return;
+        node->parent(this);
+        nodes_.insert(node);
+    }
+
     //
     // Edge creation for a type: create an edge between 2 nodes_ for a specific
     // type.
@@ -259,8 +267,8 @@ struct Graph : Node {
 
     template <typename T>
     void draw_edge(auto sender, auto receiver, Edge<T> edge) {
-        nodes_.insert(sender);
-        nodes_.insert(receiver);
+        register_node(sender);
+        register_node(receiver);
         connections_.push_back(Connection{sender.get(), receiver.get(), type_to_string<T>()});
         sender->connect_output_edge(std::move(edge));
     }
@@ -268,8 +276,8 @@ struct Graph : Node {
     template <typename T>
     void draw_edge(auto sender, auto receiver) {
         if constexpr (HasInputNodes<typename decltype(receiver)::element_type>) {
-            nodes_.insert(sender);
-            nodes_.insert(receiver);
+            register_node(sender);
+            register_node(receiver);
             auto& input_edges = receiver->input().template edges<T>();
             for (auto& input_edge : input_edges) {
                 sender->connect_output_edge(input_edge);
@@ -351,14 +359,14 @@ struct Graph : Node {
 
     template <typename T>
     void connect_input(auto node, Edge<T> edge) {
-        nodes_.insert(node);
+        register_node(node);
         input_nodes_.insert(node);
         input_.connect_edge(std::move(edge));
     }
 
     template <typename T>
     void connect_input(auto node) {
-        nodes_.insert(node);
+        register_node(node);
         input_nodes_.insert(node);
         if constexpr (HasInputNodes<typename decltype(node)::element_type>) {
             auto& input_edges = node->input().template edges<T>();
@@ -420,7 +428,7 @@ struct Graph : Node {
 
     template <typename T>
     void connect_output(auto node) {
-        nodes_.insert(node);
+        register_node(node);
         output_nodes_.insert(node);
         output_.template add_connect<T>([node, this](Edge<T> edge) {
             if constexpr (!HasInputNodes<typename decltype(node)::element_type>) {

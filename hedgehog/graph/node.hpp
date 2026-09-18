@@ -33,14 +33,18 @@ namespace hh {
 //
 
 class Node {
-    NodeInfo info_;
-    Profiler profiler_;
+    Node *parent_{nullptr};
+    NodeInfo info_{};
+    Profiler profiler_{};
 
   public:
     Node(NodeInfo info) : info_(info) {}
 
     NodeInfo const &info() { return info_; }
     Profiler &profiler() { return profiler_; }
+
+    Node *parent() { return parent_; }
+    void parent(Node *parent) { parent_ = parent; }
 
     virtual void initialize(GraphInfo const &info) = 0;
     virtual void execute(ExecutionInfo const &info) = 0;
