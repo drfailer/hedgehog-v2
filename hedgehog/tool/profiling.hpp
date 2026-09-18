@@ -48,13 +48,21 @@
 //
 
 #ifdef HH_ENABLE_PROFILING
-#define HH_PROFILE_REGION(profiler, name) \
+#define HH_THREAD_PROFILE_REGION(profiler, name) \
     thread_local static auto HH_CONCAT(_profile_, __LINE__) = (profiler).profile((name)); \
     for (bool \
          HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->begin_region(); \
          HH_CONCAT(_prof_, __LINE__); \
          HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->end_region())
+
+#define HH_PROFILE_REGION(profiler, name) \
+    auto HH_CONCAT(_profile_, __LINE__) = (profiler).profile((name)); \
+    for (bool \
+         HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->begin_region(); \
+         HH_CONCAT(_prof_, __LINE__); \
+         HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->end_region())
 #else
+#define HH_THREAD_PROFILE_REGION(profiler, name)
 #define HH_PROFILE_REGION(profiler, name)
 #endif
 
@@ -205,18 +213,18 @@ struct ProfilerReport {
 };
 
 struct Profiler {
-#ifdef HH_ENABLE_PROFILING
+    #ifdef HH_ENABLE_PROFILING
     std::mutex mutex;
     std::unordered_map<std::string, std::unique_ptr<Profile>> profiles;
-#endif
+    #endif
 
     Profiler() = default;
     Profiler(Profiler const &) = delete;
 
     void initialize() {
-#ifdef HH_ENABLE_PROFILING
+        #ifdef HH_ENABLE_PROFILING
         profiles.clear();
-#endif
+        #endif
     }
 
     void finalize() {}
@@ -233,27 +241,27 @@ struct Profiler {
     //
 
     Profile *profile([[maybe_unused]] std::string const &name) {
-#ifdef HH_ENABLE_PROFILING
+        #ifdef HH_ENABLE_PROFILING
         std::lock_guard<std::mutex> lock(mutex);
         auto profile = std::make_unique<Profile>();
         auto ptr = profile.get();
         profiles[name] = std::move(profile);
         return ptr;
-#else
+        #else
         static Profile dummy;
         return &dummy;
-#endif
+        #endif
     }
 
     ProfilerReport create_report(std::string const &label, ProfileReportKind kind) {
         ProfilerReport report;
         report.label = label;
         report.kind = kind;
-#ifdef HH_ENABLE_PROFILING
+        #ifdef HH_ENABLE_PROFILING
         for (auto &[label, profile] : profiles) {
             report.profiles[label] = *profile.get();
         }
-#endif
+        #endif
         return report;
     }
 };

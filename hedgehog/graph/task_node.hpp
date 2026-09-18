@@ -68,7 +68,7 @@ struct TaskNode : Node {
         template <typename T>
         void execute(data_t<T> data) {
             using namespace std::string_literals; // for ""s
-            HH_PROFILE_REGION(profiler, "execute<"s + type_to_string<T>() + ">"s)
+            HH_THREAD_PROFILE_REGION(profiler, "execute<"s + type_to_string<T>() + ">"s)
             {
                 if constexpr (ExecutableWithContext<Task, decltype(this->context), decltype(data)>) {
                     task->execute(&this->context, std::move(data));
@@ -151,7 +151,7 @@ struct TaskNode : Node {
             state->initialize(this, RuntimeInfo{&Node::info(), &graph_info_, info, &state->profiler});
             WaitResult wait_result;
             for (;;) {
-                HH_PROFILE_REGION(state->profiler, "wait")
+                HH_THREAD_PROFILE_REGION(state->profiler, "wait")
                 {
                     wait_result = input_.wait(state->context.info());
                 }

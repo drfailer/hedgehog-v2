@@ -66,7 +66,7 @@ TEST(graph, simple) {
     std::visit(test_value, graph->get_result());
     graph->stop();
 
-    graph->generate_dot_file("basic.dot");
+    graph->generate_dot_file("simple.dot");
 }
 
 TEST(graph, sub_graph) {
@@ -212,7 +212,7 @@ TEST(lambda_task, simple) {
     std::visit(test_value, graph->get_result());
     graph->stop();
 
-    graph->generate_dot_file("basic.dot");
+    graph->generate_dot_file("lambda_simple.dot");
 }
 
 TEST(memory, pool) {
@@ -349,5 +349,5 @@ TEST(pipeline, lambda) {
     std::visit(test_value, graph->get_result());
     std::visit(test_value, graph->get_result());
     graph->stop();
-    graph->generate_dot_file("pipeline.dot");
+    graph->generate_dot_file("lambda_pipeline.dot");
 }

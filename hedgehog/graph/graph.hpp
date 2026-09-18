@@ -149,14 +149,11 @@ struct Graph : Node {
     }
 
     void stop() {
+        HH_PROFILE_REGION(Node::profiler(), "finalization") {
+            finalize(GraphInfo{Node::info().name, 0});
+        }
         #ifdef HH_ENABLE_PROFILING
         exec_profile_->end_region();
-        auto *fin_profile = Node::profiler().profile("finalization");
-        fin_profile->begin_region();
-        #endif
-        finalize(GraphInfo{Node::info().name, 0});
-        #ifdef HH_ENABLE_PROFILING
-        fin_profile->end_region();
         #endif
     }
 
