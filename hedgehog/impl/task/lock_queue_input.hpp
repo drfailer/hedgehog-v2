@@ -26,6 +26,7 @@
 #include <semaphore>
 #include "../../graph/node.hpp"
 #include "../../tool/log.hpp"
+#include "trigger.hpp"
 
 namespace hh {
 
@@ -89,43 +90,6 @@ struct LockQueueInputPorts : NodePorts<LockQueueInputPort, Inputs...> {
 
 // cond trigger input //////////////////////////////////////////////////////////
 
-struct CondTrigger {
-    std::mutex mutex{};
-    std::condition_variable cond{};
-    bool terminated = false;
-    std::function<bool()> pred;
-
-    void initialize(std::function<bool()> fun) {
-        this->pred = fun;
-        terminated = false;
-    }
-
-    void finalize() {
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            terminated = true;
-        }
-        cond.notify_all();
-    }
-
-    void signal(SignalOpts const &opts) {
-        std::lock_guard<std::mutex> lock(mutex); // lock to avoid lost wakeup
-        if (opts.count == 1) {
-            cond.notify_one();
-        } else {
-            cond.notify_all();
-        }
-    }
-
-    WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
-        std::unique_lock<std::mutex> lock(mutex);
-        cond.wait(lock, [this]{
-            return pred() || terminated;
-        });
-        return WaitResult{terminated, false};
-    }
-};
-
 template <typename ...Inputs>
 struct LockQueueNodeInput : CondTrigger, LockQueueInputPorts<Inputs...> {
     void initialize(InitializationInfo const &info) {
@@ -149,32 +113,6 @@ struct LockQueueNodeInput : CondTrigger, LockQueueInputPorts<Inputs...> {
 
 
 // sema trigger input //////////////////////////////////////////////////////////
-
-struct SemaTrigger {
-    size_t number_threads_{0};
-    std::counting_semaphore<> sem_{0};
-    std::atomic<bool> terminated_{false};
-
-    void initialize(size_t number_threads) {
-        number_threads_ = number_threads;
-        terminated_.store(false);
-    }
-
-    void finalize() {
-        terminated_.store(true, std::memory_order_release);
-        sem_.release(number_threads_);
-    }
-
-    void signal(SignalOpts const &opts) {
-        sem_.release(opts.count);
-    }
-
-    WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
-        sem_.acquire();
-        return WaitResult{terminated_.load(std::memory_order_acquire), false};
-    }
-};
-
 
 template <typename ...Inputs>
 struct LockQueueSemaNodeInput : SemaTrigger, LockQueueInputPorts<Inputs...> {
