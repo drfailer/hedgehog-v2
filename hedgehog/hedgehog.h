@@ -28,7 +28,7 @@
 #include "graph/pipeline_node.hpp"
 
 #include "api/task.hpp"
-#include "api/state_manager.hpp"
+#include "api/state.hpp"
 #include "api/pipeline.hpp"
 #include "api/execution_context.hpp"
 
