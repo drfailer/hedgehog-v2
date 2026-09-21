@@ -49,8 +49,6 @@ TEST(graph, simple) {
     auto node2 = hh::make_task<Task>(2, "task2");
     auto graph = hh::make_graph<2, int, float, int, float>();
 
-    printf("running first test\n");
-
     graph->connect_inputs(node1);
     graph->draw_edges(node1, node2);
     graph->connect_outputs(node2);
@@ -260,8 +258,6 @@ TEST(lambda_task, simple) {
         printf("%s::execute<float>(%f)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
         ctx->push_result(data);
     });
-
-    printf("running first test\n");
 
     graph->connect_inputs(node);
     graph->connect_outputs(node);
@@ -510,3 +506,76 @@ TEST(pipeline, state_managers) {
         graph->stop();
     }
 }
+
+//
+// Test custom edges (basic filtering in this case).
+//
+TEST(edge, custom_edges) {
+    size_t node1_int_count = 0, node1_float_count = 0;
+    size_t node2_int_count = 0, node2_float_count = 0;
+    size_t edge_node1_int_count = 0, edge_node1_float_count = 0;
+    size_t edge_node2_int_count = 0, edge_node2_float_count = 0;
+
+    auto node1 = hh::make_lambda_task<2, int, float, int, float>(1, "node1");
+    node1->set_execute<int>([&](auto ctx, auto data) {
+        printf("%s::execute<int>(%d)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
+        ctx->push_result(data);
+        ++node1_int_count;
+    });
+    node1->set_execute<float>([&](auto ctx, auto data) {
+        printf("%s::execute<float>(%f)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
+        ctx->push_result(data);
+        ++node1_float_count;
+    });
+
+    auto node2 = hh::make_lambda_task<2, int, float, int, float>(1, "node2");
+    node2->set_execute<int>([&](auto ctx, auto data) {
+        printf("%s::execute<int>(%d)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
+        ctx->push_result(data);
+        ++node2_int_count;
+    });
+    node2->set_execute<float>([&](auto ctx, auto data) {
+        printf("%s::execute<float>(%f)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
+        ctx->push_result(data);
+        ++node2_float_count;
+    });
+
+    auto graph = hh::make_graph<2, int, float, int, float>();
+
+    graph->connect_input<int>(node1, hh::Edge<int>([&](hh::Edge<int> *, hh::data_t<int> data, hh::RuntimeInfo const &info) {
+        printf("edge<int>(%s)\n", node1->info().name.c_str());
+        node1->push_data(std::move(data), info);
+        ++edge_node1_int_count;
+    }));
+    graph->connect_input<float>(node1, hh::Edge<float>([&](hh::Edge<float> *, hh::data_t<float>, hh::RuntimeInfo const &) {
+        printf("edge<float>(%s)\n", node1->info().name.c_str());
+        ++edge_node1_float_count;
+    }));
+    graph->connect_input<int>(node2, hh::Edge<int>([&](hh::Edge<int> *, hh::data_t<int>, hh::RuntimeInfo const &) {
+        printf("edge<int>(%s)\n", node2->info().name.c_str());
+        ++edge_node2_int_count;
+    }));
+    graph->connect_input<float>(node2, hh::Edge<float>([&](hh::Edge<float> *, hh::data_t<float> data, hh::RuntimeInfo const &info) {
+        printf("edge<float>(%s)\n", node2->info().name.c_str());
+        node2->push_data(std::move(data), info);
+        ++edge_node2_float_count;
+    }));
+    graph->connect_outputs(node1);
+    graph->connect_outputs(node2);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(0));
+    graph->push_data(hh::make_data<float>(0.0f));
+    graph->eat_results(2);
+    graph->stop();
+
+    ASSERT_EQ(edge_node1_int_count, 1);
+    ASSERT_EQ(edge_node1_float_count, 1);
+    ASSERT_EQ(edge_node2_int_count, 1);
+    ASSERT_EQ(edge_node2_float_count, 1);
+    ASSERT_EQ(node1_int_count, 1);
+    ASSERT_EQ(node1_float_count, 0);
+    ASSERT_EQ(node2_int_count, 0);
+    ASSERT_EQ(node2_float_count, 1);
+}
+
