@@ -29,6 +29,7 @@
 #include "../impl/graph/graph_sink.hpp"
 #include "../impl/graph/serial_sink.hpp"
 #include "../impl/graph/serial_executor.hpp"
+#include "../impl/graph/direct_edge_builder.hpp"
 
 namespace hh {
 
