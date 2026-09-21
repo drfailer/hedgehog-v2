@@ -37,6 +37,13 @@ struct Task {
     }
 };
 
+//
+// Make sure that the we can create tasks and connect them to the graph. Also
+// test that the thread executor runs the tasks, that the data flows correctly
+// through the graph and that the graph terminates correctly. This test also
+// generates a dot file which contains execution information when the profiling
+// is enabled.
+//
 TEST(graph, simple) {
     auto node1 = hh::make_task<Task>(2, "task1");
     auto node2 = hh::make_task<Task>(2, "task2");
@@ -69,6 +76,10 @@ TEST(graph, simple) {
     graph->generate_dot_file("simple.dot");
 }
 
+//
+// Test that we can connect sub-graphs and that the graph runs well when doing
+// so.
+//
 TEST(graph, sub_graph) {
     auto inner1 = hh::make_task<Task>(1, "inner1");
     auto inner2 = hh::make_task<Task>(1, "inner2");
@@ -103,7 +114,9 @@ TEST(graph, sub_graph) {
     graph->generate_dot_file("sub_graph.dot");
 }
 
-
+//
+// Test that nested sub-graphs works properly.
+//
 TEST(graph, nested_sub_graph) {
     auto inner1 = hh::make_task<Task>(1, "inner1");
     auto inner2 = hh::make_task<Task>(1, "inner2");
@@ -144,6 +157,62 @@ TEST(graph, nested_sub_graph) {
     graph->generate_dot_file("nested_sub_graph.dot");
 }
 
+struct State : hh::MutexState {
+    using inputs = hh::type_list<int, float>;
+    using outputs = hh::type_list<int, float>;
+
+    int counter = 0;
+    size_t int_count = 0;
+    size_t float_count = 0;
+
+    State(int counter) : counter(counter) {}
+
+    void execute(auto ctx, hh::data_t<int> data) {
+        printf("%s::execute<int>(%d)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
+        int_count += 1;
+        counter += *data;
+        ctx->push_result(data);
+    }
+
+    void execute(auto ctx, hh::data_t<float> data) {
+        printf("%s::execute<float>(%f)[%ld]\n", ctx->name().c_str(), *data, ctx->thread_index());
+        float_count += 1;
+        counter = static_cast<int>(static_cast<float>(counter) * *data);
+        ctx->push_result(data);
+    }
+};
+
+//
+// Make sure the state manager compile and that we are able to share a state
+// between multiple state managers within the same graph.
+//
+TEST(graph, state_manager) {
+    auto graph = hh::make_graph<2, int, float, int, float>();
+    auto state = std::make_shared<State>(4);
+    auto sm1 = hh::make_state_manager(state, "sm1");
+    auto sm2 = hh::make_state_manager(state, "sm2");
+
+    graph->connect_inputs(sm1);
+    graph->draw_edges(sm1, sm2);
+    graph->connect_outputs(sm2);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(4));
+    graph->eat_results();
+    EXPECT_EQ(state->int_count, 2);
+    EXPECT_EQ(state->float_count, 0);
+    EXPECT_EQ(state->counter, 12);
+    graph->push_data(hh::make_data<float>(0.5f));
+    graph->eat_results();
+    EXPECT_EQ(state->int_count, 2);
+    EXPECT_EQ(state->float_count, 2);
+    EXPECT_EQ(state->counter, 3);
+    graph->stop();
+}
+
+//
+// Make sure the serial executor is able to run sub-graphs.
+//
 TEST(serial_executor, sub_graph) {
     auto inner1 = hh::make_task<Task>(1, "inner1");
     auto inner2 = hh::make_task<Task>(1, "inner2");
@@ -176,6 +245,9 @@ TEST(serial_executor, sub_graph) {
     graph->stop();
 }
 
+//
+// Test the lambda task interface.
+//
 TEST(lambda_task, simple) {
     auto node = hh::make_lambda_task<2, int, float, int, float>(2, "lambda_task");
     auto graph = hh::make_graph<2, int, float, int, float>();
@@ -215,6 +287,9 @@ TEST(lambda_task, simple) {
     graph->generate_dot_file("lambda_simple.dot");
 }
 
+//
+// Test the memory pool.
+//
 TEST(memory, pool) {
     std::vector<int *> ptrs;
     hh::Pool<int> pool;
@@ -291,6 +366,9 @@ struct Pipeline {
     }
 };
 
+//
+// Test the default pipeline API.
+//
 TEST(pipeline, simple) {
     auto pipeline = hh::make_pipeline<Pipeline>({{1, 2}, {3, 4}});
     auto graph = hh::make_graph<2, int, float, int, float>("PipelineGraph");
@@ -314,6 +392,9 @@ TEST(pipeline, simple) {
     graph->generate_dot_file("pipeline.dot");
 }
 
+//
+// Test the lambda pipeline API.
+//
 TEST(pipeline, lambda) {
     auto pipeline = hh::make_lambda_pipeline({{1, 2}, {3, 4}}, [](size_t) {
         auto node1 = hh::make_task<PipelineTask>(2, "task1");
@@ -350,4 +431,82 @@ TEST(pipeline, lambda) {
     std::visit(test_value, graph->get_result());
     graph->stop();
     graph->generate_dot_file("lambda_pipeline.dot");
+}
+
+//
+// Test that states can be shared between pipelines.
+//
+TEST(pipeline, state_managers) {
+    //
+    // Use two different states for the 2 graphs.
+    //
+    {
+        auto state1 = std::make_shared<State>(4);
+        auto state2 = std::make_shared<State>(4);
+        auto pipeline = hh::make_lambda_pipeline({{1, 2}, {3, 4}}, [state1, state2](size_t index) {
+            auto graph = hh::make_graph<2, int, float, int, float>();
+            auto sm = hh::make_state_manager(index == 0 ? state1 : state2, "sm");
+            graph->connect_inputs(sm);
+            graph->connect_outputs(sm);
+            return graph;
+        });
+        pipeline->set_send_to<int>([](auto) -> size_t { return 0; });
+        pipeline->set_send_to<float>([](auto) -> size_t { return 1; });
+        auto graph = hh::make_graph<2, int, float, int, float>("PipelineGraph");
+
+        graph->connect_inputs(pipeline);
+        graph->connect_outputs(pipeline);
+
+        graph->start();
+        graph->push_data(hh::make_data<int>(4));
+        graph->eat_results();
+        EXPECT_EQ(state1->int_count, 1);
+        EXPECT_EQ(state1->float_count, 0);
+        EXPECT_EQ(state1->counter, 8);
+        EXPECT_EQ(state2->int_count, 0);
+        EXPECT_EQ(state2->float_count, 0);
+        EXPECT_EQ(state2->counter, 4);
+        graph->push_data(hh::make_data<float>(0.5f));
+        graph->eat_results();
+        EXPECT_EQ(state1->int_count, 1);
+        EXPECT_EQ(state1->float_count, 0);
+        EXPECT_EQ(state1->counter, 8);
+        EXPECT_EQ(state2->int_count, 0);
+        EXPECT_EQ(state2->float_count, 1);
+        EXPECT_EQ(state2->counter, 2);
+        graph->stop();
+    }
+
+    //
+    // Use a single state for the 2 graphs.
+    //
+    {
+        auto state = std::make_shared<State>(4);
+        auto pipeline = hh::make_lambda_pipeline({{1, 2}, {3, 4}}, [state](size_t) {
+            auto graph = hh::make_graph<2, int, float, int, float>();
+            auto sm = hh::make_state_manager(state, "sm");
+            graph->connect_inputs(sm);
+            graph->connect_outputs(sm);
+            return graph;
+        });
+        pipeline->set_send_to<int>([](auto) -> size_t { return 0; });
+        pipeline->set_send_to<float>([](auto) -> size_t { return 1; });
+        auto graph = hh::make_graph<2, int, float, int, float>("PipelineGraph");
+
+        graph->connect_inputs(pipeline);
+        graph->connect_outputs(pipeline);
+
+        graph->start();
+        graph->push_data(hh::make_data<int>(4));
+        graph->eat_results();
+        EXPECT_EQ(state->int_count, 1);
+        EXPECT_EQ(state->float_count, 0);
+        EXPECT_EQ(state->counter, 8);
+        graph->push_data(hh::make_data<float>(0.5f));
+        graph->eat_results();
+        EXPECT_EQ(state->int_count, 1);
+        EXPECT_EQ(state->float_count, 1);
+        EXPECT_EQ(state->counter, 4);
+        graph->stop();
+    }
 }
