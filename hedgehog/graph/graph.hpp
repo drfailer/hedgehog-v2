@@ -241,7 +241,7 @@ struct Graph : Node {
     //
 
     template <typename T>
-    Edge<T> make_edge(auto sender, auto receiver) {
+    Edge<T> build_edge(auto sender, auto receiver) {
         return EdgeBuilder::template make_edge<T>(MakeEdgeArgs{sender, receiver, this});
     }
 
@@ -271,6 +271,11 @@ struct Graph : Node {
     }
 
     template <typename T>
+    void draw_edge(auto sender, auto receiver, auto impl) {
+        draw_edge<T>(sender, receiver, make_edge<T>(this, receiver.get(), std::move(impl)));
+    }
+
+    template <typename T>
     void draw_edge(auto sender, auto receiver) {
         if constexpr (HasInputNodes<typename decltype(receiver)::element_type>) {
             register_node(sender);
@@ -285,7 +290,7 @@ struct Graph : Node {
                 });
             }
         } else {
-            draw_edge(sender, receiver, make_edge<T>(sender.get(), receiver.get()));
+            draw_edge(sender, receiver, build_edge<T>(sender.get(), receiver.get()));
         }
     }
 
@@ -362,6 +367,11 @@ struct Graph : Node {
     }
 
     template <typename T>
+    void connect_input(auto node, auto impl) {
+        connect_input<T>(node, make_edge<T>(this, node.get(), std::move(impl)));
+    }
+
+    template <typename T>
     void connect_input(auto node) {
         register_node(node);
         input_nodes_.insert(node);
@@ -371,7 +381,7 @@ struct Graph : Node {
                 input_.connect_edge(input_edge);
             }
         } else {
-            input_.connect_edge(make_edge<T>((Node *)nullptr, node.get()));
+            input_.connect_edge(build_edge<T>((Node *)nullptr, node.get()));
         }
     }
 

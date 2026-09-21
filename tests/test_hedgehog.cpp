@@ -542,24 +542,24 @@ TEST(edge, custom_edges) {
 
     auto graph = hh::make_graph<2, int, float, int, float>();
 
-    graph->connect_input<int>(node1, hh::Edge<int>([&](hh::Edge<int> *, hh::data_t<int> data, hh::RuntimeInfo const &info) {
+    graph->connect_input<int>(node1, [&](auto data, hh::RuntimeInfo const &info) {
         printf("edge<int>(%s)\n", node1->info().name.c_str());
         node1->push_data(std::move(data), info);
         ++edge_node1_int_count;
-    }));
-    graph->connect_input<float>(node1, hh::Edge<float>([&](hh::Edge<float> *, hh::data_t<float>, hh::RuntimeInfo const &) {
+    });
+    graph->connect_input<float>(node1, [&](auto, hh::RuntimeInfo const &) {
         printf("edge<float>(%s)\n", node1->info().name.c_str());
         ++edge_node1_float_count;
-    }));
-    graph->connect_input<int>(node2, hh::Edge<int>([&](hh::Edge<int> *, hh::data_t<int>, hh::RuntimeInfo const &) {
+    });
+    graph->connect_input<int>(node2, [&](auto, hh::RuntimeInfo const &) {
         printf("edge<int>(%s)\n", node2->info().name.c_str());
         ++edge_node2_int_count;
-    }));
-    graph->connect_input<float>(node2, hh::Edge<float>([&](hh::Edge<float> *, hh::data_t<float> data, hh::RuntimeInfo const &info) {
+    });
+    graph->connect_input<float>(node2, [&](auto data, hh::RuntimeInfo const &info) {
         printf("edge<float>(%s)\n", node2->info().name.c_str());
         node2->push_data(std::move(data), info);
         ++edge_node2_float_count;
-    }));
+    });
     graph->connect_outputs(node1);
     graph->connect_outputs(node2);
 

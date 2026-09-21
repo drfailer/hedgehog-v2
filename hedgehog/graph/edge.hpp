@@ -79,6 +79,63 @@ struct Edge {
     }
 };
 
+// Edge Impl ///////////////////////////////////////////////////////////////////
+
+//
+// The Edge struct holds an std::function which handles the transfer as well
+// as some required information (help with SBO). It is an opaque interface that
+// can be stored inside the graph components. The EdgeImpl is the actual edge
+// implementation that knows the type of all the elements.
+//
+// Using this is not required, but it makes creating custom edges simpler,
+// allowing to pass a lambda with a more flexible interface instead of an edge.
+// EdgeImpl also execute Executor::on_transfer automatically (required for some
+// executor implementations). Users still have the possiblity to directly
+// provide an Edge when full control over the implementaion is required.
+//
+
+template <typename Config>
+struct EdgeImpl {
+    using Type = Config::Type;
+    using Impl = Config::Impl;
+    using Graph = Config::Graph;
+    using Receiver = Config::Receiver;
+
+    Impl impl;
+
+    EdgeImpl(Impl impl): impl(std::move(impl)) {}
+
+    void operator()(Edge<Type> *edge, data_t<Type> data, RuntimeInfo const &info) {
+        using Executor = Graph::Executor;
+
+        auto receiver = static_cast<Config::Receiver *>(edge->receiver);
+        auto graph = static_cast<Graph *>(edge->graph);
+
+        if constexpr (requires { impl(graph, receiver, std::move(data), info); }) {
+            impl(graph, receiver, std::move(data), info);
+        } else if constexpr (requires { impl(receiver, std::move(data), info); }) {
+            impl(receiver, std::move(data), info);
+        } else {
+            impl(std::move(data), info);
+        }
+
+        if constexpr (HasOnTransfer<Executor, Receiver, RuntimeInfo>) {
+            graph->executor()->on_transfer(receiver, info);
+        }
+    }
+};
+
+template <typename T>
+Edge<T> make_edge(auto graph, auto receiver, auto impl) {
+    struct Config {
+        using Type = T;
+        using Impl = decltype(impl);
+        using Graph = std::remove_pointer_t<decltype(graph)>;
+        using Receiver = std::remove_pointer_t<decltype(receiver)>;
+    };
+    return Edge<T>(graph, receiver, EdgeImpl<Config>(impl));
+}
+
 // Connections /////////////////////////////////////////////////////////////////
 
 //
