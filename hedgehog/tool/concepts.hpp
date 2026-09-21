@@ -43,6 +43,14 @@ concept Finalizable = requires(C &c) { c.finalize(); };
 template <typename T, typename Ctx, typename Data>
 concept ExecutableWithContext = requires(T &t, Ctx *ctx, Data d) { t.execute(ctx, d); };
 
+// States //////////////////////////////////////////////////////////////////////
+
+template <typename S>
+concept Lockable = requires(S &s) {
+    s.lock();
+    s.unlock();
+};
+
 // Executor capabilities ///////////////////////////////////////////////////////
 
 template <typename E, typename N, typename I>

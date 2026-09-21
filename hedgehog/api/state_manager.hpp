@@ -25,6 +25,8 @@
 
 namespace hh {
 
+// state manager ///////////////////////////////////////////////////////////////
+
 //
 // The default state manager doesn't lock the state to allow users to define
 // optimized state management.
@@ -40,7 +42,13 @@ struct StateManager {
     StateManager(std::shared_ptr<State> state) : state_(state) {}
 
     void execute(auto ctx, auto data) {
+        if constexpr (Lockable<State>) {
+            state_->lock();
+        }
         state_->execute(ctx, std::move(data));
+        if constexpr (Lockable<State>) {
+            state_->unlock();
+        }
     }
 
     std::shared_ptr<StateManager> copy() {
@@ -56,35 +64,15 @@ auto make_state_manager(std::shared_ptr<Impl> state, std::string const &name = "
                                               NodeInfo{name, 1});
 }
 
-template <typename State>
-struct LockStateManager {
-    using inputs = State::inputs;
-    using outputs = State::outputs;
+// states //////////////////////////////////////////////////////////////////////
 
+class MutexState {
     std::mutex mutex_;
-    std::shared_ptr<State> state_;
 
-    LockStateManager(std::shared_ptr<State> state) : state_(state) {}
-
-    void execute(auto ctx, auto data) {
-        mutex_.lock();
-        state_->execute(ctx, std::move(data));
-        mutex_.unlock();
-    }
-
-    std::shared_ptr<LockStateManager> copy() {
-        log::fatal("A state manager should not be copied.");
-    }
+  public:
+    void lock() { mutex_.lock(); }
+    void unlock() { mutex_.unlock(); }
 };
-
-
-template <typename Impl>
-auto make_lock_state_manager(std::shared_ptr<Impl> state, std::string const &name = "StateManager") {
-    using BaseConfig = make_task_config<Impl>;
-    struct Config : BaseConfig { using Task = LockStateManager<Impl>; };
-    return std::make_shared<TaskNode<Config>>(std::make_shared<LockStateManager<Impl>>(std::move(state)),
-                                              NodeInfo{name, 1});
-}
 
 } // end namespace hh
 
