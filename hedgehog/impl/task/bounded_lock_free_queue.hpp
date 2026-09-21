@@ -49,8 +49,9 @@ class alignas(64) BoundedLockFreeQueue {
       }
   }
 
-  bool push(T data) {
+  void push(T data) {
       size_t t = tail_.load();
+      size_t full_counter = 0;
 
       for (;;) {
           size_t index = slots_[t & Mask].index.load(std::memory_order_acquire);
@@ -61,15 +62,20 @@ class alignas(64) BoundedLockFreeQueue {
                   break;
               }
           } else if (diff < 0) {
-              return false;
+              // In this implementation, we consider that there will always be
+              // at least one other thread that will try to pop data from the
+              // queue. Therefore, we spin in this function until room is freed
+              // for the data. Doing so allow to move the data when pushing
+              // which is faster when using shared pointers.
+              full_counter += 1;
+              for (size_t c = 0; c < full_counter; ++c) { hh_cross_platform_yield(); }
           } else {
               hh_cross_platform_yield();
               t = tail_.load();
           }
       }
-      slots_[t & Mask].data = data;
+      slots_[t & Mask].data = std::move(data);
       slots_[t & Mask].index.store(t + 1, std::memory_order_release);
-      return true;
   }
 
   std::optional<T> pop() {
@@ -90,8 +96,7 @@ class alignas(64) BoundedLockFreeQueue {
               h = head_.load();
           }
       }
-      T result = slots_[h & Mask].data;
-      slots_[h & Mask].data = T{};
+      T result = std::move(slots_[h & Mask].data);
       slots_[h & Mask].index.store(h + Size, std::memory_order_release);
       return result;
   }

@@ -32,9 +32,7 @@ struct BoundedLockFreeQueueInputPort {
     size_t max_queue_size = 0;
 
     void push_data(data_t<T> data, RuntimeInfo const &) {
-        while (!queue.push(std::move(data))) {
-            hh_cross_platform_yield();
-        }
+        queue.push(std::move(data));
         if (queue.size() > max_queue_size) max_queue_size = queue.size();
     }
 
