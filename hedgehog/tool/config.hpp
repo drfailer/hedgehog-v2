@@ -69,18 +69,6 @@ struct deduce_node_output_type<Impl, Default> {
     using type = typename Impl::node_output;
 };
 
-// Graph Executor //////////////////////
-
-template <typename Impl, typename Default>
-struct deduce_executor_type {
-    using type = Default;
-};
-
-template <HasExecutor Impl, typename Default>
-struct deduce_executor_type<Impl, Default> {
-    using type = typename Impl::executor;
-};
-
 // task config /////////////////////////////////////////////////////////////////
 
 template <typename Impl>
