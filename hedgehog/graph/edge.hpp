@@ -172,12 +172,12 @@ struct EdgeSlots : EdgeSlot<Types>... {
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
         auto &edges = EdgeSlot<T>::edges_;
-        for (size_t i = 0, n = edges.size(); i + 1 < n; ++i) {
+        size_t edge_count = edges.size();
+        if (edge_count == 0) return;
+        for (size_t i = 1; i < edge_count; ++i) {
             edges[i].transfer(data, info);
         }
-        if (!edges.empty()) {
-            edges.back().transfer(std::move(data), info);
-        }
+        edges[0].transfer(std::move(data), info);
     }
 
     template <typename T>
