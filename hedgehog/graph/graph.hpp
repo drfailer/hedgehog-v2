@@ -288,7 +288,7 @@ struct Graph : Node {
 
     template <typename T>
     void draw_edge(auto sender, auto receiver) {
-        if constexpr (HasInputNodes<typename decltype(receiver)::element_type>) {
+        if constexpr (IsGraph<typename decltype(receiver)::element_type>) {
             register_node(sender);
             register_node(receiver);
             auto& input_edges = receiver->input().template edges<T>();
@@ -386,7 +386,7 @@ struct Graph : Node {
     void connect_input(auto node) {
         register_node(node);
         input_nodes_.insert(node);
-        if constexpr (HasInputNodes<typename decltype(node)::element_type>) {
+        if constexpr (IsGraph<typename decltype(node)::element_type>) {
             auto& input_edges = node->input().template edges<T>();
             for (auto& input_edge : input_edges) {
                 input_.connect_edge(input_edge);
@@ -449,7 +449,7 @@ struct Graph : Node {
         register_node(node);
         output_nodes_.insert(node);
         output_.template add_connect<T>([node, this](Edge<T> edge) {
-            if constexpr (!HasInputNodes<typename decltype(node)::element_type>) {
+            if constexpr (!IsGraph<typename decltype(node)::element_type>) {
                 connections_.push_back(Connection{
                     .sender = node.get(),
                     .receiver = static_cast<Node *>(edge.receiver),

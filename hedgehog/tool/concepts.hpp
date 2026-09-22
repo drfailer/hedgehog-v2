@@ -62,7 +62,16 @@ concept HasOnResult = requires(E &e) { e.on_result(); };
 // Graph structure /////////////////////////////////////////////////////////////
 
 template <typename N>
-concept HasInputNodes = requires(N &n) { n.input_nodes(); };
+concept IsGraph = requires(N &n) {
+    n.input_nodes();
+};
+
+// Pipeline structure //////////////////////////////////////////////////////////
+
+template <typename N>
+concept IsPipeline = requires(N &n) {
+    n.graphs();
+};
 
 // Memory //////////////////////////////////////////////////////////////////////
 
