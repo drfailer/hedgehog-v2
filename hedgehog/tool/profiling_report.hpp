@@ -164,12 +164,14 @@ inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report
         auto edge = "edge_"s + std::to_string(report.id) + "_"s + std::to_string(report.sender_id) + "_"s + std::to_string(report.receiver_id);
 
         os << sender << " -> " << edge << " [dir=none];\n";
-        os << edge << "[label=\"" << report.label << "\"];\n";
+        os << edge << "[shape=rect, style=filled, fillcolor=\"#ffffff\", label=\"" << report.label << "\"];\n";
         os << edge << " -> " << receiver << ";\n";
     } break;
     case ProfileReportKind::Graph: {
         os << "subgraph cluster_" << std::to_string(report.id) << " {\n";
-        os << "label=\"" << report.label << "\";\n";
+        os << "label=\"" << report.label << "\"; fontsize=25; penwidth=5; labelloc=top; labeljust=left;\n";
+        os << "style=filled;\n";
+        os << "fillcolor=\"#ffffff\";\n";
         for (auto child : report.children) {
             report_content_to_dot(os, child, max_exec);
         }
@@ -181,32 +183,13 @@ inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report
         os << "subgraph cluster_" << std::to_string(report.id) << " {\n";
         os << "style=filled;\n";
         os << "fillcolor=\"#e8e8e8\";\n";
-        os << "label=<";
-        write_node_label(os, report);
-        os << ">;\n";
+        os << "label=\"" << report.label << "\"; fontsize=25; penwidth=5; labelloc=top; labeljust=left;\n";
 
         os << "node_" << report.id
            << " [label=\"\", shape=diamond, width=.3, style=filled, fillcolor=\"#606060\"];\n";
 
         for (auto &child : report.children) {
-            if (child.kind == ProfileReportKind::Graph) {
-                os << "subgraph cluster_" << std::to_string(child.id) << " {\n";
-                os << "label=<";
-                write_node_label(os, child);
-                os << ">;\n";
-                os << "node_" << child.sender_id
-                   << " [label=\"\", width=.1, shape=circle];\n";
-                os << "node_" << child.receiver_id
-                   << " [label=\"\", width=.1, shape=point];\n";
-                for (auto &gc : child.children) {
-                    report_content_to_dot(os, gc, max_exec);
-                }
-                os << "}\n";
-                os << "node_" << report.id << " -> node_"
-                   << child.sender_id << ";\n";
-            } else {
-                report_content_to_dot(os, child, max_exec);
-            }
+            report_content_to_dot(os, child, max_exec);
         }
         os << "}\n";
     } break;
@@ -220,7 +203,7 @@ inline void report_to_dot(ProfilerReport const &report, std::ostream &os) {
     os << "labelloc=tl;\n";
     os << "label=<";
     write_node_label(os, report);
-    os << ">;\n";
+    os << ">; fontsize=25; penwidth=5; labelloc=top; labeljust=left;\n";
     os << "node_" << std::to_string(report.sender_id) << " [label=\"\", width=.1, shape=circle];\n";
     os << "node_" << std::to_string(report.receiver_id) << " [label=\"\", width=.1, shape=point];\n";
     for (auto child : report.children) {

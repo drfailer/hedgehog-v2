@@ -446,10 +446,11 @@ struct Graph : Node {
 
     template <typename T>
     void connect_output(auto node) {
+        using NodeType = decltype(node)::element_type;
         register_node(node);
         output_nodes_.insert(node);
         output_.template add_connect<T>([node, this](Edge<T> edge) {
-            if constexpr (!IsGraph<typename decltype(node)::element_type>) {
+            if constexpr (!IsGraph<NodeType> && !IsPipeline<NodeType>) {
                 connections_.push_back(Connection{
                     .sender = node.get(),
                     .receiver = static_cast<Node *>(edge.receiver),
