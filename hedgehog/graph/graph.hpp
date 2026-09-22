@@ -139,7 +139,13 @@ struct Graph : Node {
         sink_.initialize(InitializationInfo{&Node::info(), &graph_info_, nullptr});
         connect_sink();
 
-        initialize(graph_info_);
+
+        Node::profiler().initialize();
+
+        HH_PROFILE_REGION(Node::profiler(), "intialization") {
+            initialize_components();
+        }
+
         #ifdef HH_ENABLE_PROFILING
         exec_profile_ = Node::profiler().profile("execution");
         exec_profile_->begin_region();
@@ -187,19 +193,19 @@ struct Graph : Node {
 
     // node api ////////////////////////////////////////////////////////////////
 
-    void initialize(GraphInfo const &) override {
+    void initialize_components() {
         auto init_info = InitializationInfo{&Node::info(), &graph_info_, &Node::profiler()};
-        Node::profiler().initialize();
-
-        auto *init_profile = Node::profiler().profile("initialize");
-        init_profile->begin_region();
         input_.initialize(init_info);
         output_.initialize(init_info);
         for (auto &node : nodes_) {
             node->initialize(graph_info_);
         }
         executor_->initialize(init_info);
-        init_profile->end_region();
+    }
+
+    void initialize(GraphInfo const &) override {
+        Node::profiler().initialize();
+        initialize_components();
     }
 
     void execute(ExecutionInfo const &info) override {
