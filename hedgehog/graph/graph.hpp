@@ -163,8 +163,13 @@ struct Graph : Node {
     }
 
     template <typename T>
-    void push_data(data_t<T> data, RuntimeInfo const &info = {}) {
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
         input_.push_data(std::move(data), info);
+    }
+
+    template <typename T>
+    void push_data(data_t<T> data) {
+        push_data<T>(std::move(data), RuntimeInfo{&Node::info(), &graph_info_, {}, &Node::profiler()});
     }
 
     auto get_result() {
