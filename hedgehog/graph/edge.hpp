@@ -79,6 +79,8 @@ struct Edge {
     }
 };
 
+static_assert(sizeof(Edge<int>) <= 64, "Edge should fit on a cache line.");
+
 // Edge Impl ///////////////////////////////////////////////////////////////////
 
 //
