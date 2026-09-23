@@ -69,10 +69,10 @@ class alignas(64) BoundedLockFreeQueue {
               // for the data. Doing so allow to move the data when pushing
               // which is faster when using shared pointers.
               full_counter += 1;
-              for (size_t c = 0; c < full_counter; ++c) { hh_cross_platform_yield(); }
+              for (size_t c = 0; c < full_counter; ++c) { hh_cross_platform_mm_pause(); }
               if (full_counter > 32) [[unlikely]] std::this_thread::yield();
           } else {
-              hh_cross_platform_yield();
+              hh_cross_platform_mm_pause();
               t = tail_.load();
           }
       }
@@ -94,7 +94,7 @@ class alignas(64) BoundedLockFreeQueue {
           } else if (diff < 0) {
               return std::nullopt;
           } else {
-              hh_cross_platform_yield();
+              hh_cross_platform_mm_pause();
               h = head_.load();
           }
       }

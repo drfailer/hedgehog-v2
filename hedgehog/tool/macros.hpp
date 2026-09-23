@@ -31,15 +31,15 @@
 #if defined(_MSC_VER)
     #include <intrin.h>
     #if defined(_M_IX86) || defined(_M_X64)
-        #define hh_cross_platform_yield() _mm_pause()
+        #define hh_cross_platform_mm_pause() _mm_pause()
     #else
-        #define hh_cross_platform_yield() YieldProcessor()
+        #define hh_cross_platform_mm_pause() YieldProcessor()
     #endif
 #elif defined(__x86_64__) || defined(__i386__)
     #include <emmintrin.h>
-    #define hh_cross_platform_yield() _mm_pause()
+    #define hh_cross_platform_mm_pause() _mm_pause()
 #else
-    #define hh_cross_platform_yield() asm volatile("yield")
+    #define hh_cross_platform_mm_pause() asm volatile("yield")
 #endif
 
 #endif

@@ -70,7 +70,7 @@ struct IndexAllocator {
             if (head.compare_exchange_weak(old_head, new_head, std::memory_order_release, std::memory_order_acquire)) [[likely]] {
                 break;
             }
-            hh_cross_platform_yield();
+            hh_cross_platform_mm_pause();
         }
         return old_head.index;
     }
@@ -86,7 +86,7 @@ struct IndexAllocator {
             if (head.compare_exchange_weak(old_head, new_head, std::memory_order_release, std::memory_order_acquire)) [[likely]] {
                 break;
             }
-            hh_cross_platform_yield();
+            hh_cross_platform_mm_pause();
         }
     }
 };
