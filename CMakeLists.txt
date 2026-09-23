@@ -24,6 +24,7 @@ find_package(Threads REQUIRED)
 find_package(CUDAToolkit QUIET)
 
 add_compile_options(-Wall -Wextra -Wno-unused-local-typedefs)
+add_definitions(-DHH_ENABLE_PROFILING)
 
 link_libraries(Threads::Threads)
 
