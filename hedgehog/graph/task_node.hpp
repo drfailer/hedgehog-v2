@@ -59,7 +59,7 @@ struct TaskNode : Node {
             profiler.initialize();
             context.construct(node, info);
             if constexpr (InitializableWith<Task, decltype(context)>) {
-                task->initialize(context);
+                task->initialize(&context);
             } else if constexpr (Initializable<Task>) {
                 task->initialize();
             }
@@ -70,8 +70,8 @@ struct TaskNode : Node {
             using namespace std::string_literals; // for ""s
             HH_THREAD_PROFILE_REGION(profiler, "execute<"s + type_to_string<T>() + ">"s)
             {
-                if constexpr (ExecutableWithContext<Task, decltype(this->context), decltype(data)>) {
-                    task->execute(&this->context, std::move(data));
+                if constexpr (ExecutableWithContext<Task, decltype(context), decltype(data)>) {
+                    task->execute(&context, std::move(data));
                 } else {
                     task->execute(std::move(data));
                 }
@@ -81,7 +81,7 @@ struct TaskNode : Node {
         void finalize() {
             profiler.finalize();
             if constexpr (FinalizableWith<Task, decltype(context)>) {
-                task->finalize(context);
+                task->finalize(&context);
             } else if constexpr (Finalizable<Task>) {
                 task->finalize();
             }
