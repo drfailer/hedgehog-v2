@@ -66,7 +66,7 @@ struct BoundedLockFreeQueueInput : SemaTrigger, NodePorts<BoundedLockFreeQueueIn
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
         BoundedLockFreeQueueInputPort<T>::push_data(std::move(data), info);
-        SemaTrigger::signal(SignalOpts{info, 1, 0});
+        SemaTrigger::signal(SignalOpts{1, 0});
     }
 
     template <typename Executable>

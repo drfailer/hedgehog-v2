@@ -58,7 +58,6 @@ template <typename T>
 struct Edge;
 
 struct SignalOpts {
-    RuntimeInfo info;    // execution context
     size_t count;        // number of threads to signal
     size_t thread_index; // signal a particular thread
 };
@@ -85,7 +84,7 @@ concept NodeInputTrait = std::default_initializable<T>
     }
     && requires(T t, RuntimeInfo const &ri, SignalOpts opts) {
         { t.wait(ri) } -> std::same_as<WaitResult>;
-        t.signal(opts);
+        { t.signal(opts) };
     }
     && requires(T t, void *exec, RuntimeInfo const &ri) {
         t.execute(exec, ri);

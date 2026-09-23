@@ -107,7 +107,7 @@ struct LockQueueNodeInput : CondTrigger, LockQueueInputPorts<Inputs...> {
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
         LockQueueInputPort<T>::push_data(std::move(data), info);
-        CondTrigger::signal(SignalOpts{info, 1, 0});
+        CondTrigger::signal(SignalOpts{1, 0});
     }
 };
 
@@ -129,7 +129,7 @@ struct LockQueueSemaNodeInput : SemaTrigger, LockQueueInputPorts<Inputs...> {
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
         LockQueueInputPort<T>::push_data(std::move(data), info);
-        SemaTrigger::signal(SignalOpts{info, 1, 0});
+        SemaTrigger::signal(SignalOpts{1, 0});
     }
 };
 
