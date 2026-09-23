@@ -173,7 +173,7 @@ struct EdgeSlots : EdgeSlot<Types>... {
     void push_data(data_t<T> data, RuntimeInfo const &info) {
         auto &edges = EdgeSlot<T>::edges_;
         size_t edge_count = edges.size();
-        if (edge_count == 0) return;
+        if (edge_count == 0) [[unlikely]] return;
         for (size_t i = 1; i < edge_count; ++i) {
             edges[i].transfer(data, info);
         }
