@@ -24,6 +24,8 @@
 #include <queue>
 #include <condition_variable>
 #include <semaphore>
+#include <memory>
+#include <tuple>
 #include "../../graph/node.hpp"
 #include "../../tool/log.hpp"
 #include "trigger.hpp"
@@ -64,17 +66,28 @@ struct alignas(64) LockQueueInputPort {
 
 
 template <typename ...Inputs>
-struct LockQueueInputPorts : NodePorts<LockQueueInputPort, Inputs...> {
+struct LockQueueInputPorts {
+    std::tuple<std::unique_ptr<LockQueueInputPort<Inputs>>...> ports_;
+
+    LockQueueInputPorts()
+        : ports_(std::make_unique<LockQueueInputPort<Inputs>>()...) {}
+
+    template <typename T>
+    LockQueueInputPort<T> *port() {
+        return std::get<std::unique_ptr<LockQueueInputPort<T>>>(ports_).get();
+    }
+
     void initialize(InitializationInfo const &) {
-        ([&] { LockQueueInputPort<Inputs>::max_queue_size = 0; }(), ...);
+        ([] (auto &p) { p->max_queue_size = 0; }(std::get<std::unique_ptr<LockQueueInputPort<Inputs>>>(ports_)), ...);
     }
 
     void finalize([[maybe_unused]] InitializationInfo const &info) {
         #ifdef HH_ENABLE_PROFILING
         ([&] {
-            using namespace std::string_literals; // for ""s
+            using namespace std::string_literals;
+            auto *p = port<Inputs>();
             auto profile = info.profiler->profile("LockQueueInputPort<"s + type_to_string<Inputs>() + ">");
-            profile->set_info("MQS = ", LockQueueInputPort<Inputs>::max_queue_size, " | ", "QS = ", LockQueueInputPort<Inputs>::size());
+            profile->set_info("MQS = ", p->max_queue_size, " | ", "QS = ", p->size());
         }(), ...);
         #endif
     }
@@ -82,7 +95,7 @@ struct LockQueueInputPorts : NodePorts<LockQueueInputPort, Inputs...> {
     template <typename Executable>
     void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
         ([&] {
-            if (auto data = LockQueueInputPort<Inputs>::pop()) [[likely]] {
+            if (auto data = port<Inputs>()->pop()) [[likely]] {
                 exec->execute(std::move(*data));
             }
         }(), ...);
@@ -92,23 +105,33 @@ struct LockQueueInputPorts : NodePorts<LockQueueInputPort, Inputs...> {
 // cond trigger input //////////////////////////////////////////////////////////
 
 template <typename ...Inputs>
-struct LockQueueNodeInput : CondTrigger, LockQueueInputPorts<Inputs...> {
+struct LockQueueNodeInput : LockQueueInputPorts<Inputs...> {
+    std::unique_ptr<CondTrigger> trigger_ = std::make_unique<CondTrigger>();
+
     void initialize(InitializationInfo const &info) {
         LockQueueInputPorts<Inputs...>::initialize(info);
-        CondTrigger::initialize([this]{
-            return ((LockQueueInputPort<Inputs>::size() > 0) || ...);
+        trigger_->initialize([this]{
+            return ((this->template port<Inputs>()->size() > 0) || ...);
         });
     }
 
     void finalize([[maybe_unused]] InitializationInfo const &info) {
-        CondTrigger::finalize();
+        trigger_->finalize();
         LockQueueInputPorts<Inputs...>::finalize(info);
+    }
+
+    WaitResult wait(RuntimeInfo const &info) {
+        return trigger_->wait(info);
+    }
+
+    void signal(SignalOpts const &opts) {
+        trigger_->signal(opts);
     }
 
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
-        LockQueueInputPort<T>::push_data(std::move(data), info);
-        CondTrigger::signal(SignalOpts{1, 0});
+        this->template port<T>()->push_data(std::move(data), info);
+        trigger_->signal(SignalOpts{1, 0});
     }
 };
 
@@ -116,21 +139,31 @@ struct LockQueueNodeInput : CondTrigger, LockQueueInputPorts<Inputs...> {
 // sema trigger input //////////////////////////////////////////////////////////
 
 template <typename ...Inputs>
-struct LockQueueSemaNodeInput : SemaTrigger, LockQueueInputPorts<Inputs...> {
+struct LockQueueSemaNodeInput : LockQueueInputPorts<Inputs...> {
+    std::unique_ptr<SemaTrigger> trigger_ = std::make_unique<SemaTrigger>();
+
     void initialize(InitializationInfo const &info) {
         LockQueueInputPorts<Inputs...>::initialize(info);
-        SemaTrigger::initialize(info.node->number_threads);
+        trigger_->initialize(info.node->number_threads);
     }
 
     void finalize([[maybe_unused]] InitializationInfo const &info) {
-        SemaTrigger::finalize();
+        trigger_->finalize();
         LockQueueInputPorts<Inputs...>::finalize(info);
+    }
+
+    WaitResult wait(RuntimeInfo const &info) {
+        return trigger_->wait(info);
+    }
+
+    void signal(SignalOpts const &opts) {
+        trigger_->signal(opts);
     }
 
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
-        LockQueueInputPort<T>::push_data(std::move(data), info);
-        SemaTrigger::signal(SignalOpts{1, 0});
+        this->template port<T>()->push_data(std::move(data), info);
+        trigger_->signal(SignalOpts{1, 0});
     }
 };
 
