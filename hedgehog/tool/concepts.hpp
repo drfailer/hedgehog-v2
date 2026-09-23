@@ -38,10 +38,6 @@ concept FinalizableWith = requires(C &c, Info &i) { c.finalize(i); };
 template <typename C>
 concept Finalizable = requires(C &c) { c.finalize(); };
 
-// Task execution //////////////////////////////////////////////////////////////
-
-template <typename T, typename Ctx, typename Data>
-concept ExecutableWithContext = requires(T &t, Ctx *ctx, Data d) { t.execute(ctx, d); };
 
 // States //////////////////////////////////////////////////////////////////////
 

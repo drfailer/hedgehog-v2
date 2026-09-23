@@ -70,7 +70,11 @@ struct TaskNode : Node {
             using namespace std::string_literals; // for ""s
             HH_THREAD_PROFILE_REGION(profiler, "execute<"s + type_to_string<T>() + ">"s)
             {
-                if constexpr (ExecutableWithContext<Task, decltype(context), decltype(data)>) {
+                if constexpr (requires { Task::execute(&context, std::move(data)); }) {
+                    Task::execute(&context, std::move(data));
+                } else if constexpr (requires { Task::execute(std::move(data)); }) {
+                    Task::execute(std::move(data));
+                } else if constexpr (requires { task->execute(&context, std::move(data)); }) {
                     task->execute(&context, std::move(data));
                 } else {
                     task->execute(std::move(data));
