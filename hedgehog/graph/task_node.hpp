@@ -159,8 +159,8 @@ struct TaskNode : Node {
                 {
                     wait_result = input_.wait(state->context.info());
                 }
-                if (wait_result.terminate) break;
-                if (wait_result.skip) continue;
+                if (wait_result.terminate) [[unlikely]] break;
+                if (wait_result.skip) [[unlikely]] continue;
                 input_.execute(state, state->context.info());
             }
             state->finalize();

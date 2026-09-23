@@ -23,6 +23,7 @@
 #include <optional>
 #include <unistd.h>
 #include <cstdint>
+#include <thread>
 
 #include "../../tool/macros.hpp"
 
@@ -57,11 +58,11 @@ class alignas(64) BoundedLockFreeQueue {
           size_t index = slots_[t & Mask].index.load(std::memory_order_acquire);
           int64_t diff = static_cast<int64_t>(index) - static_cast<int64_t>(t);
 
-          if (diff == 0) {
+          if (diff == 0) [[likely]] {
               if (tail_.compare_exchange_weak(t, t + 1)) {
                   break;
               }
-          } else if (diff < 0) {
+          } else if (diff < 0) [[unlikely]] {
               // In this implementation, we consider that there will always be
               // at least one other thread that will try to pop data from the
               // queue. Therefore, we spin in this function until room is freed
@@ -69,6 +70,7 @@ class alignas(64) BoundedLockFreeQueue {
               // which is faster when using shared pointers.
               full_counter += 1;
               for (size_t c = 0; c < full_counter; ++c) { hh_cross_platform_yield(); }
+              if (full_counter > 32) [[unlikely]] std::this_thread::yield();
           } else {
               hh_cross_platform_yield();
               t = tail_.load();
@@ -85,7 +87,7 @@ class alignas(64) BoundedLockFreeQueue {
           size_t index = slots_[h & Mask].index.load(std::memory_order_acquire);
           int64_t diff = static_cast<int64_t>(index) - static_cast<int64_t>(h + 1);
 
-          if (diff == 0) {
+          if (diff == 0) [[likely]] {
               if (head_.compare_exchange_weak(h, h + 1, std::memory_order_relaxed)) {
                   break;
               }

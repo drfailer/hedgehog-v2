@@ -54,7 +54,7 @@ struct CondTrigger {
 
     void signal(SignalOpts const &opts) {
         std::lock_guard<std::mutex> lock(mutex); // lock to avoid lost wakeup
-        if (opts.count == 1) {
+        if (opts.count == 1) [[likely]] {
             cond.notify_one();
         } else {
             cond.notify_all();
@@ -78,7 +78,7 @@ struct CondTrigger {
 // too many threads.
 //
 
-struct SemaTrigger {
+struct alignas(64) SemaTrigger {
     size_t number_threads_{0};
     std::counting_semaphore<> sem_{0};
     std::atomic<bool> terminated_{false};

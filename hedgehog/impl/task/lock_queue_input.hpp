@@ -36,7 +36,7 @@ struct Edge;
 // lock queue input port ///////////////////////////////////////////////////////
 
 template <typename T>
-struct LockQueueInputPort {
+struct alignas(64) LockQueueInputPort {
     std::mutex mutex;
     std::queue<data_t<T>> queue;
     size_t max_queue_size = 0;
@@ -49,14 +49,13 @@ struct LockQueueInputPort {
 
     std::optional<data_t<T>> pop() {
         std::lock_guard<std::mutex> lock(mutex);
-        if (queue.empty()) return std::nullopt;
+        if (queue.empty()) [[unlikely]] return std::nullopt;
         auto data = std::move(queue.front());
         queue.pop();
         return data;
     }
 
     size_t size() {
-        std::lock_guard<std::mutex> lock(mutex); // this is comment out in hh??
         return queue.size();
     }
 };
@@ -81,7 +80,7 @@ struct LockQueueInputPorts : NodePorts<LockQueueInputPort, Inputs...> {
     template <typename Executable>
     void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
         ([&] {
-            if (auto data = LockQueueInputPort<Inputs>::pop()) {
+            if (auto data = LockQueueInputPort<Inputs>::pop()) [[likely]] {
                 exec->execute(std::move(*data));
             }
         }(), ...);

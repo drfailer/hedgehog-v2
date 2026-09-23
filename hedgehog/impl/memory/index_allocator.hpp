@@ -20,6 +20,7 @@
 #define HEDGEHOG_IMPL_MEMORY_INDEX_STACK_H
 
 #include <cstdint>
+#include "../../tool/macros.hpp"
 
 namespace hh {
 
@@ -66,10 +67,10 @@ struct IndexAllocator {
             new_head.index = next_indices[old_head.index];
             new_head.tag = old_head.tag + 1;
 
-            if (head.compare_exchange_weak(old_head, new_head, std::memory_order_release, std::memory_order_acquire)) {
-                // the head was successfully updated, we can leave the CAS loop
+            if (head.compare_exchange_weak(old_head, new_head, std::memory_order_release, std::memory_order_acquire)) [[likely]] {
                 break;
             }
+            hh_cross_platform_yield();
         }
         return old_head.index;
     }
@@ -82,10 +83,10 @@ struct IndexAllocator {
             next_indices[index] = old_head.index;
             new_head.tag = old_head.tag + 1;
 
-            if (head.compare_exchange_weak(old_head, new_head, std::memory_order_release, std::memory_order_acquire)) {
-                // the head was successfully updated, we can leave the CAS loop
+            if (head.compare_exchange_weak(old_head, new_head, std::memory_order_release, std::memory_order_acquire)) [[likely]] {
                 break;
             }
+            hh_cross_platform_yield();
         }
     }
 };
