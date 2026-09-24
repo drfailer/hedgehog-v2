@@ -48,36 +48,58 @@ struct BoundedLockFreeQueueInputPort {
 };
 
 template <typename ...Inputs>
-struct BoundedLockFreeQueueInput : SemaTrigger, NodePorts<BoundedLockFreeQueueInputPort, Inputs...> {
-    void initialize(InitializationInfo const &info) {
-        ([&] { BoundedLockFreeQueueInputPort<Inputs>::max_queue_size = 0; }(), ...);
-        SemaTrigger::initialize(info.node->number_threads);
+struct BoundedLockFreeQueueInputPorts {
+    std::tuple<std::unique_ptr<BoundedLockFreeQueueInputPort<Inputs>>...> ports_;
+
+    BoundedLockFreeQueueInputPorts()
+        : ports_(std::make_unique<BoundedLockFreeQueueInputPort<Inputs>>()...) {}
+
+    template <typename T>
+    BoundedLockFreeQueueInputPort<T> *port() {
+        return std::get<std::unique_ptr<BoundedLockFreeQueueInputPort<T>>>(ports_).get();
+    }
+
+    void initialize(InitializationInfo const &) {
+        ([] (auto p) { p->max_queue_size = 0; }(port<Inputs>()), ...);
     }
 
     void finalize([[maybe_unused]] InitializationInfo const &info) {
-        SemaTrigger::finalize();
         #ifdef HH_ENABLE_PROFILING
         ([&] {
-            using namespace std::string_literals; // for ""s
+            using namespace std::string_literals;
+            auto *p = port<Inputs>();
             auto profile = info.profiler->profile("BoundedLockFreeQueueInputPort<"s + type_to_string<Inputs>() + ">");
-            profile->set_info("MQS = ", BoundedLockFreeQueueInputPort<Inputs>::max_queue_size, " | ", "QS = ", BoundedLockFreeQueueInputPort<Inputs>::size());
+            profile->set_info("MQS = ", p->max_queue_size, " | ", "QS = ", p->size());
         }(), ...);
         #endif
-    }
-
-    template <typename T>
-    void push_data(data_t<T> data, RuntimeInfo const &info) {
-        BoundedLockFreeQueueInputPort<T>::push_data(std::move(data), info);
-        SemaTrigger::signal(SignalOpts{1, 0});
     }
 
     template <typename Executable>
     void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
         ([&] {
-            if (auto data = BoundedLockFreeQueueInputPort<Inputs>::pop()) {
+            if (auto data = port<Inputs>()->pop()) [[likely]] {
                 exec->execute(std::move(*data));
             }
         }(), ...);
+    }
+};
+
+template <typename ...Inputs>
+struct BoundedLockFreeQueueInput : SemaTrigger, BoundedLockFreeQueueInputPorts<Inputs...> {
+    void initialize(InitializationInfo const &info) {
+        BoundedLockFreeQueueInputPorts<Inputs...>::initialize(info);
+        SemaTrigger::initialize(info.node->number_threads);
+    }
+
+    void finalize([[maybe_unused]] InitializationInfo const &info) {
+        SemaTrigger::finalize();
+        BoundedLockFreeQueueInputPorts<Inputs...>::finalize(info);
+    }
+
+    template <typename T>
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
+        this->template port<T>()->push_data(std::move(data), info);
+        SemaTrigger::signal(SignalOpts{1, 0});
     }
 };
 
