@@ -110,16 +110,19 @@ struct EdgeImpl {
     void operator()(Edge<Type> *edge, data_t<Type> data, RuntimeInfo const &info) {
         using Executor = Graph::Executor;
 
+        bool success = true;
         auto receiver = static_cast<Config::Receiver *>(edge->receiver);
         auto graph = static_cast<Graph *>(edge->graph);
 
         if constexpr (requires { impl(graph, receiver, std::move(data), info); }) {
-            impl(graph, receiver, std::move(data), info);
+            success = impl(graph, receiver, std::move(data), info);
         } else if constexpr (requires { impl(receiver, std::move(data), info); }) {
-            impl(receiver, std::move(data), info);
+            success = impl(receiver, std::move(data), info);
         } else {
-            impl(std::move(data), info);
+            success = impl(std::move(data), info);
         }
+
+        if (!success) [[unlikely]] return;
 
         if constexpr (HasOnTransfer<Executor, Receiver, RuntimeInfo>) {
             graph->executor()->on_transfer(receiver, info);
