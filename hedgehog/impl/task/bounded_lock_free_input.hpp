@@ -33,7 +33,9 @@ struct BoundedLockFreeQueueInputPort {
 
     void push_data(data_t<T> data, RuntimeInfo const &) {
         queue.push(std::move(data));
+        #ifdef HH_ENABLE_PROFILING
         if (queue.size() > max_queue_size) max_queue_size = queue.size();
+        #endif
     }
 
     std::optional<data_t<T>> pop() {
