@@ -78,7 +78,7 @@ struct LockQueueInputPorts {
     }
 
     void initialize(InitializationInfo const &) {
-        ([] (auto &p) { p->max_queue_size = 0; }(std::get<std::unique_ptr<LockQueueInputPort<Inputs>>>(ports_)), ...);
+        ([] (auto p) { p->max_queue_size = 0; }(port<Inputs>()), ...);
     }
 
     void finalize([[maybe_unused]] InitializationInfo const &info) {
@@ -110,9 +110,7 @@ struct LockQueueNodeInput : LockQueueInputPorts<Inputs...> {
 
     void initialize(InitializationInfo const &info) {
         LockQueueInputPorts<Inputs...>::initialize(info);
-        trigger_->initialize([this]{
-            return ((this->template port<Inputs>()->size() > 0) || ...);
-        });
+        trigger_->initialize();
     }
 
     void finalize([[maybe_unused]] InitializationInfo const &info) {
@@ -120,8 +118,10 @@ struct LockQueueNodeInput : LockQueueInputPorts<Inputs...> {
         LockQueueInputPorts<Inputs...>::finalize(info);
     }
 
-    WaitResult wait(RuntimeInfo const &info) {
-        return trigger_->wait(info);
+    WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
+        return trigger_->wait([this]{
+            return ((this->template port<Inputs>()->size() > 0) || ...);
+        });
     }
 
     void signal(SignalOpts const &opts) {

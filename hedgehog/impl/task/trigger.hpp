@@ -37,10 +37,8 @@ struct CondTrigger {
     std::mutex mutex{};
     std::condition_variable cond{};
     bool terminated = false;
-    std::function<bool()> pred;
 
-    void initialize(std::function<bool()> fun) {
-        this->pred = fun;
+    void initialize() {
         terminated = false;
     }
 
@@ -61,9 +59,9 @@ struct CondTrigger {
         }
     }
 
-    WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
+    WaitResult wait(auto pred) {
         std::unique_lock<std::mutex> lock(mutex);
-        cond.wait(lock, [this]{
+        cond.wait(lock, [&]{
             return pred() || terminated;
         });
         return WaitResult{terminated, false};
