@@ -202,11 +202,13 @@ struct GroupNodeInput {
         }
     };
 
+    size_t number_threads_ = 0;
     std::vector<std::unique_ptr<Group>> groups_ = {};
     alignas(64) std::atomic<size_t> index_{0};
 
     void initialize(InitializationInfo const &info) {
         size_t number_threads = info.node->number_threads;
+        this->number_threads_ = number_threads;
         groups_.resize((number_threads / GroupSize) + ((number_threads % GroupSize) == 0 ? 0 : 1));
         for (auto &group : groups_) {
             group = std::make_unique<Group>();
@@ -229,16 +231,20 @@ struct GroupNodeInput {
         size_t count = opts.count;
 
         while (count > 0) {
-            size_t group_index = index_.fetch_add(1) % groups_.size();
+            // the index is slightly off if the number of threads is not
+            // divisible by the group count, however, it shouldn't cause any
+            // issues.
+            size_t group_index = (index_.fetch_add(std::min(count, GroupSize)) % number_threads_) / GroupSize;
             auto &group = groups_[group_index];
-            group->trigger.signal({0, std::min(group_index, group.number_threads)});
-            count -= GroupSize;
+            size_t signal_count = std::min(count, group.number_threads);
+            group->trigger.signal({0, signal_count});
+            count -= signal_count;
         }
     }
 
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
-        size_t group_index = index_.fetch_add(1) % groups_.size();
+        size_t group_index = (index_.fetch_add(1) % number_threads) / GroupSize;
         groups_[group_index]->ports.template push_data<T>(std::move(data), info);
         groups_[group_index]->trigger.signal({1, 0});
     }
