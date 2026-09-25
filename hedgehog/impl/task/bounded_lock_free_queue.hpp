@@ -51,7 +51,7 @@ class alignas(64) BoundedLockFreeQueue {
   }
 
   void push(T data) {
-      size_t t = tail_.load();
+      size_t t = tail_.load(std::memory_order_relaxed);
       size_t full_counter = 0;
 
       for (;;) {
@@ -59,7 +59,7 @@ class alignas(64) BoundedLockFreeQueue {
           int64_t diff = static_cast<int64_t>(index) - static_cast<int64_t>(t);
 
           if (diff == 0) [[likely]] {
-              if (tail_.compare_exchange_weak(t, t + 1)) {
+              if (tail_.compare_exchange_weak(t, t + 1, std::memory_order_relaxed)) {
                   break;
               }
           } else if (diff < 0) [[unlikely]] {
@@ -73,7 +73,7 @@ class alignas(64) BoundedLockFreeQueue {
               if (full_counter > 32) [[unlikely]] std::this_thread::yield();
           } else {
               hh_cross_platform_mm_pause();
-              t = tail_.load();
+              t = tail_.load(std::memory_order_relaxed);
           }
       }
       slots_[t & Mask].data = std::move(data);
@@ -81,7 +81,7 @@ class alignas(64) BoundedLockFreeQueue {
   }
 
   std::optional<T> pop() {
-      size_t h = head_.load();
+      size_t h = head_.load(std::memory_order_relaxed);
 
       for (;;) {
           size_t index = slots_[h & Mask].index.load(std::memory_order_acquire);
@@ -92,10 +92,14 @@ class alignas(64) BoundedLockFreeQueue {
                   break;
               }
           } else if (diff < 0) {
+              if (h < tail_.load(std::memory_order_acquire)) {
+                  hh_cross_platform_mm_pause();
+                  continue;
+              }
               return std::nullopt;
           } else {
               hh_cross_platform_mm_pause();
-              h = head_.load();
+              h = head_.load(std::memory_order_relaxed);
           }
       }
       T result = std::move(slots_[h & Mask].data);
