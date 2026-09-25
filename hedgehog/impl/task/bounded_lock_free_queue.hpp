@@ -29,7 +29,8 @@
 
 namespace hh {
 
-// this queue is an implementation of Dmitry Vyukov bounded lock free queue.
+// this queue is a modified implementation of Dmitry Vyukov bounded lock free queue.
+
 template <typename T, size_t Size>
 class alignas(64) BoundedLockFreeQueue {
  private:

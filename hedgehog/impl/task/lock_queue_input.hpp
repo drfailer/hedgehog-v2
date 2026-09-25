@@ -92,6 +92,11 @@ struct LockQueueInputPorts : NodePorts<LockQueueInputPort, Inputs...> {
             }
         }(), ...);
     }
+
+    template <typename T>
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
+        LockQueueInputPort<T>::push_data(std::move(data), info);
+    }
 };
 
 // cond trigger input //////////////////////////////////////////////////////////
@@ -165,6 +170,88 @@ struct LockQueueFutexNodeInput : FutexTrigger<SpinCount::value>, LockQueueInputP
         Trigger::signal(SignalOpts{1, 0});
     }
 };
+
+// group input /////////////////////////////////////////////////////////////////
+
+//
+// This input creates small groups of threads and attribute input ports (queues
+// per type) to each group. This allows to reduce contention when there are a
+// lot of threads.
+//
+
+template <size_t GroupSize, typename TriggerType, template <typename ...> class PortsType, typename ...Inputs>
+struct GroupNodeInput {
+    struct Group {
+        PortsType<Inputs...> ports;
+        TriggerType trigger;
+        size_t number_threads;
+
+        void initialize(InitializationInfo const &info, size_t number_threads) {
+            this->number_threads = number_threads;
+            if constexpr (requires { trigger.initialize(number_threads); }) {
+                trigger.initialize(number_threads);
+            } else {
+                trigger.initialize();
+            }
+            ports.initialize(info);
+        }
+
+        void finalize(InitializationInfo const &info) {
+            trigger.finalize();
+            ports.finalize(info);
+        }
+    };
+
+    std::vector<std::unique_ptr<Group>> groups_ = {};
+    alignas(64) std::atomic<size_t> index_{0};
+
+    void initialize(InitializationInfo const &info) {
+        size_t number_threads = info.node->number_threads;
+        groups_.resize((number_threads / GroupSize) + ((number_threads % GroupSize) == 0 ? 0 : 1));
+        for (auto &group : groups_) {
+            group = std::make_unique<Group>();
+            group->initialize(info, std::min(number_threads, GroupSize));
+            number_threads -= GroupSize;
+        }
+    }
+
+    void finalize(InitializationInfo const &info) {
+        for (auto &group : groups_) {
+            group->finalize(info);
+        }
+    }
+
+    WaitResult wait(RuntimeInfo const &info) {
+        return groups_[info.exec.thread_index / GroupSize]->trigger.wait(info);
+    }
+
+    void signal(SignalOpts const &opts) {
+        size_t count = opts.count;
+
+        while (count > 0) {
+            size_t group_index = index_.fetch_add(1) % groups_.size();
+            auto &group = groups_[group_index];
+            group->trigger.signal({0, std::min(group_index, group.number_threads)});
+            count -= GroupSize;
+        }
+    }
+
+    template <typename T>
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
+        size_t group_index = index_.fetch_add(1) % groups_.size();
+        groups_[group_index]->ports.template push_data<T>(std::move(data), info);
+        groups_[group_index]->trigger.signal({1, 0});
+    }
+
+    template <typename Executable>
+    void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        groups_[info.exec.thread_index / GroupSize]->ports.execute(exec, info);
+    }
+};
+
+
+template <typename ...Inputs>
+using LockGroupNodeInput = GroupNodeInput<4, SemaTrigger, LockQueueInputPorts, Inputs...>;
 
 } // end namespace
 

@@ -219,13 +219,6 @@ template <int = 0>
 using FutexTrigger = SemaTrigger;
 #endif
 
-// group trigger ///////////////////////////////////////////////////////////////
-
-//
-// TODO: group small amounts of threads on different semaphores. Reduces
-//       contention when there are a lot of waiting threads.
-//
-
 // spin trigger ////////////////////////////////////////////////////////////////
 
 //
