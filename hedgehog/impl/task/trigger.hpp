@@ -19,6 +19,16 @@
 #ifndef HEDGEHOG_IMPL_TASK_TRIGGER_H
 #define HEDGEHOG_IMPL_TASK_TRIGGER_H
 
+#ifdef __linux__
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <linux/futex.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#endif
+#include <climits>
+#include "../../tool/macros.hpp"
+
 //
 // Triggers allow thread to wait and be notified.
 //
@@ -100,6 +110,114 @@ struct alignas(64) SemaTrigger {
         return WaitResult{terminated_.load(std::memory_order_acquire), false};
     }
 };
+
+// futex trigger ///////////////////////////////////////////////////////////////
+
+//
+// Trigger with configurable spin count backed by OS wait primitives (Linux
+// futex / Windows WaitOnAddress). Unlike std::counting_semaphore (which always
+// spins 16 iterations in libstdc++), the spin count defaults to 0 for minimal
+// latency in compute-heavy workloads.
+//
+// Falls back to SemaTrigger on unsupported platforms.
+//
+
+#if defined(__linux__) || defined(_WIN32)
+
+template <size_t SpinCount = 0>
+struct alignas(64) FutexTrigger {
+    static constexpr size_t spin_count = SpinCount;
+
+    size_t number_threads_{0};
+    alignas(64) std::atomic<int32_t> counter_{0};
+    alignas(64) std::atomic<int32_t> waiters_{0};
+    std::atomic<bool> terminated_{false};
+
+    void initialize(size_t number_threads) {
+        number_threads_ = number_threads;
+        terminated_.store(false);
+        counter_.store(0, std::memory_order_relaxed);
+        waiters_.store(0, std::memory_order_relaxed);
+    }
+
+    void finalize() {
+        terminated_.store(true, std::memory_order_release);
+        counter_.fetch_add(static_cast<int32_t>(number_threads_), std::memory_order_release);
+        platform_wake_all();
+    }
+
+    void signal(SignalOpts const &opts) {
+        counter_.fetch_add(static_cast<int32_t>(opts.count), std::memory_order_seq_cst);
+        if (waiters_.load(std::memory_order_seq_cst) > 0)
+            platform_wake(opts.count);
+    }
+
+    WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
+        for (;;) {
+            auto val = counter_.load(std::memory_order_acquire);
+            if (val > 0) {
+                if (counter_.compare_exchange_weak(val, val - 1,
+                        std::memory_order_acquire, std::memory_order_relaxed))
+                    return WaitResult{terminated_.load(std::memory_order_acquire), false};
+                continue;
+            }
+
+            if constexpr (spin_count > 0) {
+                for (size_t i = 0; i < spin_count; ++i) {
+                    hh_cross_platform_mm_pause();
+                    val = counter_.load(std::memory_order_acquire);
+                    if (val > 0) break;
+                }
+                if (val > 0) continue;
+            }
+
+            waiters_.fetch_add(1, std::memory_order_seq_cst);
+            val = counter_.load(std::memory_order_seq_cst);
+            if (val > 0) {
+                waiters_.fetch_sub(1, std::memory_order_relaxed);
+                continue;
+            }
+            platform_wait(0);
+            waiters_.fetch_sub(1, std::memory_order_relaxed);
+        }
+    }
+
+private:
+#ifdef __linux__
+    void platform_wait(int32_t expected) {
+        syscall(SYS_futex, reinterpret_cast<uint32_t*>(&counter_),
+                FUTEX_WAIT | FUTEX_PRIVATE_FLAG, expected, nullptr, nullptr, 0);
+    }
+
+    void platform_wake(size_t count) {
+        syscall(SYS_futex, reinterpret_cast<uint32_t*>(&counter_),
+                FUTEX_WAKE | FUTEX_PRIVATE_FLAG, static_cast<int>(count), nullptr, nullptr, 0);
+    }
+
+    void platform_wake_all() {
+        syscall(SYS_futex, reinterpret_cast<uint32_t*>(&counter_),
+                FUTEX_WAKE | FUTEX_PRIVATE_FLAG, INT_MAX, nullptr, nullptr, 0);
+    }
+#elif defined(_WIN32)
+    void platform_wait(int32_t expected) {
+        WaitOnAddress(&counter_, &expected, sizeof(expected), INFINITE);
+    }
+
+    void platform_wake(size_t count) {
+        for (size_t i = 0; i < count; ++i)
+            WakeByAddressSingle(&counter_);
+    }
+
+    void platform_wake_all() {
+        WakeByAddressAll(&counter_);
+    }
+#endif
+};
+
+#else
+template <int = 0>
+using FutexTrigger = SemaTrigger;
+#endif
 
 // group trigger ///////////////////////////////////////////////////////////////
 

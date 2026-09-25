@@ -143,6 +143,29 @@ struct LockQueueSemaNodeInput : SemaTrigger, LockQueueInputPorts<Inputs...> {
     }
 };
 
+// futex trigger input /////////////////////////////////////////////////////////
+
+template <typename SpinCount, typename ...Inputs>
+struct LockQueueFutexNodeInput : FutexTrigger<SpinCount::value>, LockQueueInputPorts<Inputs...> {
+    using Trigger = FutexTrigger<SpinCount::value>;
+
+    void initialize(InitializationInfo const &info) {
+        LockQueueInputPorts<Inputs...>::initialize(info);
+        Trigger::initialize(info.node->number_threads);
+    }
+
+    void finalize([[maybe_unused]] InitializationInfo const &info) {
+        Trigger::finalize();
+        LockQueueInputPorts<Inputs...>::finalize(info);
+    }
+
+    template <typename T>
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
+        LockQueueInputPort<T>::push_data(std::move(data), info);
+        Trigger::signal(SignalOpts{1, 0});
+    }
+};
+
 } // end namespace
 
 #endif

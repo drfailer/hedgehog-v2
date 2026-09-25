@@ -103,6 +103,27 @@ struct BoundedLockFreeQueueInput : SemaTrigger, BoundedLockFreeQueueInputPorts<I
     }
 };
 
+template <typename SpinCount, typename ...Inputs>
+struct BoundedLockFreeFutexInput : FutexTrigger<SpinCount::value>, BoundedLockFreeQueueInputPorts<Inputs...> {
+    using Trigger = FutexTrigger<SpinCount::value>;
+
+    void initialize(InitializationInfo const &info) {
+        BoundedLockFreeQueueInputPorts<Inputs...>::initialize(info);
+        Trigger::initialize(info.node->number_threads);
+    }
+
+    void finalize([[maybe_unused]] InitializationInfo const &info) {
+        Trigger::finalize();
+        BoundedLockFreeQueueInputPorts<Inputs...>::finalize(info);
+    }
+
+    template <typename T>
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
+        this->template port<T>()->push_data(std::move(data), info);
+        Trigger::signal(SignalOpts{1, 0});
+    }
+};
+
 } // end namespace hh
 
 #endif
