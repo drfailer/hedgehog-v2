@@ -82,6 +82,11 @@ struct BoundedLockFreeQueueInputPorts {
             }
         }(), ...);
     }
+
+    template <typename T>
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
+        port<T>()->push_data(std::move(data), info);
+    }
 };
 
 template <typename ...Inputs>
@@ -123,6 +128,9 @@ struct BoundedLockFreeFutexInput : FutexTrigger<SpinCount::value>, BoundedLockFr
         Trigger::signal(SignalOpts{1, 0});
     }
 };
+
+template <typename ...Inputs>
+using LockFreeGroupNodeInput = GroupNodeInput<4, SemaTrigger, BoundedLockFreeQueueInputPorts, Inputs...>;
 
 } // end namespace hh
 
