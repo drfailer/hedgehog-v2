@@ -202,18 +202,18 @@ struct GroupNodeInput {
         }
     };
 
-    size_t number_threads_ = 0;
+    size_t num_groups_ = 0;
     std::vector<std::unique_ptr<Group>> groups_ = {};
     alignas(64) std::atomic<size_t> index_{0};
 
     void initialize(InitializationInfo const &info) {
         size_t number_threads = info.node->number_threads;
-        this->number_threads_ = number_threads;
-        groups_.resize((number_threads / GroupSize) + ((number_threads % GroupSize) == 0 ? 0 : 1));
-        for (auto &group : groups_) {
-            group = std::make_unique<Group>();
-            group->initialize(info, std::min(number_threads, GroupSize));
-            number_threads -= GroupSize;
+        num_groups_ = (number_threads + GroupSize - 1) / GroupSize;
+        groups_.resize(num_groups_);
+        for (size_t g = 0; g < num_groups_; ++g) {
+            size_t gt = std::min(GroupSize, number_threads - g * GroupSize);
+            groups_[g] = std::make_unique<Group>();
+            groups_[g]->initialize(info, gt);
         }
     }
 
@@ -229,14 +229,10 @@ struct GroupNodeInput {
 
     void signal(SignalOpts const &opts) {
         size_t count = opts.count;
-
         while (count > 0) {
-            // the index is slightly off if the number of threads is not
-            // divisible by the group count, however, it shouldn't cause any
-            // issues.
-            size_t group_index = (index_.fetch_add(std::min(count, GroupSize), std::memory_order_acq_rel) % number_threads_) / GroupSize;
+            size_t group_index = index_.fetch_add(1, std::memory_order_relaxed) % num_groups_;
             auto &group = groups_[group_index];
-            size_t signal_count = std::min(count, group.number_threads);
+            size_t signal_count = std::min(count, group->number_threads);
             group->trigger.signal({0, signal_count});
             count -= signal_count;
         }
@@ -244,7 +240,7 @@ struct GroupNodeInput {
 
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
-        size_t group_index = (index_.fetch_add(1, std::memory_order_acq_rel) % number_threads_) / GroupSize;
+        size_t group_index = index_.fetch_add(1, std::memory_order_relaxed) % num_groups_;
         groups_[group_index]->ports.template push_data<T>(std::move(data), info);
         groups_[group_index]->trigger.signal({1, 0});
     }
@@ -257,7 +253,7 @@ struct GroupNodeInput {
 
 
 template <typename ...Inputs>
-using LockGroupNodeInput = GroupNodeInput<4, FutexTrigger<0>, LockQueueInputPorts, Inputs...>;
+using LockGroupNodeInput = GroupNodeInput<4, SemaTrigger, LockQueueInputPorts, Inputs...>;
 
 } // end namespace
 
