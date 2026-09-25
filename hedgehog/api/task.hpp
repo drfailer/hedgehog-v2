@@ -30,6 +30,9 @@ namespace hh {
 // make_task ///////////////////////////////////////////////////////////////////
 
 template <typename Impl>
+using task_t = TaskNode<make_task_config<Impl>>;
+
+template <typename Impl>
 auto make_task(std::shared_ptr<Impl> task, size_t number_threads = 1, std::string const &name = "Task") {
     using Config = make_task_config<Impl>;
     return std::make_shared<TaskNode<Config>>(task, NodeInfo{name, number_threads});
