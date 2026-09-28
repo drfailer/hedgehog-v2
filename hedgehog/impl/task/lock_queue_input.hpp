@@ -224,7 +224,13 @@ struct GroupNodeInput {
     }
 
     WaitResult wait(RuntimeInfo const &info) {
-        return groups_[info.exec.thread_index / GroupSize]->trigger.wait(info);
+        if constexpr (std::is_same_v<TriggerType, CondTrigger>) {
+            return groups_[info.exec.thread_index / GroupSize]->trigger.wait([this]{
+                return ((LockQueueInputPort<Inputs>::size() > 0) || ...);
+            });
+        } else {
+            return groups_[info.exec.thread_index / GroupSize]->trigger.wait(info);
+        }
     }
 
     void signal(SignalOpts const &opts) {
