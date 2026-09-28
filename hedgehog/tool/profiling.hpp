@@ -33,7 +33,12 @@
 #ifdef HH_ENABLE_PROFILING
 #include <mutex>
 #include <memory>
+
+#ifdef HH_USE_NVTX
+#include <nvtx3/nvToolsExt.h>
 #endif
+#endif
+
 
 #include "macros.hpp"
 
@@ -123,35 +128,60 @@ struct ProfileRegion {
 struct Profile {
     ProfileRegion region;
     std::string info;
+    #ifdef HH_USE_NVTX
+    nvtxDomainHandle_t nvtx_domain;
+    nvtxEventAttributes_t nvtx_attr;
+    nvtxRangeId_t nvtx_range_id;
+    #endif
+
+    Profile() = default;
+
+    #ifdef HH_USE_NVTX
+    Profile(std::string const &name, nvtxDomainHandle_t nvtx_domain) : nvtx_domain(nvtx_domain) {
+        nvtx_attr = {};
+        nvtx_attr.version = NVTX_VERSION;
+        nvtx_attr.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+        nvtx_attr.colorType = NVTX_COLOR_ARGB;
+        nvtx_attr.color = 0xFF72ff68;
+        nvtx_attr.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
+        nvtx_attr.message.registered = nvtxDomainRegisterStringA(nvtx_domain, name.c_str());
+    }
+    #endif
 
     bool begin_region() {
-#ifdef HH_ENABLE_PROFILING
+        #ifdef HH_ENABLE_PROFILING
         region.t0 = Clock::now();
-#endif
+        #ifdef HH_USE_NVTX
+        nvtx_range_id = nvtxDomainRangeStartEx(nvtx_domain, &nvtx_attr);
+        #endif
+        #endif
         return true;
     }
 
     bool end_region() {
-#ifdef HH_ENABLE_PROFILING
+        #ifdef HH_ENABLE_PROFILING
         TimePoint t1 = Clock::now();
         Duration duration = t1 - this->region.t0;
         region.measure.add_value(duration.count());
-#endif
+        #ifdef HH_USE_NVTX
+        nvtxDomainRangeEnd(nvtx_domain, nvtx_range_id);
+        #endif
+        #endif
         return false;
     }
 
     void set_info([[maybe_unused]] std::string const &info_str) {
-#ifdef HH_ENABLE_PROFILING
+        #ifdef HH_ENABLE_PROFILING
         this->info = info_str;
-#endif
+        #endif
     }
 
     void set_info(auto ...args) {
-#ifdef HH_ENABLE_PROFILING
+        #ifdef HH_ENABLE_PROFILING
         std::ostringstream oss;
         (oss << ... << args);
         this->info = oss.str();
-#endif
+        #endif
     }
 
     bool has_info() const { return info.size() > 0; }
@@ -208,6 +238,9 @@ struct Profiler {
     #ifdef HH_ENABLE_PROFILING
     std::mutex mutex;
     std::unordered_map<std::string, std::unique_ptr<Profile>> profiles;
+    #ifdef HH_USE_NVTX
+    nvtxDomainHandle_t nvtx_domain;
+    #endif
     #endif
 
     Profiler() = default;
@@ -235,7 +268,11 @@ struct Profiler {
     Profile *profile([[maybe_unused]] std::string const &name) {
         #ifdef HH_ENABLE_PROFILING
         std::lock_guard<std::mutex> lock(mutex);
+        #ifdef HH_USE_NVTX
+        auto profile = std::make_unique<Profile>(name, nvtx_domain);
+        #else
         auto profile = std::make_unique<Profile>();
+        #endif
         auto ptr = profile.get();
         profiles[name] = std::move(profile);
         return ptr;
