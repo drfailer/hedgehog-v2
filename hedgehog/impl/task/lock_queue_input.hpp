@@ -217,7 +217,7 @@ struct GroupNodeInput {
             size_t group_index = index_.fetch_add(1, std::memory_order_relaxed) % num_groups_;
             auto &group = groups_[group_index];
             size_t signal_count = std::min(count, group->number_threads);
-            group->signal({0, signal_count});
+            group->signal({signal_count, 0});
             count -= signal_count;
         }
     }
