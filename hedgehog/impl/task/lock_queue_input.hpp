@@ -252,8 +252,8 @@ struct GroupNodeInput {
 };
 
 
-template <typename ...Inputs>
-using LockGroupNodeInput = GroupNodeInput<4, SemaTrigger, LockQueueInputPorts, Inputs...>;
+template <size_t Size, typename ...Inputs>
+using LockGroupNodeInput = GroupNodeInput<Size, SemaTrigger, LockQueueInputPorts, Inputs...>;
 
 // single mutex input //////////////////////////////////////////////////////////
 
