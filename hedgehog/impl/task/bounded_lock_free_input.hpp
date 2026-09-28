@@ -26,9 +26,11 @@
 
 namespace hh {
 
-template <typename T>
+// bounded lock free queue port ////////////////////////////////////////////////
+
+template <size_t Size, typename T>
 struct BoundedLockFreeQueueInputPort {
-    BoundedLockFreeQueue<data_t<T>, 1024> queue;
+    BoundedLockFreeQueue<data_t<T>, Size> queue;
     size_t max_queue_size = 0;
 
     void push_data(data_t<T> data, RuntimeInfo const &) {
@@ -47,16 +49,17 @@ struct BoundedLockFreeQueueInputPort {
     }
 };
 
-template <typename ...Inputs>
+template <size_t Size, typename ...Inputs>
 struct BoundedLockFreeQueueInputPorts {
-    std::tuple<std::unique_ptr<BoundedLockFreeQueueInputPort<Inputs>>...> ports_;
+    template <typename T> using Queue = BoundedLockFreeQueueInputPort<Size, T>;
+    std::tuple<std::unique_ptr<Queue<Inputs>>...> ports_;
 
     BoundedLockFreeQueueInputPorts()
-        : ports_(std::make_unique<BoundedLockFreeQueueInputPort<Inputs>>()...) {}
+        : ports_(std::make_unique<Queue<Inputs>>()...) {}
 
     template <typename T>
-    BoundedLockFreeQueueInputPort<T> *port() {
-        return std::get<std::unique_ptr<BoundedLockFreeQueueInputPort<T>>>(ports_).get();
+    Queue<T> *port() {
+        return std::get<std::unique_ptr<Queue<T>>>(ports_).get();
     }
 
     void initialize(InitializationInfo const &) {
@@ -89,16 +92,18 @@ struct BoundedLockFreeQueueInputPorts {
     }
 };
 
-template <typename ...Inputs>
-struct BoundedLockFreeQueueInput : SemaTrigger, BoundedLockFreeQueueInputPorts<Inputs...> {
+// bounded lock free queue input (sema) ////////////////////////////////////////
+
+template <size_t Size, typename ...Inputs>
+struct BoundedLockFreeQueueInput : SemaTrigger, BoundedLockFreeQueueInputPorts<Size, Inputs...> {
     void initialize(InitializationInfo const &info) {
-        BoundedLockFreeQueueInputPorts<Inputs...>::initialize(info);
+        BoundedLockFreeQueueInputPorts<Size, Inputs...>::initialize(info);
         SemaTrigger::initialize(info.node->number_threads);
     }
 
     void finalize([[maybe_unused]] InitializationInfo const &info) {
         SemaTrigger::finalize();
-        BoundedLockFreeQueueInputPorts<Inputs...>::finalize(info);
+        BoundedLockFreeQueueInputPorts<Size, Inputs...>::finalize(info);
     }
 
     template <typename T>
@@ -108,18 +113,20 @@ struct BoundedLockFreeQueueInput : SemaTrigger, BoundedLockFreeQueueInputPorts<I
     }
 };
 
-template <typename SpinCount, typename ...Inputs>
-struct BoundedLockFreeFutexInput : FutexTrigger<SpinCount::value>, BoundedLockFreeQueueInputPorts<Inputs...> {
-    using Trigger = FutexTrigger<SpinCount::value>;
+// bounded lock free queue input (futex) ///////////////////////////////////////
+
+template <size_t Size, size_t SpinCount, typename ...Inputs>
+struct BoundedLockFreeFutexInput : FutexTrigger<SpinCount>, BoundedLockFreeQueueInputPorts<Size, Inputs...> {
+    using Trigger = FutexTrigger<SpinCount>;
 
     void initialize(InitializationInfo const &info) {
-        BoundedLockFreeQueueInputPorts<Inputs...>::initialize(info);
+        BoundedLockFreeQueueInputPorts<Size, Inputs...>::initialize(info);
         Trigger::initialize(info.node->number_threads);
     }
 
     void finalize([[maybe_unused]] InitializationInfo const &info) {
         Trigger::finalize();
-        BoundedLockFreeQueueInputPorts<Inputs...>::finalize(info);
+        BoundedLockFreeQueueInputPorts<Size, Inputs...>::finalize(info);
     }
 
     template <typename T>
@@ -129,8 +136,18 @@ struct BoundedLockFreeFutexInput : FutexTrigger<SpinCount::value>, BoundedLockFr
     }
 };
 
-template <typename ...Inputs>
-using LockFreeGroupNodeInput = GroupNodeInput<4, SemaTrigger, BoundedLockFreeQueueInputPorts, Inputs...>;
+// group bounded lock free queue input /////////////////////////////////////////
+
+template <size_t Size, size_t GroupSize, typename ...Inputs>
+struct LockFreeGroupNodeInputImpl {
+    template <typename ...Ts>
+    using Ports = BoundedLockFreeQueueInputPorts<Size, Ts...>;
+
+    using type = GroupNodeInput<GroupSize, SemaTrigger, Ports, Inputs...>;
+};
+
+template <size_t Size, size_t GroupSize, typename ...Inputs>
+using LockFreeGroupNodeInput = typename LockFreeGroupNodeInputImpl<Size, GroupSize, Inputs...>::type;
 
 } // end namespace hh
 

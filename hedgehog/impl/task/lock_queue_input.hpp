@@ -150,9 +150,9 @@ struct LockQueueSemaNodeInput : SemaTrigger, LockQueueInputPorts<Inputs...> {
 
 // futex trigger input /////////////////////////////////////////////////////////
 
-template <typename SpinCount, typename ...Inputs>
-struct LockQueueFutexNodeInput : FutexTrigger<SpinCount::value>, LockQueueInputPorts<Inputs...> {
-    using Trigger = FutexTrigger<SpinCount::value>;
+template <size_t SpinCount, typename ...Inputs>
+struct LockQueueFutexNodeInput : FutexTrigger<SpinCount>, LockQueueInputPorts<Inputs...> {
+    using Trigger = FutexTrigger<SpinCount>;
 
     void initialize(InitializationInfo const &info) {
         LockQueueInputPorts<Inputs...>::initialize(info);
