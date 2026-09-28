@@ -139,15 +139,7 @@ struct BoundedLockFreeFutexInput : FutexTrigger<SpinCount>, BoundedLockFreeQueue
 // group bounded lock free queue input /////////////////////////////////////////
 
 template <size_t Size, size_t GroupSize, typename ...Inputs>
-struct LockFreeGroupNodeInputImpl {
-    template <typename ...Ts>
-    using Ports = BoundedLockFreeQueueInputPorts<Size, Ts...>;
-
-    using type = GroupNodeInput<GroupSize, SemaTrigger, Ports, Inputs...>;
-};
-
-template <size_t Size, size_t GroupSize, typename ...Inputs>
-using LockFreeGroupNodeInput = typename LockFreeGroupNodeInputImpl<Size, GroupSize, Inputs...>::type;
+using LockFreeGroupNodeInput = GroupNodeInput<GroupSize, BoundedLockFreeQueueInput<Size, Inputs...>>;
 
 } // end namespace hh
 
