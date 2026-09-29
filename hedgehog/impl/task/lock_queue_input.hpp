@@ -68,7 +68,7 @@ struct alignas(64) LockQueueInputPort {
 
 
 template <typename ...Inputs>
-struct LockQueueInputPorts : NodePorts<LockQueueInputPort, Inputs...> {
+struct LockQueueInputPorts : LockQueueInputPort<Inputs>... {
     void initialize(InitializationInfo const &) {
         ([this] () { LockQueueInputPort<Inputs>::max_queue_size = 0; }, ...);
     }
@@ -91,11 +91,6 @@ struct LockQueueInputPorts : NodePorts<LockQueueInputPort, Inputs...> {
                 exec->execute(std::move(*data));
             }
         }(), ...);
-    }
-
-    template <typename T>
-    void push_data(data_t<T> data, RuntimeInfo const &info) {
-        LockQueueInputPort<T>::push_data(std::move(data), info);
     }
 };
 

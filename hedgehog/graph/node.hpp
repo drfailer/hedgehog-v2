@@ -109,18 +109,6 @@ concept NodeOutputTrait = std::default_initializable<T>
 
 #endif // HH_ENABLE_CONCEPTS
 
-//
-// Helper for dispatching ports.
-//
-
-template <template <typename> class PortType, typename ...Types>
-struct NodePorts : PortType<Types>... {
-    template <typename T>
-    void connect_edge(Edge<T> data) {
-        PortType<T>::connect_edge(std::move(data));
-    }
-};
-
 } // end namespace hh
 
 #endif
