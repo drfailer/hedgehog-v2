@@ -24,6 +24,9 @@
 #include "lock_queue_input.hpp"
 #include "../../tool/macros.hpp"
 
+#include "daking_mpsc_queue/MPSC_queue.hpp"
+#include "moodycamel_concurrent_queue/concurrentqueue.h"
+
 namespace hh {
 
 // bounded lock free queue port ////////////////////////////////////////////////
@@ -36,10 +39,12 @@ struct BoundedLockFreeQueueInputPort {
     void push_data(data_t<T> data, RuntimeInfo const &) {
         queue.push(std::move(data));
         #ifdef HH_ENABLE_PROFILING
-        if (queue.size() > max_queue_size) max_queue_size = queue.size();
+        size_t size = queue.size();
+        if (size > max_queue_size) max_queue_size = size;
         #endif
     }
 
+    // TODO: change the pop signature
     std::optional<data_t<T>> pop() {
         return queue.pop();
     }
@@ -135,6 +140,137 @@ struct BoundedLockFreeFutexInput : FutexTrigger<SpinCount>, BoundedLockFreeQueue
     void push_data(data_t<T> data, RuntimeInfo const &info) {
         this->template port<T>()->push_data(std::move(data), info);
         Trigger::signal(SignalOpts{1, 0});
+    }
+};
+
+// moodycamel mpmc input ///////////////////////////////////////////////////////
+
+template <typename T>
+struct MoodycamelMPMCInputPort {
+    moodycamel::ConcurrentQueue<data_t<T>> queue{};
+    size_t max_queue_size = 0;
+
+    void initialize(InitializationInfo const &) {
+        // TODO: with info, we can get the number of threads on the task which we can use to create consumer tokens
+        max_queue_size = 0;
+    }
+
+    void finalize(InitializationInfo const &info) {
+        #ifdef HH_ENABLE_PROFILING
+        using namespace std::string_literals;
+        info.profiler->add_string(
+            type_to_string<decltype(*this)>(),
+            "MQS = ", max_queue_size, " | ", "QS = ", queue.size_approx()
+        );
+        #endif
+    }
+
+    void push_data(data_t<T> data, RuntimeInfo const &) {
+        // TODO: get consumer token with the thread index
+        queue.enqueue(std::move(data));
+        #ifdef HH_ENABLE_PROFILING
+        size_t size = queue.size_approx();
+        if (size > max_queue_size) max_queue_size = size;
+        #endif
+    }
+
+    // TODO: bulk push
+
+    bool pop(data_t<T> &data) {
+        return queue.try_dequeue(data);
+    }
+
+    size_t size() {
+        return queue.size_approx();
+    }
+};
+
+template <typename ...Inputs>
+struct MoodycamelMPMCInput : CondTrigger, MoodycamelMPMCInputPort<Inputs>... {
+    void initialize(InitializationInfo const &info) {
+        (MoodycamelMPMCInputPort<Inputs>::initialize(info), ...);
+        CondTrigger::initialize();
+    }
+
+    void finalize([[maybe_unused]] InitializationInfo const &info) {
+        CondTrigger::finalize();
+        (MoodycamelMPMCInputPort<Inputs>::finalize(info), ...);
+    }
+
+    WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
+        return CondTrigger::wait([this]{
+            return ((MoodycamelMPMCInputPort<Inputs>::size() > 0) || ...);
+        });
+    }
+
+    template <typename T>
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
+        MoodycamelMPMCInputPort<T>::push_data(std::move(data), info);
+        CondTrigger::signal(SignalOpts{1, 0});
+    }
+
+    template <typename Executable>
+    void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        ([&] {
+            data_t<Inputs> data;
+            while (MoodycamelMPMCInputPort<Inputs>::pop(data)) [[likely]] {
+                exec->execute(std::move(data));
+            }
+        }(), ...);
+    }
+};
+
+// daking mpsc input ///////////////////////////////////////////////////////////
+
+template <typename T>
+struct DakingMPSCInputPort {
+    daking::MPSC_queue<data_t<T>> queue;
+
+    void push_data(data_t<T> data, RuntimeInfo const &) {
+        queue.enqueue(std::move(data));
+    }
+
+    // TODO: bulk push
+
+    bool pop(data_t<T> data) {
+        return queue.try_dequeue(data);
+    }
+
+    bool empty() {
+        return queue.empty();
+    }
+};
+
+template <typename ...Inputs>
+struct DakingMPSCInput : CondTrigger, DakingMPSCInputPort<Inputs>... {
+    void initialize(InitializationInfo const &info) {
+        CondTrigger::initialize();
+    }
+
+    void finalize([[maybe_unused]] InitializationInfo const &info) {
+        CondTrigger::finalize();
+    }
+
+    WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
+        return CondTrigger::wait([this]{
+            return ((!DakingMPSCInputPort<Inputs>::empty()) || ...);
+        });
+    }
+
+    template <typename T>
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
+        DakingMPSCInputPort<T>::push_data(std::move(data), info);
+        CondTrigger::signal(SignalOpts{1, 0});
+    }
+
+    template <typename Executable>
+    void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        ([&] {
+            data_t<Inputs> data;
+            while (DakingMPSCInputPort<Inputs>::pop(data)) [[likely]] {
+                exec->execute(std::move(data));
+            }
+        }(), ...);
     }
 };
 
