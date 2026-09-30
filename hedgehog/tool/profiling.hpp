@@ -19,7 +19,7 @@
 #ifndef HEDGEHOG_TOOL_PROFILING_H
 #define HEDGEHOG_TOOL_PROFILING_H
 
-#include <unordered_map>
+#include <map>
 #include <vector>
 #include <string>
 #include <cstddef>
@@ -147,14 +147,15 @@ struct ProfileString {
 };
 
 struct Profile {
+    std::string   label;
     ProfileKind   kind;
     ProfileRegion region;
     ProfileString string;
 
-    Profile(ProfileKind kind) : kind(kind) {}
+    Profile(std::string label, ProfileKind kind): label(std::move(label)), kind(kind) {}
 
     #ifdef HH_USE_NVTX
-    Profile(std::string const &name, nvtxDomainHandle_t *nvtx_domain) : kind(ProfileKind::Region) {
+    Profile(std::string label, nvtxDomainHandle_t *nvtx_domain): label(std::move(label)), kind(ProfileKind::Region) {
         region.nvtx.domain = nvtx_domain;
         region.nvtx.attr = {};
         region.nvtx.attr.version = NVTX_VERSION;
@@ -162,7 +163,7 @@ struct Profile {
         region.nvtx.attr.colorType = NVTX_COLOR_ARGB;
         region.nvtx.attr.color = 0xFF72ff68;
         region.nvtx.attr.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
-        region.nvtx.attr.message.registered = nvtxDomainRegisterStringA(*nvtx_domain, name.c_str());
+        region.nvtx.attr.message.registered = nvtxDomainRegisterStringA(*nvtx_domain, this->label.c_str());
     }
     #endif
 
@@ -204,7 +205,7 @@ struct Profile {
 struct Profiler {
     #ifdef HH_ENABLE_PROFILING
     std::mutex mutex;
-    std::unordered_map<std::string, std::unique_ptr<Profile>> profiles;
+    std::vector<std::unique_ptr<Profile>> profiles;
     #ifdef HH_USE_NVTX
     nvtxDomainHandle_t nvtx_domain;
     #endif
@@ -225,29 +226,26 @@ struct Profiler {
         #endif
     }
 
-    Profile *profile_region([[maybe_unused]] std::string const &label) {
+    Profile *profile_region([[maybe_unused]] std::string label) {
         #ifdef HH_ENABLE_PROFILING
         std::lock_guard<std::mutex> lock(mutex);
         #ifdef HH_USE_NVTX
-        auto profile = std::make_unique<Profile>(label, &nvtx_domain);
+        profiles.push_back(std::make_unique<Profile>(std::make_unique<Profile>(std::move(label), &nvtx_domain)));
         #else
-        auto profile = std::make_unique<Profile>(ProfileKind::Region);
+        profiles.push_back(std::make_unique<Profile>(std::move(label), ProfileKind::Region));
         #endif
-        auto ptr = profile.get();
-        profiles[label] = std::move(profile);
-        return ptr;
+        return profiles.back().get();
         #else
-        static Profile dummy(ProfileKind::Region);
+        static Profile dummy("dummy", ProfileKind::Region);
         return &dummy;
         #endif
     }
 
-    void add_string(std::string const &label, auto &&...args) {
+    void add_string([[maybe_unused]] std::string label, [[maybe_unused]] auto &&...args) {
         #ifdef HH_ENABLE_PROFILING
         std::lock_guard<std::mutex> lock(mutex);
-        auto profile = std::make_unique<Profile>(ProfileKind::String);
-        profile->set_string(std::forward<decltype(args)>(args)...);
-        profiles[label] = std::move(profile);
+        profiles.push_back(std::make_unique<Profile>(std::move(label), ProfileKind::String));
+        profiles.back()->set_string(std::forward<decltype(args)>(args)...);
         #endif
     }
 };
@@ -339,11 +337,11 @@ struct ProfileReport {
 
     void add_profiles([[maybe_unused]] Profiler const &profiler) {
         #ifdef HH_ENABLE_PROFILING
-        for (auto &[label, profile] : profiler.profiles) {
+        for (auto &profile : profiler.profiles) {
             switch (profile->kind) {
             case ProfileKind::Region:
                 entries.push_back(ProfileEntry{
-                        label,
+                        profile->label,
                         ProfileKind::Region,
                         profile->region.measure,
                         {},
@@ -351,7 +349,7 @@ struct ProfileReport {
                 break;
             case ProfileKind::String:
                 entries.push_back(ProfileEntry{
-                        label,
+                        profile->label,
                         ProfileKind::String,
                         {},
                         std::vector<std::string>({profile->string.value}),
@@ -371,14 +369,14 @@ std::map<std::string, ProfileEntry> merge_profiles([[maybe_unused]] std::vector<
     for (auto &component : components) {
         auto profiler = &component.profiler;
 
-        for (auto &[label, profile] : profiler->profiles) {
-            auto entry_it = entry_map.find(label);
+        for (auto &profile : profiler->profiles) {
+            auto entry_it = entry_map.find(profile->label);
             if (entry_it == entry_map.end()) {
-                ProfileEntry new_entry = {label, profile->kind, profile->region.measure, {}};
+                ProfileEntry new_entry = {profile->label, profile->kind, profile->region.measure, {}};
                 if (profile->kind == ProfileKind::String) {
                     new_entry.string.values.push_back(profile->string.value);
                 }
-                entry_map[label] = new_entry;
+                entry_map[profile->label] = new_entry;
             } else {
                 if (entry_it->second.kind != profile->kind) {
                     log::fatal("Profile inconsistency found.");
