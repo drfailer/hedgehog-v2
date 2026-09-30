@@ -232,7 +232,7 @@ struct DakingMPSCInputPort {
 
     // TODO: bulk push
 
-    bool pop(data_t<T> data) {
+    bool pop(data_t<T> &data) {
         return queue.try_dequeue(data);
     }
 
