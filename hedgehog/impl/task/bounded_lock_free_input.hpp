@@ -136,11 +136,6 @@ struct BoundedLockFreeFutexInput : FutexTrigger<SpinCount>, BoundedLockFreeQueue
     }
 };
 
-// group bounded lock free queue input /////////////////////////////////////////
-
-template <size_t Size, size_t GroupSize, typename ...Inputs>
-using LockFreeGroupNodeInput = GroupNodeInput<GroupSize, BoundedLockFreeQueueInput<Size, Inputs...>>;
-
 } // end namespace hh
 
 #endif

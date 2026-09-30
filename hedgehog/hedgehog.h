@@ -34,6 +34,7 @@
 
 #include "impl/graph/thread_executor.hpp"
 #include "impl/task/lock_queue_input.hpp"
+#include "impl/task/group_input.hpp"
 #include "impl/memory/automatic_pool.hpp"
 #include "impl/memory/index_allocator.hpp"
 #include "impl/memory/pool.hpp"
