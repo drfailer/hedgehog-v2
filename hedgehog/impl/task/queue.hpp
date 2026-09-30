@@ -16,8 +16,8 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_IMPL_TASK_BOUNDED_LOCK_FREE_QUEUE_H
-#define HEDGEHOG_IMPL_TASK_BOUNDED_LOCK_FREE_QUEUE_H
+#ifndef HEDGEHOG_IMPL_TASK_QUEUE_H
+#define HEDGEHOG_IMPL_TASK_QUEUE_H
 
 #include <atomic>
 #include <optional>
@@ -28,6 +28,8 @@
 #include "../../tool/macros.hpp"
 
 namespace hh {
+
+// bounded lock free queue /////////////////////////////////////////////////////
 
 // this queue is a modified implementation of Dmitry Vyukov bounded lock free queue.
 

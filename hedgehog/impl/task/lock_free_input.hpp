@@ -16,11 +16,11 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_IMPL_TASK_BOUNDED_LOCK_FREE_INPUT_H
-#define HEDGEHOG_IMPL_TASK_BOUNDED_LOCK_FREE_INPUT_H
+#ifndef HEDGEHOG_IMPL_TASK_LOCK_FREE_INPUT_H
+#define HEDGEHOG_IMPL_TASK_LOCK_FREE_INPUT_H
 
 #include "trigger.hpp"
-#include "bounded_lock_free_queue.hpp"
+#include "queue.hpp"
 #include "lock_queue_input.hpp"
 #include "../../tool/macros.hpp"
 
