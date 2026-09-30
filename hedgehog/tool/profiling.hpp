@@ -237,7 +237,7 @@ struct Profiler {
         profiles[label] = std::move(profile);
         return ptr;
         #else
-        static Profile dummy;
+        static Profile dummy(ProfileKind::Region);
         return &dummy;
         #endif
     }
@@ -337,7 +337,8 @@ struct ProfileReport {
         entries.push_back(std::move(entry));
     }
 
-    void add_profiles(Profiler const &profiler) {
+    void add_profiles([[maybe_unused]] Profiler const &profiler) {
+        #ifdef HH_ENABLE_PROFILING
         for (auto &[label, profile] : profiler.profiles) {
             switch (profile->kind) {
             case ProfileKind::Region:
@@ -358,13 +359,15 @@ struct ProfileReport {
                 break;
             }
         }
+        #endif
     }
 };
 
 template <typename T>
-std::map<std::string, ProfileEntry> merge_profiles(std::vector<T> const &components) {
+std::map<std::string, ProfileEntry> merge_profiles([[maybe_unused]] std::vector<T> const &components) {
     std::map<std::string, ProfileEntry> entry_map;
 
+    #ifdef HH_ENABLE_PROFILING
     for (auto &component : components) {
         auto profiler = &component.profiler;
 
@@ -387,11 +390,13 @@ std::map<std::string, ProfileEntry> merge_profiles(std::vector<T> const &compone
             }
         }
     }
+    #endif
 
     return entry_map;
 }
 
-void merge_reports_rec(ProfileReport *dst, std::vector<ProfileReport> reports) {
+void merge_reports_rec([[maybe_unused]] ProfileReport *dst, [[maybe_unused]] std::vector<ProfileReport> reports) {
+    #ifdef HH_ENABLE_PROFILING
     if (reports.empty()) return;
 
     // the current report is based on reports[0]
@@ -436,12 +441,14 @@ void merge_reports_rec(ProfileReport *dst, std::vector<ProfileReport> reports) {
         merge_reports_rec(&child_report, child_reports);
         dst->add_report(child_report);
     }
+    #endif
 }
 
 template <typename T>
-ProfileReport merge_reports(std::vector<T> components) {
+ProfileReport merge_reports([[maybe_unused]] std::vector<T> components) {
     ProfileReport report;
 
+    #ifdef HH_ENABLE_PROFILING
     if (components.empty()) return report;
 
     std::vector<ProfileReport> reports;
@@ -449,6 +456,8 @@ ProfileReport merge_reports(std::vector<T> components) {
         reports.push_back(component->profile());
     }
     merge_reports_rec(&report, reports);
+    #endif
+
     return report;
 }
 

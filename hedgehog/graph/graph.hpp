@@ -478,7 +478,7 @@ struct Graph : Node {
 
     // profiling ///////////////////////////////////////////////////////////////
 
-    void generate_dot_file(std::string const &filename) {
+    void generate_dot_file([[maybe_unused]] std::string const &filename) {
         #ifdef HH_ENABLE_PROFILING
         auto report = this->profile();
         std::ofstream ofs(filename);
