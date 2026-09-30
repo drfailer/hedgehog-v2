@@ -49,7 +49,7 @@ class Node {
     virtual void initialize(GraphInfo const &info) = 0;
     virtual void execute(ExecutionInfo const &info) = 0;
     virtual void finalize(GraphInfo const &info) = 0;
-    virtual ProfilerReport profile() = 0;
+    virtual ProfileReport profile() = 0;
 };
 
 // Node IO /////////////////////////////////////////////////////////////////////

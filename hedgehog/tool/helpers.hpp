@@ -63,24 +63,6 @@ std::shared_ptr<Component> copy_component(std::shared_ptr<Component> component) 
     }
 }
 
-template <typename Component>
-void initialize_component(std::shared_ptr<Component> component, InitializationInfo const &info) {
-    if constexpr (InitializableWith<Component, InitializationInfo const>) {
-        component->initialize(info);
-    } else if constexpr (Initializable<Component>) {
-        component->initialize();
-    }
-}
-
-template <typename Component>
-void finalize_component(std::shared_ptr<Component> component, InitializationInfo const &info) {
-    if constexpr (FinalizableWith<Component, InitializationInfo const>) {
-        component->finalize(info);
-    } else if constexpr (Finalizable<Component>) {
-        component->finalize();
-    }
-}
-
 } // end namespace hh
 
 #endif

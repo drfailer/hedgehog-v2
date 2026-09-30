@@ -60,7 +60,7 @@ inline std::string format_duration(double ns) {
 
 // text output /////////////////////////////////////////////////////////////////
 
-inline void report_to_text(ProfilerReport const &report, std::ostream &os, size_t indent = 0) {
+inline void report_to_text(ProfileReport const &report, std::ostream &os, size_t indent = 0) {
     auto pad = std::string(indent * 2, ' ');
     switch (report.kind) {
     case ProfileReportKind::Node:     os << pad << "node " << report.label << ":\n"; break;
@@ -68,16 +68,22 @@ inline void report_to_text(ProfilerReport const &report, std::ostream &os, size_
     case ProfileReportKind::Graph:    os << pad << "graph " << report.label << ":\n"; break;
     case ProfileReportKind::Pipeline: os << pad << "pipeline " << report.label << ":\n"; break;
     }
-    for (auto &[label, profile] : report.profiles) {
-        if (profile.has_region()) {
-            auto &m = profile.region.measure;
-            os << pad << "  " << label << ": "
+    for (auto &entry : report.entries) {
+        switch (entry.kind) {
+        case ProfileKind::Region: {
+            auto &m = entry.region.measure;
+            os << pad << "  " << entry.label << ": "
                << format_duration(m.mean) << " +/- " << format_duration(m.stddev())
                << " [" << format_duration(m.min) << "; " << format_duration(m.max) << "]"
                << " (" << m.count << ")\n";
-        }
-        if (profile.has_info()) {
-            os << pad << "    " << profile.info << "\n";
+        } break;
+        case ProfileKind::String: {
+            os << pad << "    ";
+            for (auto str : entry.string.values) {
+                os << str << "<BR/>";
+            }
+            os << "\n";
+        } break;
         }
     }
     for (auto &child : report.children) {
@@ -87,17 +93,17 @@ inline void report_to_text(ProfilerReport const &report, std::ostream &os, size_
 
 // dot output //////////////////////////////////////////////////////////////////
 
-inline double compute_node_exec_time(ProfilerReport const &report) {
+inline double compute_node_exec_time(ProfileReport const &report) {
     double total = 0;
-    for (auto &[name, profile] : report.profiles) {
-        if (name.starts_with("execute") && profile.has_region()) {
-            total += profile.region.measure.mean * profile.region.measure.count;
+    for (auto &entry : report.entries) {
+        if (entry.label.starts_with("execute") && entry.kind == ProfileKind::Region) {
+            total += entry.region.measure.mean * entry.region.measure.count;
         }
     }
     return total;
 }
 
-inline double find_max_exec(ProfilerReport const &report) {
+inline double find_max_exec(ProfileReport const &report) {
     double max_exec = 0;
     for (auto &child : report.children) {
         if (child.kind == ProfileReportKind::Node) {
@@ -110,7 +116,7 @@ inline double find_max_exec(ProfilerReport const &report) {
     return max_exec;
 }
 
-inline std::string compute_node_color(ProfilerReport const &node, double max_exec) {
+inline std::string compute_node_color(ProfileReport const &node, double max_exec) {
     double exec_time = compute_node_exec_time(node);
     double ratio = max_exec > 0 ? exec_time / max_exec : 0;
     int pos = std::clamp(int(ratio * 255), 0, 255);
@@ -119,7 +125,7 @@ inline std::string compute_node_color(ProfilerReport const &node, double max_exe
     return buf;
 }
 
-inline void write_node_label(std::ostream &os, ProfilerReport const &report, std::string const &bgcolor = "") {
+inline void write_node_label(std::ostream &os, ProfileReport const &report, std::string const &bgcolor = "") {
     os << "<table border=\"0\" cellborder=\"1\" cellspacing=\"0\" cellpadding=\"5\">\n";
     auto escaped_label = html_escape(report.label);
     if (bgcolor.empty()) {
@@ -128,27 +134,29 @@ inline void write_node_label(std::ostream &os, ProfilerReport const &report, std
         os << "<tr><td colspan=\"2\" bgcolor=\"" << bgcolor
            << "\"><font color=\"white\"><b>" << escaped_label << "</b></font></td></tr>\n";
     }
-    for (auto &[name, profile] : report.profiles) {
-        if (!profile.has_region() && !profile.has_info()) continue;
-        os << "<tr><td align=\"left\">" << html_escape(name) << "</td><td align=\"left\">";
-        if (profile.has_region()) {
-            auto &m = profile.region.measure;
+    for (auto &entry : report.entries) {
+        os << "<tr><td align=\"left\">" << html_escape(entry.label) << "</td><td align=\"left\">";
+        switch (entry.kind) {
+        case ProfileKind::Region: {
+            auto &m = entry.region.measure;
             os << "avg: " << format_duration(m.mean) << " +/- " << format_duration(m.stddev())
                << " | ttl: " << format_duration(m.mean * m.count)
                << " | min: " << format_duration(m.min)
                << " - max: " << format_duration(m.max)
                << " | count: " << m.count;
-        }
-        if (profile.has_info()) {
-            if (profile.has_region()) os << "<br/>";
-            os << html_escape(profile.info);
+        } break;
+        case ProfileKind::String: {
+            for (auto str : entry.string.values) {
+                os << html_escape(str) << "<BR/>";
+            }
+        } break;
         }
         os << "</td></tr>\n";
     }
     os << "</table>";
 }
 
-inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report, double max_exec) {
+inline void report_content_to_dot(std::ostream &os, ProfileReport const &report, double max_exec) {
     switch (report.kind) {
     case ProfileReportKind::Node: {
         auto color = compute_node_color(report, max_exec);
@@ -196,7 +204,7 @@ inline void report_content_to_dot(std::ostream &os, ProfilerReport const &report
     }
 }
 
-inline void report_to_dot(ProfilerReport const &report, std::ostream &os) {
+inline void report_to_dot(ProfileReport const &report, std::ostream &os) {
     double max_exec = find_max_exec(report);
     os << "digraph {\n";
     os << "rankdir=TB;\n";

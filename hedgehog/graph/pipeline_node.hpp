@@ -74,30 +74,23 @@ struct PipelineNode : Node {
         }
     }
 
-    ProfilerReport profile() override {
-        ProfilerReport report = Node::profiler().create_report(Node::info().name, ProfileReportKind::Pipeline);
-        report.id = reinterpret_cast<uintptr_t>(static_cast<Node *>(this));
-        ProfilerReport graph_report = graphs_[0]->profile();
+    ProfileReport profile() override {
+        auto report = ProfileReport::pipeline(this, Node::info().name);
+
+        #ifdef HH_ENABLE_PROFILING
+        report.add_profiles(Node::profiler());
 
         // add connections to graph input
-        uintptr_t edge_id = 0;
         type_list_map<InputTypes>([&]<typename T>() {
             auto const &edges = graphs_[0]->input().template edges<T>();
             for (auto const &edge : edges) {
-                report.add_report(ProfilerReport(edge_id++,
-                                                 reinterpret_cast<uintptr_t>(this),
-                                                 reinterpret_cast<uintptr_t>(edge.receiver),
-                                                 type_to_string<T>()));
+                report.add_report(ProfileReport::edge(this, edge.receiver, type_to_string<T>()));
             }
         });
 
-        for (size_t i = 1; i < graphs_.size(); ++i) {
-            auto sibling_report =  graphs_[i]->profile();
-            for (auto &[label, profile] : sibling_report.profiles) {
-                graph_report.add_profile(label, profile);
-            }
-        }
-        report.add_report(graph_report);
+        // merge graphs reports
+        report.add_report(merge_reports(graphs_));
+        #endif
         return report;
     }
 

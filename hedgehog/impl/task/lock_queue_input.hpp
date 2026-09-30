@@ -78,8 +78,10 @@ struct LockQueueInputPorts : LockQueueInputPort<Inputs>... {
         ([&] {
             using namespace std::string_literals;
             auto *p = static_cast<LockQueueInputPort<Inputs> *>(this);
-            auto profile = info.profiler->profile("LockQueueInputPort<"s + type_to_string<Inputs>() + ">");
-            profile->set_info("MQS = ", p->max_queue_size, " | ", "QS = ", p->size());
+            info.profiler->add_string(
+                "LockQueueInputPort<"s + type_to_string<Inputs>() + ">",
+                "MQS = ", p->max_queue_size, " | ", "QS = ", p->size()
+            );
         }(), ...);
         #endif
     }

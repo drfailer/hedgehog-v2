@@ -94,8 +94,8 @@ struct Graph : Node {
 
     Input &input() { return input_; }
     Output &output() { return output_; }
-    Executor *executor() const { return executor_.get(); }
-    Sink const &sink() const { return sink_; }
+    Executor *executor() { return executor_.get(); }
+    Sink &sink() { return sink_; }
     std::set<std::shared_ptr<Node>> const &nodes() const { return nodes_; }
     std::set<std::shared_ptr<Node>> const &input_nodes() const { return input_nodes_; }
     std::set<std::shared_ptr<Node>> const &output_nodes() const { return output_nodes_; }
@@ -140,14 +140,14 @@ struct Graph : Node {
         connect_sink();
 
 
-        Node::profiler().initialize();
+        Node::profiler().initialize(Node::info().name);
 
         HH_PROFILE_REGION(Node::profiler(), "intialization") {
             initialize_components();
         }
 
         #ifdef HH_ENABLE_PROFILING
-        exec_profile_ = Node::profiler().profile("execution");
+        exec_profile_ = Node::profiler().profile_region("execution");
         exec_profile_->begin_region();
         #endif
         ExecutionInfo exec_info = {0, rank, {0, 0}, false, ExecutionInfo::Execute};
@@ -204,7 +204,7 @@ struct Graph : Node {
     }
 
     void initialize(GraphInfo const &) override {
-        Node::profiler().initialize();
+        Node::profiler().initialize(Node::info().name);
         initialize_components();
     }
 
@@ -224,21 +224,17 @@ struct Graph : Node {
         Node::profiler().finalize();
     }
 
-    ProfilerReport profile() override {
-        ProfilerReport report = Node::profiler().create_report(Node::info().name, ProfileReportKind::Graph);
-        report.id = reinterpret_cast<uintptr_t>(static_cast<Node *>(this));
-        report.sender_id = reinterpret_cast<uintptr_t>(static_cast<Node *>(this));
-        report.receiver_id = reinterpret_cast<uintptr_t>(&sink_);
+    ProfileReport profile() override {
+        auto report = ProfileReport::graph(this, &sink_, Node::info().name);
+        #ifdef HH_ENABLE_PROFILING
+        report.add_profiles(Node::profiler());
         for (auto &node : nodes_) {
             report.add_report(node->profile());
         }
-        uintptr_t edge_id = 0;
         for (auto const &conn : connections_) {
-            report.add_report(ProfilerReport(edge_id++,
-                                             reinterpret_cast<uintptr_t>(conn.sender),
-                                             reinterpret_cast<uintptr_t>(conn.receiver),
-                                             conn.type_name));
+            report.add_report(ProfileReport::edge(conn.sender, conn.receiver, conn.type_name));
         }
+        #endif
         return report;
     }
 
@@ -483,9 +479,11 @@ struct Graph : Node {
     // profiling ///////////////////////////////////////////////////////////////
 
     void generate_dot_file(std::string const &filename) {
+        #ifdef HH_ENABLE_PROFILING
         auto report = this->profile();
         std::ofstream ofs(filename);
         report_to_dot(report, ofs);
+        #endif
     }
 };
 

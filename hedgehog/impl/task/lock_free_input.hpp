@@ -71,8 +71,10 @@ struct BoundedLockFreeQueueInputPorts {
         ([&] {
             using namespace std::string_literals;
             auto *p = port<Inputs>();
-            auto profile = info.profiler->profile("BoundedLockFreeQueueInputPort<"s + type_to_string<Inputs>() + ">");
-            profile->set_info("MQS = ", p->max_queue_size, " | ", "QS = ", p->size());
+            info.profiler->add_string(
+                "BoundedLockFreeQueueInputPort<"s + type_to_string<Inputs>() + ">"
+                "MQS = ", p->max_queue_size, " | ", "QS = ", p->size()
+            );
         }(), ...);
         #endif
     }

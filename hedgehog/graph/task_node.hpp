@@ -56,7 +56,7 @@ struct TaskNode : Node {
         Profiler profiler;
 
         void initialize(TaskNode<Config> *node, RuntimeInfo const &info) {
-            profiler.initialize();
+            profiler.initialize(node->info().name);
             context.construct(node, info);
             if constexpr (InitializableWith<Task, decltype(context)>) {
                 task->initialize(&context);
@@ -116,7 +116,7 @@ struct TaskNode : Node {
             states_[i].task = copy_component(states_[0].task);
         }
         graph_info_ = info;
-        Node::profiler().initialize();
+        Node::profiler().initialize(Node::info().name);
         auto init_info = InitializationInfo{&Node::info(), &graph_info_, &Node::profiler()};
         input_.initialize(init_info);
         output_.initialize(init_info);
@@ -174,16 +174,12 @@ struct TaskNode : Node {
         Node::profiler().finalize();
     }
 
-    ProfilerReport profile() override {
-        ProfilerReport report = Node::profiler().create_report(Node::info().name, ProfileReportKind::Node);
-        report.id = reinterpret_cast<uintptr_t>(static_cast<Node *>(this));
-#ifdef HH_ENABLE_PROFILING
-        for (auto &state : states_) {
-            for (auto &[label, profile] : state.profiler.profiles) {
-                report.add_profile(label, *profile.get());
-            }
-        }
-#endif
+    ProfileReport profile() override {
+        auto report = ProfileReport::node(this, Node::info().name);
+        #ifdef HH_ENABLE_PROFILING
+        report.add_profiles(Node::profiler());
+        report.add_entries(merge_profiles(states_));
+        #endif
         return report;
     }
 
