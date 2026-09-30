@@ -24,8 +24,8 @@
 #include "lock_queue_input.hpp"
 #include "../../tool/macros.hpp"
 
-#include "daking_mpsc_queue/MPSC_queue.hpp"
-#include "moodycamel_concurrent_queue/concurrentqueue.h"
+#include "../../../3rdparty/daking_mpsc_queue/MPSC_queue.hpp"
+#include "../../../3rdparty/moodycamel_concurrent_queue/concurrentqueue.h"
 
 namespace hh {
 
