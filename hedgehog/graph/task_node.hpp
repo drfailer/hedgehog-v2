@@ -174,13 +174,17 @@ struct TaskNode : Node {
         Node::profiler().finalize();
     }
 
-    ProfileReport profile() override {
-        auto report = ProfileReport::node(this, Node::info().name + " x" + std::to_string(Node::info().number_threads));
+    void profile(ProfileMap &map) override {
+        ProfileReport report;
         #ifdef HH_ENABLE_PROFILING
         report.add_profiles(Node::profiler());
         report.add_entries(merge_profiles(states_));
         #endif
-        return report;
+        map[reinterpret_cast<uintptr_t>(this)] = std::move(report);
+    }
+
+    GraphViewNode graph_view() override {
+        return GraphViewNode::make_node(this, Node::info().name + " x" + std::to_string(Node::info().number_threads));
     }
 
     // io //////////////////////////////////////////////////////////////////////

@@ -74,24 +74,27 @@ struct PipelineNode : Node {
         }
     }
 
-    ProfileReport profile() override {
-        auto report = ProfileReport::pipeline(this, Node::info().name);
+    void profile(ProfileMap &map) override {
+        Node::profile(map);
+        for (auto &graph : graphs_) {
+            graph->profile(map);
+        }
+    }
 
-        #ifdef HH_ENABLE_PROFILING
-        report.add_profiles(Node::profiler());
+    GraphViewNode graph_view() override {
+        auto view = GraphViewNode::make_pipeline(this, Node::info().name);
+        auto &children = view.children();
 
-        // add connections to graph input
-        type_list_map<InputTypes>([&]<typename T>() {
-            auto const &edges = graphs_[0]->input().template edges<T>();
-            for (auto const &edge : edges) {
-                report.add_report(ProfileReport::edge(this, edge.receiver, type_to_string<T>()));
-            }
-        });
-
-        // merge graphs reports
-        report.add_report(merge_reports(graphs_));
-        #endif
-        return report;
+        for (auto &graph : graphs_) {
+            type_list_map<InputTypes>([&]<typename T>() {
+                auto const &edges = graph->input().template edges<T>();
+                for (auto const &edge : edges) {
+                    children.push_back(GraphViewNode::make_edge(this, edge.receiver, type_to_string<T>()));
+                }
+            });
+            children.push_back(graph->graph_view());
+        }
+        return view;
     }
 
     // io //////////////////////////////////////////////////////////////////////
