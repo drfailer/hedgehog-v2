@@ -39,6 +39,7 @@
 #include "impl/io/trigger.hpp"
 #include "impl/memory/automatic_pool.hpp"
 #include "impl/memory/pool.hpp"
+#include "impl/task/cuda_task.hpp"
 
 #include "tool/concepts.hpp"
 #include "tool/config.hpp"
