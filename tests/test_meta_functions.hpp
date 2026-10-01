@@ -16,7 +16,8 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-// TODO: this should be added as an executable, but it should be built only when needed.
+#ifndef TESTS_TEST_META_FUNCTIONS_H
+#define TESTS_TEST_META_FUNCTIONS_H
 
 #include "../hedgehog/hedgehog.h"
 #include <type_traits>
@@ -49,6 +50,4 @@ using test_io_types = hh::io_types<2, char, int, float, double>;
 static_assert(std::is_same_v<test_io_types::inputs, hh::type_list<char, int>>);
 static_assert(std::is_same_v<test_io_types::outputs, hh::type_list<float, double>>);
 
-int main(int argc, char **argv) {
-    return 0;
-}
+#endif

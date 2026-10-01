@@ -22,6 +22,10 @@
 #include <algorithm>
 #include "../hedgehog/hedgehog.h"
 
+#ifdef HH_TEST_META
+#include "test_meta_functions.hpp"
+#endif
+
 struct Task {
     using inputs = hh::type_list<int, float>;
     using outputs = hh::type_list<int, float>;

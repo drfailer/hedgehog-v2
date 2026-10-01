@@ -11,9 +11,15 @@ endif (MSVC)
 
 include(FetchContent) # Used to download GTEST
 
-option(TEST_HH "Downloads google unit test API and runs google test scripts to test Hedgehog core and api" OFF)
+option(HH_TEST "Downloads google unit test API and runs google test scripts to test Hedgehog core and api" OFF)
+option(HH_TEST_META "Test meta-functions" OFF)
+option(HH_ENABLE_PROFILING "Enable profiling." OFF)
 option(HH_ENABLE_CONCEPTS "Enable concept constraints on template parameters (slower compile)" OFF)
 option(ENABLE_NVTX "Enable NVTX if CUDA is found" OFF)
+
+if (HH_ENABLE_PROFILING)
+    add_definitions(-DHH_ENABLE_PROFILING)
+endif()
 
 if (HH_ENABLE_CONCEPTS)
     add_definitions(-DHH_ENABLE_CONCEPTS)
@@ -25,7 +31,6 @@ find_package(Threads REQUIRED)
 find_package(CUDAToolkit QUIET)
 
 add_compile_options(-Wall -Wextra -Wno-unused-local-typedefs)
-add_definitions(-DHH_ENABLE_PROFILING)
 
 link_libraries(Threads::Threads)
 
@@ -53,7 +58,10 @@ else (CUDAToolkit_FOUND)
     message("CUDA not found, all features will not be available.")
 endif (CUDAToolkit_FOUND)
 
-if (TEST_HH)
+if (HH_TEST)
+    if (HH_TEST_META)
+        add_definitions(-DHH_TEST_META)
+    endif(HH_TEST_META)
     message("Fetch Gtest")
     if (POLICY CMP0135)
         FetchContent_Declare(
@@ -85,7 +93,7 @@ if (TEST_HH)
 
     include(GoogleTest)
     gtest_discover_tests(gtest_hedgehog)
-endif (TEST_HH)
+endif (HH_TEST)
 
 
 # Install the target
