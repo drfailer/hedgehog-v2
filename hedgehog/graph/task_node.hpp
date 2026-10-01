@@ -184,7 +184,7 @@ struct TaskNode : Node {
     }
 
     GraphViewNode graph_view() override {
-        return GraphViewNode::make_node(this, Node::info().name + " x" + std::to_string(Node::info().number_threads));
+        return GraphViewNode::make_node(this);
     }
 
     // io //////////////////////////////////////////////////////////////////////

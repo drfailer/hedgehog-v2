@@ -82,14 +82,14 @@ struct PipelineNode : Node {
     }
 
     GraphViewNode graph_view() override {
-        auto view = GraphViewNode::make_pipeline(this, Node::info().name);
+        auto view = GraphViewNode::make_pipeline(this);
         auto &children = view.children();
 
         for (auto &graph : graphs_) {
             type_list_map<InputTypes>([&]<typename T>() {
                 auto const &edges = graph->input().template edges<T>();
                 for (auto const &edge : edges) {
-                    children.push_back(GraphViewNode::make_edge(this, edge.receiver, type_to_string<T>()));
+                    children.push_back(GraphViewNode::make_edge(this, reinterpret_cast<Node *>(edge.receiver), type_to_string<T>()));
                 }
             });
             children.push_back(graph->graph_view());

@@ -20,7 +20,6 @@
 #define HEDGEHOG_TOOL_GRAPH_VIEW_H
 
 #include <string>
-#include <cstdint>
 #include <vector>
 #include <variant>
 
@@ -28,18 +27,21 @@
 
 namespace hh {
 
+class Node;
+
 struct GraphViewNode;
 
 struct ViewNode {};
 
 struct ViewEdge {
-    uintptr_t sender_id;
-    uintptr_t receiver_id;
+    Node *sender;
+    Node *receiver;
+    std::string type_name;
 };
 
 struct ViewGraph {
-    uintptr_t source_id;
-    uintptr_t sink_id;
+    std::vector<Node *> input_nodes;
+    std::vector<Node *> output_nodes;
     std::vector<GraphViewNode> children;
 };
 
@@ -50,35 +52,25 @@ struct ViewPipeline {
 enum class ViewKind { Node, Edge, Graph, Pipeline };
 
 struct GraphViewNode {
-    std::string label;
-    uintptr_t id = 0;
+    Node *node = nullptr;
     std::variant<ViewNode, ViewEdge, ViewGraph, ViewPipeline> data;
 
     // factory methods /////////////////////////////////////////////////////////
 
-    static GraphViewNode make_node(void *ptr, std::string name) {
-        return {std::move(name), reinterpret_cast<uintptr_t>(ptr), ViewNode{}};
+    static GraphViewNode make_node(Node *n) {
+        return {n, ViewNode{}};
     }
 
-    static GraphViewNode make_edge(void *sender, void *receiver, std::string type_name) {
-        static uintptr_t edge_counter = 0;
-        return {
-            std::move(type_name),
-            edge_counter++,
-            ViewEdge{reinterpret_cast<uintptr_t>(sender), reinterpret_cast<uintptr_t>(receiver)},
-        };
+    static GraphViewNode make_edge(Node *sender, Node *receiver, std::string type_name) {
+        return {nullptr, ViewEdge{sender, receiver, std::move(type_name)}};
     }
 
-    static GraphViewNode make_graph(void *ptr, void *sink, std::string name) {
-        return {
-            std::move(name),
-            reinterpret_cast<uintptr_t>(ptr),
-            ViewGraph{reinterpret_cast<uintptr_t>(ptr), reinterpret_cast<uintptr_t>(sink), {}},
-        };
+    static GraphViewNode make_graph(Node *n) {
+        return {n, ViewGraph{}};
     }
 
-    static GraphViewNode make_pipeline(void *ptr, std::string name) {
-        return {std::move(name), reinterpret_cast<uintptr_t>(ptr), ViewPipeline{}};
+    static GraphViewNode make_pipeline(Node *n) {
+        return {n, ViewPipeline{}};
     }
 
     // tag & accessors /////////////////////////////////////////////////////////
@@ -90,8 +82,8 @@ struct GraphViewNode {
     bool is_graph() const { return kind() == ViewKind::Graph; }
     bool is_pipeline() const { return kind() == ViewKind::Pipeline; }
 
-    ViewNode       &node()           { return std::get<ViewNode>(data); }
-    ViewNode const &node()     const { return std::get<ViewNode>(data); }
+    ViewNode       &view_node()           { return std::get<ViewNode>(data); }
+    ViewNode const &view_node()     const { return std::get<ViewNode>(data); }
     ViewEdge       &edge()           { return std::get<ViewEdge>(data); }
     ViewEdge const &edge()     const { return std::get<ViewEdge>(data); }
     ViewGraph       &graph()           { return std::get<ViewGraph>(data); }

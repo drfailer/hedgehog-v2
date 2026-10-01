@@ -244,13 +244,27 @@ struct Graph : Node {
     }
 
     GraphViewNode graph_view() override {
-        auto view = GraphViewNode::make_graph(this, &sink_, Node::info().name);
+        auto view = GraphViewNode::make_graph(this);
+        auto &view_graph = view.graph();
+
+        type_list_map<InputTypes>([&]<typename T>() {
+            for (auto &edge : input_.template edges<T>()) {
+                view_graph.input_nodes.push_back(reinterpret_cast<Node *>(edge.receiver));
+            }
+        });
+        for (auto &node : output_nodes_) {
+            view_graph.output_nodes.push_back(node.get());
+        }
+
         auto &children = view.children();
         for (auto &node : nodes_) {
             children.push_back(node->graph_view());
         }
+        auto *sink_ptr = reinterpret_cast<Node *>(&sink_);
         for (auto const &conn : connections_) {
-            children.push_back(GraphViewNode::make_edge(conn.sender, conn.receiver, conn.type_name));
+            if (conn.receiver != sink_ptr) {
+                children.push_back(GraphViewNode::make_edge(conn.sender, conn.receiver, conn.type_name));
+            }
         }
         return view;
     }
