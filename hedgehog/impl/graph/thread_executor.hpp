@@ -21,6 +21,7 @@
 
 #include <vector>
 #include <thread>
+#include "../../tool/numa.hpp"
 
 namespace hh {
 
@@ -41,6 +42,7 @@ struct ThreadExecutor {
                     exec_info.thread_index = i;
                     threads.push_back(
                         std::thread([node, exec_info]() {
+                            numa::pin_current_thread(exec_info.pipeline.numa_id);
                             node->execute(exec_info);
                         })
                     );

@@ -20,6 +20,10 @@
 #include <gtest/gtest.h>
 #include <cstdio>
 #include <algorithm>
+#ifdef __linux__
+#include <sched.h>
+#include <fstream>
+#endif
 #include "../hedgehog/hedgehog.h"
 
 #ifdef HH_TEST_META
@@ -586,4 +590,189 @@ TEST(edge, custom_edges) {
     ASSERT_EQ(node2_int_count, 0);
     ASSERT_EQ(node2_float_count, 1);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//                           NUMA pinning tests                               //
+////////////////////////////////////////////////////////////////////////////////
+
+#ifdef __linux__
+
+static bool numa_node_exists(int id) {
+    std::ifstream f("/sys/devices/system/node/node" + std::to_string(id) + "/cpulist");
+    return f.is_open();
+}
+
+static std::vector<int> get_numa_cpus(int id) {
+    return hh::numa::parse_cpulist([&]{
+        std::ifstream f("/sys/devices/system/node/node" + std::to_string(id) + "/cpulist");
+        std::string s;
+        std::getline(f, s);
+        return s;
+    }());
+}
+
+static std::vector<int> get_thread_affinity() {
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    sched_getaffinity(0, sizeof(cpu_set_t), &set);
+    std::vector<int> cpus;
+    for (int i = 0; i < CPU_SETSIZE; ++i) {
+        if (CPU_ISSET(i, &set)) cpus.push_back(i);
+    }
+    return cpus;
+}
+
+struct NumaPinTask {
+    using inputs = hh::type_list<int>;
+    using outputs = hh::type_list<int>;
+
+    int expected_numa_id;
+    std::vector<int> expected_cpus;
+    std::atomic<bool> *pinning_correct;
+
+    void execute(auto ctx, hh::data_t<int> data) {
+        ASSERT_EQ(ctx->numa_id(), expected_numa_id);
+        auto actual = get_thread_affinity();
+        std::sort(actual.begin(), actual.end());
+        auto expected = expected_cpus;
+        std::sort(expected.begin(), expected.end());
+        pinning_correct->store(actual == expected);
+        ctx->push_result(data);
+    }
+};
+
+struct NumaPinPipeline {
+    int numa_id;
+    std::atomic<bool> *pinning_correct;
+
+    auto make_graph(size_t) {
+        auto t = std::make_shared<NumaPinTask>();
+        t->expected_numa_id = numa_id;
+        t->expected_cpus = get_numa_cpus(numa_id);
+        t->pinning_correct = pinning_correct;
+        auto task = hh::make_task(t, 1, "pin_task");
+        auto graph = hh::make_graph<1, int, int>();
+        graph->connect_inputs(task);
+        graph->connect_outputs(task);
+        return graph;
+    }
+
+    size_t send_to(hh::data_t<int>) { return 0; }
+};
+
+TEST(numa, pinning) {
+    if (!numa_node_exists(0)) GTEST_SKIP() << "No NUMA node 0";
+
+    std::atomic<bool> pinning_correct{false};
+    auto p = std::make_shared<NumaPinPipeline>();
+    p->numa_id = 0;
+    p->pinning_correct = &pinning_correct;
+    auto pipeline = hh::make_pipeline(p, {{0, 0}});
+
+    auto graph = hh::make_graph<1, int, int>("NumaPinGraph");
+    graph->connect_inputs(pipeline);
+    graph->connect_outputs(pipeline);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(42));
+    graph->get_result();
+    graph->stop();
+
+    ASSERT_TRUE(pinning_correct.load()) << "Thread not pinned to NUMA node 0 CPUs";
+}
+
+struct NoPinTask {
+    using inputs = hh::type_list<int>;
+    using outputs = hh::type_list<int>;
+
+    std::atomic<size_t> *cpu_count;
+
+    void execute(auto ctx, hh::data_t<int> data) {
+        ASSERT_EQ(ctx->numa_id(), -1);
+        auto cpus = get_thread_affinity();
+        cpu_count->store(cpus.size());
+        ctx->push_result(data);
+    }
+};
+
+TEST(numa, no_pinning_outside_pipeline) {
+    if (!numa_node_exists(0)) GTEST_SKIP() << "No NUMA nodes";
+
+    size_t total_cpus = get_thread_affinity().size();
+    std::atomic<size_t> cpu_count{0};
+
+    auto t = std::make_shared<NoPinTask>();
+    t->cpu_count = &cpu_count;
+    auto task = hh::make_task(t, 1, "nopin_task");
+
+    auto graph = hh::make_graph<1, int, int>("NoPinGraph");
+    graph->connect_inputs(task);
+    graph->connect_outputs(task);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(1));
+    graph->get_result();
+    graph->stop();
+
+    ASSERT_EQ(cpu_count.load(), total_cpus) << "Thread should not be pinned outside pipeline";
+}
+
+struct NestedNumaTask {
+    using inputs = hh::type_list<int>;
+    using outputs = hh::type_list<int>;
+
+    int expected_numa_id;
+    std::atomic<bool> *correct;
+
+    void execute(auto ctx, hh::data_t<int> data) {
+        correct->store(ctx->numa_id() == expected_numa_id);
+        ctx->push_result(data);
+    }
+};
+
+struct NestedNumaPipeline {
+    int numa_id;
+    std::atomic<bool> *correct;
+
+    auto make_graph(size_t) {
+        auto t = std::make_shared<NestedNumaTask>();
+        t->expected_numa_id = numa_id;
+        t->correct = correct;
+        auto task = hh::make_task(t, 1, "nested_task");
+
+        auto inner = hh::make_graph<1, int, int>("inner");
+        inner->connect_inputs(task);
+        inner->connect_outputs(task);
+
+        auto outer = hh::make_graph<1, int, int>("outer");
+        outer->connect_inputs(inner);
+        outer->connect_outputs(inner);
+        return outer;
+    }
+
+    size_t send_to(hh::data_t<int>) { return 0; }
+};
+
+TEST(numa, propagation_to_nested_subgraphs) {
+    if (!numa_node_exists(1)) GTEST_SKIP() << "No NUMA node 1";
+
+    std::atomic<bool> correct{false};
+    auto p = std::make_shared<NestedNumaPipeline>();
+    p->numa_id = 1;
+    p->correct = &correct;
+    auto pipeline = hh::make_pipeline(p, {{1, 0}});
+
+    auto graph = hh::make_graph<1, int, int>("NestedGraph");
+    graph->connect_inputs(pipeline);
+    graph->connect_outputs(pipeline);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(7));
+    graph->get_result();
+    graph->stop();
+
+    ASSERT_TRUE(correct.load()) << "numa_id not propagated to nested sub-graph";
+}
+
+#endif // __linux__
 

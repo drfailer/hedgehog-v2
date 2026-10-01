@@ -31,15 +31,17 @@ struct SerialExecutor {
     std::set<std::shared_ptr<Node>> const *nodes_ = nullptr;
     std::queue<Node *> ready_nodes_;
     bool executing_;
+    PipelineInfo pipeline_info_;
 
     ExecutionInfo make_execution_info(auto phase) {
-        return ExecutionInfo{0, 0, PipelineInfo{}, true, phase};
+        return ExecutionInfo{0, 0, pipeline_info_, true, phase};
     }
 
-    void execute(std::set<std::shared_ptr<Node>> const &nodes, ExecutionInfo const &) {
+    void execute(std::set<std::shared_ptr<Node>> const &nodes, ExecutionInfo const &info) {
         // graphs are executed only once (a graph node never ends up in the
         // ready list) so here we simply initialize the tasks and sub-graphs
         nodes_ = &nodes;
+        pipeline_info_ = info.pipeline;
         for (auto &node : nodes) {
             node->execute(make_execution_info(ExecutionInfo::Initialize));
         }
