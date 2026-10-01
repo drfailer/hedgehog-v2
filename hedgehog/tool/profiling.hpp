@@ -230,7 +230,7 @@ struct Profiler {
         #ifdef HH_ENABLE_PROFILING
         std::lock_guard<std::mutex> lock(mutex);
         #ifdef HH_USE_NVTX
-        profiles.push_back(std::make_unique<Profile>(std::make_unique<Profile>(std::move(label), &nvtx_domain)));
+        profiles.push_back(std::make_unique<Profile>(std::move(label), &nvtx_domain));
         #else
         profiles.push_back(std::make_unique<Profile>(std::move(label), ProfileKind::Region));
         #endif
