@@ -79,6 +79,7 @@ struct Graph : Node {
     std::set<std::shared_ptr<Node>> input_nodes_ = {};
     std::set<std::shared_ptr<Node>> output_nodes_ = {};
     std::vector<Connection> connections_ = {};
+    bool built_ = false;
 
     #ifdef HH_ENABLE_PROFILING
     Profile *exec_profile_ = nullptr;
@@ -103,15 +104,17 @@ struct Graph : Node {
 
     // user functions //////////////////////////////////////////////////////////
 
-    void connect_sink() {
+    void build() {
+        if (built_) return;
+
+        // connect the sink
         type_list_map<OutputTypes>([this]<typename T>() {
             output_.connect(Edge<T>(&sink_, this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
                 static_cast<Sink *>(e->receiver)->push_data(std::move(data), info);
             }));
         });
-    }
 
-    void create_input_connections() {
+        // create input connections
         type_list_map<InputTypes>([&]<typename T>() {
             auto edges = input_.template edges<T>();
             for (auto &edge : edges) {
@@ -122,6 +125,8 @@ struct Graph : Node {
                 });
             }
         });
+
+        built_ = true;
     }
 
     void start(int rank = 0, HH_LOC) {
@@ -133,12 +138,13 @@ struct Graph : Node {
             log::fatal(loc, "graph start aborted due to errors.");
         }
 
-        create_input_connections();
+        build();
 
-        // intialize the sink
+        if (input_.edge_count() == 0) {
+            log::fatal(loc, "graph has no input connections");
+        }
+
         sink_.initialize(InitializationInfo{&Node::info(), &graph_info_, nullptr});
-        connect_sink();
-
 
         Node::profiler().initialize(Node::info().name);
 
