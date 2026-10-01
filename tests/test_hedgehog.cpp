@@ -774,5 +774,130 @@ TEST(numa, propagation_to_nested_subgraphs) {
     ASSERT_TRUE(correct.load()) << "numa_id not propagated to nested sub-graph";
 }
 
+//
+// Test NUMA-aware memory pool allocation.
+//
+TEST(memory, numa_pool) {
+    if (!numa_node_exists(0)) GTEST_SKIP() << "No NUMA node 0";
+
+    {
+        hh::Pool<int> pool(0);
+        pool.fill(16);
+        auto ptr = pool.allocate(false);
+        ASSERT_NE(ptr, nullptr);
+        int node = hh::numa::query_node(ptr);
+        EXPECT_EQ(node, 0) << "Memory not on NUMA node 0 (got node " << node << ")";
+        pool.release(ptr);
+    }
+
+    if (numa_node_exists(1)) {
+        hh::Pool<int> pool(1);
+        pool.fill(16);
+        auto ptr = pool.allocate(false);
+        ASSERT_NE(ptr, nullptr);
+        int node = hh::numa::query_node(ptr);
+        EXPECT_EQ(node, 1) << "Memory not on NUMA node 1 (got node " << node << ")";
+        pool.release(ptr);
+    }
+}
+
+//
+// Test NUMA pool inside a pipeline — verify pool placement matches ctx->numa_id().
+//
+
+struct NumaPoolTask {
+    using inputs = hh::type_list<int>;
+    using outputs = hh::type_list<int>;
+
+    std::atomic<bool> *correct;
+
+    void execute(auto ctx, hh::data_t<int> data) {
+        int nid = ctx->numa_id();
+        hh::Pool<int> pool(nid);
+        pool.fill(16);
+        auto ptr = pool.allocate(false);
+        bool ok = (ptr != nullptr) && (hh::numa::query_node(ptr) == nid);
+        correct->store(ok);
+        pool.release(ptr);
+        ctx->push_result(data);
+    }
+};
+
+struct NumaPoolPipeline {
+    int numa_id;
+    std::atomic<bool> *correct;
+
+    auto make_graph(size_t) {
+        auto t = std::make_shared<NumaPoolTask>();
+        t->correct = correct;
+        auto task = hh::make_task(t, 1, "numa_pool_task");
+        auto graph = hh::make_graph<1, int, int>();
+        graph->connect_inputs(task);
+        graph->connect_outputs(task);
+        return graph;
+    }
+
+    size_t send_to(hh::data_t<int>) { return 0; }
+};
+
+TEST(memory, numa_pool_pipeline) {
+    if (!numa_node_exists(0)) GTEST_SKIP() << "No NUMA node 0";
+
+    std::atomic<bool> correct{false};
+    auto p = std::make_shared<NumaPoolPipeline>();
+    p->numa_id = 0;
+    p->correct = &correct;
+    auto pipeline = hh::make_pipeline(p, {{0, 0}});
+
+    auto graph = hh::make_graph<1, int, int>("NumaPoolGraph");
+    graph->connect_inputs(pipeline);
+    graph->connect_outputs(pipeline);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(1));
+    graph->get_result();
+    graph->stop();
+
+    ASSERT_TRUE(correct.load()) << "NUMA pool allocation failed inside pipeline";
+}
+
 #endif // __linux__
+
+#ifdef HH_USE_CUDA
+
+struct CudaPoolElement {
+    double *device_ptr = nullptr;
+
+    CudaPoolElement() {
+        cudaMalloc(&device_ptr, 64 * sizeof(double));
+    }
+    ~CudaPoolElement() {
+        if (device_ptr) cudaFree(device_ptr);
+    }
+
+    void clean_memory() {}
+};
+
+//
+// Test that pool sets the CUDA device before constructing elements.
+//
+TEST(memory, cuda_pool) {
+    int device_count = 0;
+    cudaGetDeviceCount(&device_count);
+    if (device_count == 0) GTEST_SKIP() << "No CUDA devices";
+
+    hh::Pool<CudaPoolElement> pool(-1, 0);
+    pool.fill(4);
+    auto ptr = pool.allocate(false);
+    ASSERT_NE(ptr, nullptr);
+    ASSERT_NE(ptr->device_ptr, nullptr);
+
+    cudaPointerAttributes attrs;
+    auto err = cudaPointerGetAttributes(&attrs, ptr->device_ptr);
+    ASSERT_EQ(err, cudaSuccess);
+    ASSERT_EQ(attrs.device, 0);
+
+    pool.release(ptr);
+}
+#endif // HH_USE_CUDA
 

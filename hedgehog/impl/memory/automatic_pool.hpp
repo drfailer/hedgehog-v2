@@ -37,6 +37,10 @@ template <typename T>
 struct AutomaticPool {
     Pool<T> pool_;
 
+    AutomaticPool() = default;
+    explicit AutomaticPool(int numa_id, int device_id = -1)
+        : pool_(numa_id, device_id) {}
+
     void fill(auto &&...args) {
         pool_.fill(std::forward<decltype(args)>(args)...);
     }
@@ -59,6 +63,10 @@ struct AutomaticPool {
 
 template <typename ...Types>
 struct MultiAutomaticPool : AutomaticPool<Types>... {
+    MultiAutomaticPool() = default;
+    explicit MultiAutomaticPool(int numa_id, int device_id = -1)
+        : AutomaticPool<Types>(numa_id, device_id)... {}
+
     template <typename T>
     Pool<T> *pool() { return static_cast<AutomaticPool<T> *>(this); }
 
@@ -66,7 +74,7 @@ struct MultiAutomaticPool : AutomaticPool<Types>... {
     void fill(auto &&...args) { AutomaticPool<T>::fill(std::forward<decltype(args)>(args)...); }
 
     template <typename T>
-    std::shared_ptr<T> allocate(bool wait = false) { AutomaticPool<T>::allocate(wait); }
+    std::shared_ptr<T> allocate(bool wait = false) { return AutomaticPool<T>::allocate(wait); }
 
     template <typename T>
     void release(std::shared_ptr<T>) { /* do nothing */ }

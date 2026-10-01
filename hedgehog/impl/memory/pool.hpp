@@ -27,6 +27,11 @@
 
 #include "index_allocator.hpp"
 #include "../../tool/concepts.hpp"
+#include "../../tool/numa_alloc.hpp"
+
+#ifdef HH_USE_CUDA
+#include <cuda_runtime.h>
+#endif
 
 namespace hh {
 
@@ -34,8 +39,15 @@ template <typename T>
 struct Pool {
     std::counting_semaphore<> sem_{0};
     IndexAllocator index_allocator_;
-    std::byte *mem_;
-    size_t capacity_;
+    std::byte *mem_ = nullptr;
+    size_t capacity_ = 0;
+    int numa_id_ = -1;
+    int device_id_ = -1;
+    size_t alloc_size_ = 0;
+
+    Pool() = default;
+    explicit Pool(int numa_id, int device_id = -1)
+        : numa_id_(numa_id), device_id_(device_id) {}
 
     virtual ~Pool() {
         if (!mem_) return;
@@ -43,15 +55,33 @@ struct Pool {
         for (size_t i = 0; i < capacity_; ++i) {
             elements[i].~T();
         }
-        std::free(mem_);
+        if (numa_id_ >= 0) {
+            numa::free_on_node(mem_, alloc_size_);
+        } else {
+            std::free(mem_);
+        }
     }
 
     void fill(size_t count, auto &&...args) {
         capacity_ = count;
         index_allocator_.init(count);
         size_t len_bytes = capacity_ * sizeof(T);
-        mem_ = static_cast<std::byte*>(std::aligned_alloc(alignof(T), len_bytes));
+
+        if (numa_id_ >= 0) {
+            mem_ = static_cast<std::byte *>(
+                numa::alloc_on_node(len_bytes, numa_id_, alloc_size_));
+            if (!mem_) {
+                numa_id_ = -1;
+                mem_ = static_cast<std::byte*>(std::aligned_alloc(alignof(T), len_bytes));
+            }
+        } else {
+            mem_ = static_cast<std::byte*>(std::aligned_alloc(alignof(T), len_bytes));
+        }
         assert(mem_ && "failed to fill pool");
+
+#ifdef HH_USE_CUDA
+        if (device_id_ >= 0) { cudaSetDevice(device_id_); }
+#endif
         for (size_t i = 0; i < count; ++i) {
             new (&mem_[i * sizeof(T)]) T(std::forward<decltype(args)>(args)...);
         }
@@ -92,6 +122,10 @@ struct Pool {
 
 template <typename ...Types>
 struct MultiPool : Pool<Types>... {
+    MultiPool() = default;
+    explicit MultiPool(int numa_id, int device_id = -1)
+        : Pool<Types>(numa_id, device_id)... {}
+
     template <typename T>
     Pool<T> *pool() { return static_cast<Pool<T> *>(this); }
 
@@ -99,7 +133,7 @@ struct MultiPool : Pool<Types>... {
     void fill(auto &&...args) { Pool<T>::fill(std::forward<decltype(args)>(args)...); }
 
     template <typename T>
-    T *allocate(bool wait = false) { Pool<T>::allocate(wait); }
+    T *allocate(bool wait = false) { return Pool<T>::allocate(wait); }
 
     template <typename T>
     void release(T *data) { Pool<T>::release(data); }

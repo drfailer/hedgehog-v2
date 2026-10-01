@@ -46,5 +46,6 @@
 #include "tool/type_list.hpp"
 #include "tool/helpers.hpp"
 #include "tool/numa.hpp"
+#include "tool/numa_alloc.hpp"
 
 #endif
