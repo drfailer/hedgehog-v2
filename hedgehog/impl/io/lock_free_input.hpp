@@ -31,11 +31,14 @@ namespace hh {
 
 template <typename T>
 struct MoodycamelMPMCInputPort {
+    std::vector<moodycamel::ConsumerToken> tokens;
     moodycamel::ConcurrentQueue<data_t<T>> queue{};
     size_t max_queue_size = 0;
 
-    void initialize(InitializationInfo const &) {
-        // TODO: with info, we can get the number of threads on the task which we can use to create consumer tokens
+    void initialize(InitializationInfo const &info) {
+        for (size_t i = 0; i < info.node->number_threads; ++i) {
+            tokens.emplace_back(queue);
+        }
         max_queue_size = 0;
     }
 
@@ -50,7 +53,6 @@ struct MoodycamelMPMCInputPort {
     }
 
     void push_data(data_t<T> data, RuntimeInfo const &) {
-        // TODO: get consumer token with the thread index
         queue.enqueue(std::move(data));
         #ifdef HH_ENABLE_PROFILING
         size_t size = queue.size_approx();
@@ -58,8 +60,8 @@ struct MoodycamelMPMCInputPort {
         #endif
     }
 
-    bool pop(data_t<T> &data) {
-        return queue.try_dequeue(data);
+    bool pop(data_t<T> &data, size_t thread_index) {
+        return queue.try_dequeue(tokens[thread_index], data);
     }
 
     size_t size() {
@@ -95,7 +97,7 @@ struct MoodycamelMPMCInput : CondTrigger, MoodycamelMPMCInputPort<Inputs>... {
     void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
         ([&] {
             data_t<Inputs> data;
-            while (MoodycamelMPMCInputPort<Inputs>::pop(data)) [[likely]] {
+            while (MoodycamelMPMCInputPort<Inputs>::pop(data, info.exec.thread_index)) [[likely]] {
                 exec->execute(std::move(data));
             }
         }(), ...);
