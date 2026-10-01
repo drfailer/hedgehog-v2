@@ -219,6 +219,60 @@ template <int = 0>
 using FutexTrigger = SemaTrigger;
 #endif
 
+// atomic trigger //////////////////////////////////////////////////////////////
+
+//
+// Trigger using C++20 std::atomic::wait/notify. Unlike counting triggers
+// (SemaTrigger, FutexTrigger), this uses non-accumulating signaling: the common
+// single-push path does CAS 0→1 (idempotent), so rapid pushes don't inflate a
+// counter and cause spurious wakeups when inputs drain in a while loop.
+// Multi-signal (count>1) uses fetch_add for explicit multi-thread wake.
+//
+
+struct alignas(64) AtomicTrigger {
+    size_t number_threads_{0};
+    alignas(64) std::atomic<int32_t> flag_{0};
+    std::atomic<bool> terminated_{false};
+
+    void initialize(size_t number_threads) {
+        number_threads_ = number_threads;
+        terminated_.store(false);
+        flag_.store(0, std::memory_order_relaxed);
+    }
+
+    void finalize() {
+        terminated_.store(true, std::memory_order_release);
+        flag_.fetch_add(static_cast<int32_t>(number_threads_), std::memory_order_release);
+        flag_.notify_all();
+    }
+
+    void signal(SignalOpts const &opts) {
+        if (opts.count == 1) [[likely]] {
+            int32_t expected = 0;
+            if (flag_.compare_exchange_strong(expected, 1,
+                    std::memory_order_release, std::memory_order_relaxed)) {
+                flag_.notify_one();
+            }
+        } else {
+            flag_.fetch_add(static_cast<int32_t>(opts.count), std::memory_order_release);
+            flag_.notify_all();
+        }
+    }
+
+    WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
+        for (;;) {
+            auto val = flag_.load(std::memory_order_acquire);
+            if (val > 0) {
+                if (flag_.compare_exchange_weak(val, val - 1,
+                        std::memory_order_acquire, std::memory_order_relaxed))
+                    return WaitResult{terminated_.load(std::memory_order_acquire), false};
+                continue;
+            }
+            flag_.wait(0, std::memory_order_acquire);
+        }
+    }
+};
+
 // spin trigger ////////////////////////////////////////////////////////////////
 
 //

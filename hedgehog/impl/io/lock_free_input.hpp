@@ -104,6 +104,41 @@ struct MoodycamelMPMCInput : CondTrigger, MoodycamelMPMCInputPort<Inputs>... {
     }
 };
 
+// moodycamel mpmc input (atomic trigger) //////////////////////////////////////
+
+template <typename ...Inputs>
+struct MoodycamelAtomicInput : AtomicTrigger, MoodycamelMPMCInputPort<Inputs>... {
+    void initialize(InitializationInfo const &info) {
+        (MoodycamelMPMCInputPort<Inputs>::initialize(info), ...);
+        AtomicTrigger::initialize(info.node->number_threads);
+    }
+
+    void finalize([[maybe_unused]] InitializationInfo const &info) {
+        AtomicTrigger::finalize();
+        (MoodycamelMPMCInputPort<Inputs>::finalize(info), ...);
+    }
+
+    WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
+        return AtomicTrigger::wait(info);
+    }
+
+    template <typename T>
+    void push_data(data_t<T> data, RuntimeInfo const &info) {
+        MoodycamelMPMCInputPort<T>::push_data(std::move(data), info);
+        AtomicTrigger::signal(SignalOpts{1, 0});
+    }
+
+    template <typename Executable>
+    void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        ([&] {
+            data_t<Inputs> data;
+            while (MoodycamelMPMCInputPort<Inputs>::pop(data, info.exec.thread_index)) [[likely]] {
+                exec->execute(std::move(data));
+            }
+        }(), ...);
+    }
+};
+
 // daking mpsc input ///////////////////////////////////////////////////////////
 
 template <typename T>
