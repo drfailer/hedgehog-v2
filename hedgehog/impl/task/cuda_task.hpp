@@ -22,20 +22,21 @@
 
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
+#include <unordered_set>
 
 #include "../../tool/log.hpp"
 
 #ifndef hh_check_cuda_error
 inline void __check_cuda_error(cudaError_t err) {
     if (cudaSuccess != err) {
-        log::error("Cuda error = ", err, " \"", cudaGetErrorString(err), "\".");
+        hh::log::error("Cuda error = ", err, " \"", cudaGetErrorString(err), "\".");
         exit(43);
     }
 }
 
 inline void __check_cuda_error(cublasStatus_t status) {
     if (CUBLAS_STATUS_SUCCESS != status) {
-        log::error("Cublas error = ", err, ".");
+        hh::log::error("Cublas error = ", status, ".");
         exit(44);
     }
 }

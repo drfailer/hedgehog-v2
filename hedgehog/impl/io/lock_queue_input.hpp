@@ -21,6 +21,7 @@
 
 #include <vector>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <condition_variable>
 #include <semaphore>
