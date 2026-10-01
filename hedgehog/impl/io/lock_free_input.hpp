@@ -20,128 +20,12 @@
 #define HEDGEHOG_IMPL_TASK_LOCK_FREE_INPUT_H
 
 #include "trigger.hpp"
-#include "queue.hpp"
-#include "lock_queue_input.hpp"
 #include "../../tool/macros.hpp"
 
 #include "../../../3rdparty/daking_mpsc_queue/MPSC_queue.hpp"
 #include "../../../3rdparty/moodycamel_concurrent_queue/concurrentqueue.h"
 
 namespace hh {
-
-// bounded lock free queue port ////////////////////////////////////////////////
-
-template <size_t Size, typename T>
-struct BoundedLockFreeQueueInputPort {
-    BoundedLockFreeQueue<data_t<T>, Size> queue;
-    size_t max_queue_size = 0;
-
-    void push_data(data_t<T> data, RuntimeInfo const &) {
-        queue.push(std::move(data));
-        #ifdef HH_ENABLE_PROFILING
-        size_t size = queue.size();
-        if (size > max_queue_size) max_queue_size = size;
-        #endif
-    }
-
-    // TODO: change the pop signature
-    std::optional<data_t<T>> pop() {
-        return queue.pop();
-    }
-
-    size_t size() {
-        return queue.size();
-    }
-};
-
-template <size_t Size, typename ...Inputs>
-struct BoundedLockFreeQueueInputPorts {
-    template <typename T> using Queue = BoundedLockFreeQueueInputPort<Size, T>;
-    std::tuple<std::unique_ptr<Queue<Inputs>>...> ports_;
-
-    BoundedLockFreeQueueInputPorts()
-        : ports_(std::make_unique<Queue<Inputs>>()...) {}
-
-    template <typename T>
-    Queue<T> *port() {
-        return std::get<std::unique_ptr<Queue<T>>>(ports_).get();
-    }
-
-    void initialize(InitializationInfo const &) {
-        ([] (auto p) { p->max_queue_size = 0; }(port<Inputs>()), ...);
-    }
-
-    void finalize([[maybe_unused]] InitializationInfo const &info) {
-        #ifdef HH_ENABLE_PROFILING
-        ([&] {
-            using namespace std::string_literals;
-            auto *p = port<Inputs>();
-            info.profiler->add_string(
-                "BoundedLockFreeQueueInputPort<"s + type_to_string<Inputs>() + ">",
-                "MQS = ", p->max_queue_size, " | ", "QS = ", p->size()
-            );
-        }(), ...);
-        #endif
-    }
-
-    template <typename Executable>
-    void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
-        ([&] {
-            if (auto data = port<Inputs>()->pop()) [[likely]] {
-                exec->execute(std::move(*data));
-            }
-        }(), ...);
-    }
-
-    template <typename T>
-    void push_data(data_t<T> data, RuntimeInfo const &info) {
-        port<T>()->push_data(std::move(data), info);
-    }
-};
-
-// bounded lock free queue input (sema) ////////////////////////////////////////
-
-template <size_t Size, typename ...Inputs>
-struct BoundedLockFreeQueueInput : SemaTrigger, BoundedLockFreeQueueInputPorts<Size, Inputs...> {
-    void initialize(InitializationInfo const &info) {
-        BoundedLockFreeQueueInputPorts<Size, Inputs...>::initialize(info);
-        SemaTrigger::initialize(info.node->number_threads);
-    }
-
-    void finalize([[maybe_unused]] InitializationInfo const &info) {
-        SemaTrigger::finalize();
-        BoundedLockFreeQueueInputPorts<Size, Inputs...>::finalize(info);
-    }
-
-    template <typename T>
-    void push_data(data_t<T> data, RuntimeInfo const &info) {
-        this->template port<T>()->push_data(std::move(data), info);
-        SemaTrigger::signal(SignalOpts{1, 0});
-    }
-};
-
-// bounded lock free queue input (futex) ///////////////////////////////////////
-
-template <size_t Size, size_t SpinCount, typename ...Inputs>
-struct BoundedLockFreeFutexInput : FutexTrigger<SpinCount>, BoundedLockFreeQueueInputPorts<Size, Inputs...> {
-    using Trigger = FutexTrigger<SpinCount>;
-
-    void initialize(InitializationInfo const &info) {
-        BoundedLockFreeQueueInputPorts<Size, Inputs...>::initialize(info);
-        Trigger::initialize(info.node->number_threads);
-    }
-
-    void finalize([[maybe_unused]] InitializationInfo const &info) {
-        Trigger::finalize();
-        BoundedLockFreeQueueInputPorts<Size, Inputs...>::finalize(info);
-    }
-
-    template <typename T>
-    void push_data(data_t<T> data, RuntimeInfo const &info) {
-        this->template port<T>()->push_data(std::move(data), info);
-        Trigger::signal(SignalOpts{1, 0});
-    }
-};
 
 // moodycamel mpmc input ///////////////////////////////////////////////////////
 
@@ -173,8 +57,6 @@ struct MoodycamelMPMCInputPort {
         if (size > max_queue_size) max_queue_size = size;
         #endif
     }
-
-    // TODO: bulk push
 
     bool pop(data_t<T> &data) {
         return queue.try_dequeue(data);
@@ -229,8 +111,6 @@ struct DakingMPSCInputPort {
     void push_data(data_t<T> data, RuntimeInfo const &) {
         queue.enqueue(std::move(data));
     }
-
-    // TODO: bulk push
 
     bool pop(data_t<T> &data) {
         return queue.try_dequeue(data);
