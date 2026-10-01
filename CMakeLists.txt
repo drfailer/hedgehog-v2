@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(hedgehog_v2 VERSION 1 LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 20)
+if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(CMAKE_CXX_STANDARD 20)
+endif ()
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -9,7 +11,7 @@ if (MSVC)
     add_definitions(-DNOMINMAX)
 endif (MSVC)
 
-include(FetchContent) # Used to download GTEST
+include(FetchContent)
 
 option(HH_TEST "Downloads google unit test API and runs google test scripts to test Hedgehog core and api" OFF)
 option(HH_TEST_META "Test meta-functions" OFF)
@@ -17,50 +19,60 @@ option(HH_ENABLE_PROFILING "Enable profiling." OFF)
 option(HH_ENABLE_CONCEPTS "Enable concept constraints on template parameters (slower compile)" OFF)
 option(ENABLE_NVTX "Enable NVTX if CUDA is found" OFF)
 
-if (HH_ENABLE_PROFILING)
-    add_definitions(-DHH_ENABLE_PROFILING)
-endif()
-
-if (HH_ENABLE_CONCEPTS)
-    add_definitions(-DHH_ENABLE_CONCEPTS)
-endif()
-
 set(CACHE_LINE_SIZE 64)
 
 find_package(Threads REQUIRED)
 find_package(CUDAToolkit QUIET)
 
-add_compile_options(-Wall -Wextra -Wno-unused-local-typedefs)
+# Header-only INTERFACE library target
+add_library(hedgehog INTERFACE)
+add_library(hedgehog::hedgehog ALIAS hedgehog)
 
-link_libraries(Threads::Threads)
+target_include_directories(
+    hedgehog
+    INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
 
-# TODO: don't need this right now
-# configure_file(inputs_cmake/version.h.in "${PROJECT_SOURCE_DIR}/hedgehog/version.h")
-# configure_file(inputs_cmake/constants.h.in "${PROJECT_SOURCE_DIR}/hedgehog/constants.h")
+target_compile_features(hedgehog INTERFACE cxx_std_20)
+target_link_libraries(hedgehog INTERFACE Threads::Threads)
+
+if (HH_ENABLE_PROFILING)
+    target_compile_definitions(hedgehog INTERFACE HH_ENABLE_PROFILING)
+endif()
+
+if (HH_ENABLE_CONCEPTS)
+    target_compile_definitions(hedgehog INTERFACE HH_ENABLE_CONCEPTS)
+endif()
 
 if (CUDAToolkit_FOUND)
     message("CUDA found: ${CUDAToolkit_INCLUDE_DIRS}")
-    include_directories(CUDAToolkit_INCLUDE_DIRS)
-    link_libraries(CUDA::cudart CUDA::cuda_driver CUDA::cupti)
-    add_definitions(-DHH_USE_CUDA)
+    target_link_libraries(hedgehog INTERFACE CUDA::cudart CUDA::cuda_driver CUDA::cupti)
+    target_compile_definitions(hedgehog INTERFACE HH_USE_CUDA)
     if (ENABLE_NVTX)
         if (TARGET CUDA::nvtx3)
-            link_libraries(CUDA::nvtx3)
+            target_link_libraries(hedgehog INTERFACE CUDA::nvtx3)
         elseif (TARGET CUDA::nvToolsExt)
-            link_libraries(CUDA::nvToolsExt)
+            target_link_libraries(hedgehog INTERFACE CUDA::nvToolsExt)
         endif ()
         if (NOT WIN32)
-            link_libraries(dl)
+            target_link_libraries(hedgehog INTERFACE dl)
         endif ()
-        add_definitions(-DHH_USE_NVTX)
+        target_compile_definitions(hedgehog INTERFACE HH_USE_NVTX)
     endif (ENABLE_NVTX)
 else (CUDAToolkit_FOUND)
     message("CUDA not found, all features will not be available.")
 endif (CUDAToolkit_FOUND)
 
+# Compiler warnings only when building standalone (not via FetchContent)
+if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    add_compile_options(-Wall -Wextra -Wno-unused-local-typedefs)
+endif ()
+
 if (HH_TEST)
     if (HH_TEST_META)
-        add_definitions(-DHH_TEST_META)
+        target_compile_definitions(hedgehog INTERFACE HH_TEST_META)
     endif(HH_TEST_META)
     message("Fetch Gtest")
     if (POLICY CMP0135)
@@ -89,42 +101,38 @@ if (HH_TEST)
         target_compile_options(gtest_hedgehog PRIVATE /bigobj)
     endif (MSVC)
 
-    target_link_libraries(gtest_hedgehog gtest_main)
+    target_link_libraries(gtest_hedgehog gtest_main hedgehog)
 
     include(GoogleTest)
     gtest_discover_tests(gtest_hedgehog)
 endif (HH_TEST)
 
+# Install
+install(TARGETS hedgehog EXPORT hedgehogTargets)
 
-# Install the target
-# install(TARGETS hedgehog EXPORT hedgehogTargets)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/hedgehogConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/hedgehogConfig.cmake"
+    @ONLY
+)
 
-# TODO: figure out the install later (not sure it is really needed except for cmake stuff
+install(
+    FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/hedgehogConfig.cmake"
+    DESTINATION
+    "${CMAKE_INSTALL_PREFIX}/share/hedgehog"
+)
 
-# configure_file(
-#         "${CMAKE_CURRENT_SOURCE_DIR}/hedgehogConfig.cmake.in"
-#         "${CMAKE_CURRENT_BINARY_DIR}/hedgehogConfig.cmake"
-#         @ONLY
-# )
+install(
+    EXPORT
+    hedgehogTargets
+    NAMESPACE
+    hedgehog::
+    DESTINATION
+    "${CMAKE_INSTALL_PREFIX}/share/hedgehog"
+    FILE hedgehogTargets.cmake
+)
 
-# install(
-#         FILES
-#         "${CMAKE_CURRENT_BINARY_DIR}/hedgehogConfig.cmake"
-#         DESTINATION
-#         "${CMAKE_INSTALL_PREFIX}/share/hedgehog"
-# )
-
-# install(
-#         EXPORT
-#         hedgehogTargets
-#         NAMESPACE
-#         hedgehog::
-#         DESTINATION
-#         "${CMAKE_INSTALL_PREFIX}/share/hedgehog"
-#         FILE hedgehogTargets.cmake
-# )
-
-
-# install(DIRECTORY hedgehog
-#         DESTINATION include
-#         COMPONENT headers)
+install(DIRECTORY hedgehog
+    DESTINATION include
+    COMPONENT headers)
