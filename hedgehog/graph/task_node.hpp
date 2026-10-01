@@ -175,7 +175,7 @@ struct TaskNode : Node {
     }
 
     ProfileReport profile() override {
-        auto report = ProfileReport::node(this, Node::info().name);
+        auto report = ProfileReport::node(this, Node::info().name + " x" + std::to_string(Node::info().number_threads));
         #ifdef HH_ENABLE_PROFILING
         report.add_profiles(Node::profiler());
         report.add_entries(merge_profiles(states_));
