@@ -33,7 +33,7 @@ struct SerialExecutor {
     bool executing_;
 
     ExecutionInfo make_execution_info(auto phase) {
-        return ExecutionInfo{0, 0, {0, 0}, true, phase};
+        return ExecutionInfo{0, 0, PipelineInfo{}, true, phase};
     }
 
     void execute(std::set<std::shared_ptr<Node>> const &nodes, ExecutionInfo const &) {

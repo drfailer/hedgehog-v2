@@ -150,7 +150,7 @@ struct Graph : Node {
         exec_profile_ = Node::profiler().profile_region("execution");
         exec_profile_->begin_region();
         #endif
-        ExecutionInfo exec_info = {0, rank, {0, 0}, false, ExecutionInfo::Execute};
+        ExecutionInfo exec_info = {0, rank, PipelineInfo{}, false, ExecutionInfo::Execute};
         execute(exec_info);
     }
 

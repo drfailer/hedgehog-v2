@@ -42,8 +42,8 @@ namespace hh {
 //
 
 struct PipelineInfo {
-    int numa_id;
-    int device_id;
+    int numa_id = -1;
+    int device_id = 0;
 };
 
 //
