@@ -237,7 +237,7 @@ struct Graph : Node {
         }
     }
 
-    ProfileMap collect_profiles() {
+    ProfileMap profile() {
         ProfileMap map;
         profile(map);
         return map;
@@ -513,7 +513,7 @@ struct Graph : Node {
         auto view = this->graph_view();
         std::ofstream ofs(filename);
         #ifdef HH_ENABLE_PROFILING
-        auto profiles = this->collect_profiles();
+        auto profiles = this->profile();
         graph_view_to_dot(view, profiles, ofs);
         #else
         graph_view_to_dot(view, ofs);
