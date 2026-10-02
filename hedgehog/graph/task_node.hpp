@@ -108,6 +108,11 @@ struct TaskNode : Node {
     std::vector<ThreadState> const &states() const { return states_; } // may be usefull for some executors
     std::shared_ptr<Task> task() { return states_[0].task; } // should not be used after execute
 
+    void resize_threads(size_t n) {
+        states_.resize(n);
+        Node::set_number_threads(n);
+    }
+
     // node api ////////////////////////////////////////////////////////////////
 
     void initialize(GraphInfo const &info) override {
@@ -156,6 +161,11 @@ struct TaskNode : Node {
                 auto *self = static_cast<Self *>(node);
                 auto &state = self->states_[info.thread_index];
                 return self->input_.execute(&state, state.context.info());
+            },
+            .execute_one = +[](Node *node, RuntimeInfo const &info) -> bool {
+                auto *self = static_cast<Self *>(node);
+                auto &state = self->states_[info.thread_index];
+                return self->input_.execute_one(&state, state.context.info());
             },
         };
     }

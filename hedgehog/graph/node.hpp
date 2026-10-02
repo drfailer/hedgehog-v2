@@ -52,6 +52,8 @@ class Node {
     int executor_index() const { return executor_index_; }
     void executor_index(int idx) { executor_index_ = idx; }
 
+    void set_number_threads(size_t n) { info_.number_threads = n; }
+
     virtual void initialize(GraphInfo const &info) = 0;
     virtual void execute(ExecutionInfo const &info) = 0;
     virtual void finalize(GraphInfo const &info) = 0;
@@ -87,6 +89,7 @@ struct TaskHandle {
     void (*finalize)(Node *, RuntimeInfo const &);
     WaitResult (*wait)(Node *, RuntimeInfo const &);
     size_t (*execute)(Node *, RuntimeInfo const &);
+    bool (*execute_one)(Node *, RuntimeInfo const &);
 };
 
 //

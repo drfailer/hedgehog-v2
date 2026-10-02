@@ -264,6 +264,17 @@ struct Profiler {
     NvtxProfiler nvtx_;
     #endif
 
+    Profiler() = default;
+    Profiler(Profiler const &) = delete;
+    Profiler(Profiler &&other) {
+        #ifdef HH_ENABLE_PROFILING
+        std::swap(profiles, other.profiles);
+        #endif
+        #ifdef HH_USE_NVTX
+        std::swap(nvtx_.domain, other.nvtx_.domain);
+        #endif
+    }
+
     void initialize([[maybe_unused]] std::string const &name) {
         #ifdef HH_ENABLE_PROFILING
         profiles.clear();

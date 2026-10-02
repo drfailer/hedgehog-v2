@@ -98,6 +98,19 @@ struct LockQueueInputPorts : LockQueueInputPort<Inputs>... {
         }(), ...);
         return count;
     }
+
+    template <typename Executable>
+    bool execute_one(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        bool done = false;
+        ([&] {
+            if (done) return;
+            if (auto data = LockQueueInputPort<Inputs>::pop()) {
+                exec->execute(std::move(*data));
+                done = true;
+            }
+        }(), ...);
+        return done;
+    }
 };
 
 // cond trigger input //////////////////////////////////////////////////////////

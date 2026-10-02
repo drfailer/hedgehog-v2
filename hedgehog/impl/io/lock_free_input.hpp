@@ -105,6 +105,20 @@ struct MoodycamelMPMCInput : CondTrigger, MoodycamelMPMCInputPort<Inputs>... {
         }(), ...);
         return count;
     }
+
+    template <typename Executable>
+    bool execute_one(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        bool done = false;
+        ([&] {
+            if (done) return;
+            data_t<Inputs> data;
+            if (MoodycamelMPMCInputPort<Inputs>::pop(data, info.thread_index)) {
+                exec->execute(std::move(data));
+                done = true;
+            }
+        }(), ...);
+        return done;
+    }
 };
 
 // moodycamel mpmc input (atomic trigger) //////////////////////////////////////
@@ -142,6 +156,20 @@ struct MoodycamelAtomicInput : AtomicTrigger, MoodycamelMPMCInputPort<Inputs>...
             }
         }(), ...);
         return count;
+    }
+
+    template <typename Executable>
+    bool execute_one(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        bool done = false;
+        ([&] {
+            if (done) return;
+            data_t<Inputs> data;
+            if (MoodycamelMPMCInputPort<Inputs>::pop(data, info.thread_index)) {
+                exec->execute(std::move(data));
+                done = true;
+            }
+        }(), ...);
+        return done;
     }
 };
 
@@ -197,6 +225,20 @@ struct DakingMPSCInput : CondTrigger, DakingMPSCInputPort<Inputs>... {
             }
         }(), ...);
         return count;
+    }
+
+    template <typename Executable>
+    bool execute_one(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        bool done = false;
+        ([&] {
+            if (done) return;
+            data_t<Inputs> data;
+            if (DakingMPSCInputPort<Inputs>::pop(data)) {
+                exec->execute(std::move(data));
+                done = true;
+            }
+        }(), ...);
+        return done;
     }
 };
 

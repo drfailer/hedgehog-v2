@@ -21,9 +21,9 @@
 
 #include <deque>
 #include <atomic>
+#include <algorithm>
 #include <tbb/task_arena.h>
 #include <tbb/task_group.h>
-#include <tbb/concurrent_queue.h>
 #include "../../../graph/node.hpp"
 
 namespace hh {
@@ -31,22 +31,18 @@ namespace hh {
 struct TBBExecutor {
     struct NodeData {
         TaskHandle handle = {};
-        tbb::concurrent_queue<int> free_slots = {};
+        std::atomic<bool> busy{false};
+        std::atomic<int> active{0};
         std::atomic<int> pending{0};
+        std::atomic<bool> ready{false};
+        int max_concurrent = 0;
         size_t max_threads = 0;
-
-        int acquire_slot() {
-            int slot;
-            return free_slots.try_pop(slot) ? slot : -1;
-        }
-
-        void release_slot(int slot) {
-            free_slots.push(slot);
-        }
+        bool parallel = false;
     };
 
     std::deque<NodeData> node_data_ = {};
     std::vector<Node *> graph_nodes_ = {};
+    std::atomic<int> total_demand_{0};
     tbb::task_arena arena_;
     tbb::task_group tg_;
     RuntimeInfo runtime_info_ = {};
@@ -60,10 +56,19 @@ struct TBBExecutor {
         if constexpr (requires { node->handle(); }) {
             int idx = static_cast<int>(node_data_.size());
             node->executor_index(idx);
+
+            bool parallel = node->info().number_threads > 1;
+            int max_concurrent = static_cast<int>(node->info().number_threads);
+
+            if (parallel) {
+                node->resize_threads(static_cast<size_t>(arena_.max_concurrency()));
+            }
+
             auto &nd = node_data_.emplace_back();
             nd.handle = node->handle();
             nd.max_threads = node->info().number_threads;
-            for (size_t i = 0; i < nd.max_threads; ++i) { nd.free_slots.push(static_cast<int>(i)); }
+            nd.max_concurrent = max_concurrent;
+            nd.parallel = parallel;
         } else {
             graph_nodes_.push_back(node);
         }
@@ -85,26 +90,82 @@ struct TBBExecutor {
         }
     }
 
+    int expected_workers(size_t idx) {
+        auto &nd = node_data_[idx];
+        int ttl = total_demand_.load(std::memory_order_relaxed);
+        if (ttl <= 0) return nd.max_concurrent;
+        return std::max(arena_.max_concurrency() * nd.max_concurrent / ttl, 1);
+    }
+
+    void make_node_unready(size_t idx) {
+        auto &nd = node_data_[idx];
+        if (nd.ready.exchange(false, std::memory_order_acq_rel)) {
+            total_demand_.fetch_sub(nd.max_concurrent, std::memory_order_acq_rel);
+        }
+        if (nd.pending.load(std::memory_order_acquire) > 0) {
+            if (!nd.ready.exchange(true, std::memory_order_acq_rel)) {
+                total_demand_.fetch_add(nd.max_concurrent, std::memory_order_acq_rel);
+            }
+            submit_task(idx);
+        }
+    }
+
     void submit_task(size_t idx) {
         arena_.execute([this, idx] {
             tg_.run([this, idx] {
                 auto &nd = node_data_[idx];
-                int slot = nd.acquire_slot();
-                if (slot < 0) return;
-
                 RuntimeInfo ri = runtime_info_;
-                ri.thread_index = static_cast<size_t>(slot);
 
-                for (;;) {
-                    size_t count = nd.handle.execute(nd.handle.task, ri);
-                    if (count == 0) break;
-                    nd.pending.fetch_sub(static_cast<int>(count), std::memory_order_acq_rel);
-                }
+                if (nd.parallel) {
+                    int slot = nd.active.fetch_add(1, std::memory_order_acq_rel);
+                    if (slot >= nd.max_concurrent) {
+                        nd.active.fetch_sub(1, std::memory_order_acq_rel);
+                        return;
+                    }
 
-                nd.release_slot(slot);
+                    ri.thread_index = static_cast<size_t>(
+                        tbb::this_task_arena::current_thread_index());
 
-                if (nd.pending.load(std::memory_order_acquire) > 0) {
-                    submit_task(idx);
+                    int processed = 0;
+                    for (;;) {
+                        if (!nd.handle.execute_one(nd.handle.task, ri)) break;
+                        ++processed;
+
+                        int expected = expected_workers(idx);
+                        if (nd.active.load(std::memory_order_relaxed) > expected) break;
+                    }
+                    if (processed > 0) {
+                        nd.pending.fetch_sub(processed, std::memory_order_acq_rel);
+                    }
+
+                    nd.active.fetch_sub(1, std::memory_order_acq_rel);
+
+                    if (processed == 0) {
+                        make_node_unready(idx);
+                    } else if (nd.pending.load(std::memory_order_acquire) > 0) {
+                        submit_task(idx);
+                    }
+                } else {
+                    bool expected_val = false;
+                    if (!nd.busy.compare_exchange_strong(
+                            expected_val, true, std::memory_order_acq_rel))
+                        return;
+
+                    ri.thread_index = 0;
+                    for (;;) {
+                        size_t count = nd.handle.execute(nd.handle.task, ri);
+                        if (count == 0) break;
+                        nd.pending.fetch_sub(
+                            static_cast<int>(count), std::memory_order_acq_rel);
+                    }
+
+                    nd.busy.store(false, std::memory_order_release);
+
+                    if (nd.pending.load(std::memory_order_acquire) > 0) {
+                        submit_task(idx);
+                    } else {
+                        make_node_unready(idx);
+                    }
                 }
             });
         });
@@ -113,8 +174,17 @@ struct TBBExecutor {
     void on_transfer(Node *node, RuntimeInfo const &) {
         int idx = node->executor_index();
         if (idx < 0) return;
-        node_data_[idx].pending.fetch_add(1, std::memory_order_release);
-        submit_task(static_cast<size_t>(idx));
+        auto &nd = node_data_[idx];
+        int prev = nd.pending.fetch_add(1, std::memory_order_acq_rel);
+
+        if (!nd.ready.exchange(true, std::memory_order_acq_rel)) {
+            total_demand_.fetch_add(nd.max_concurrent, std::memory_order_acq_rel);
+        }
+
+        int limit = expected_workers(static_cast<size_t>(idx));
+        if (prev < limit) {
+            submit_task(static_cast<size_t>(idx));
+        }
     }
 
     void finalize(InitializationInfo const &) {
@@ -128,6 +198,7 @@ struct TBBExecutor {
             }
         }
 
+        total_demand_.store(0, std::memory_order_relaxed);
         node_data_.clear();
         graph_nodes_.clear();
     }

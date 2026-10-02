@@ -83,6 +83,11 @@ struct GroupNodeInput {
     size_t execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
         return groups_[info.thread_index / GroupSize]->execute(exec, info);
     }
+
+    template <typename Executable>
+    bool execute_one(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        return groups_[info.thread_index / GroupSize]->execute_one(exec, info);
+    }
 };
 
 } // end namespace hh
