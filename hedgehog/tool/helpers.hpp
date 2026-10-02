@@ -29,6 +29,9 @@
 
 namespace hh {
 
+template <typename ...Fs>
+struct overloaded : Fs... { using Fs::operator()...; };
+
 // helper functions ////////////////////////////////////////////////////////////
 
 template<typename T>

@@ -43,6 +43,7 @@
 
 #include "tool/concepts.hpp"
 #include "tool/config.hpp"
+#include "tool/graph_view.hpp"
 #include "tool/type_list.hpp"
 #include "tool/helpers.hpp"
 #include "tool/numa.hpp"

@@ -22,6 +22,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <variant>
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
@@ -35,12 +36,11 @@
 #ifdef HH_ENABLE_PROFILING
 #include <mutex>
 #include <memory>
+#endif
 
 #ifdef HH_USE_NVTX
 #include <nvtx3/nvToolsExt.h>
 #endif
-#endif
-
 
 #include "macros.hpp"
 
@@ -53,6 +53,8 @@
 // internally. User tasks can access the profiler to augment the profile
 // information.
 //
+
+// Region profiling macros: timing + NVTX when both are enabled ////////////////
 
 #ifdef HH_ENABLE_PROFILING
 #define HH_THREAD_PROFILE_REGION(profiler, name) \
@@ -70,6 +72,26 @@
 #else
 #define HH_THREAD_PROFILE_REGION(profiler, name)
 #define HH_PROFILE_REGION(profiler, name)
+#endif
+
+// NVTX-only macros: for NVTX ranges without timing ///////////////////////////
+
+#ifdef HH_USE_NVTX
+#define HH_THREAD_NVTX_REGION(profiler, name) \
+    thread_local static auto HH_CONCAT(_nvtx_, __LINE__) = (profiler).nvtx().make_region((name)); \
+    for (bool \
+         HH_CONCAT(_nvtxr_, __LINE__) = HH_CONCAT(_nvtx_, __LINE__).begin(); \
+         HH_CONCAT(_nvtxr_, __LINE__); \
+         HH_CONCAT(_nvtxr_, __LINE__) = HH_CONCAT(_nvtx_, __LINE__).end())
+#define HH_NVTX_REGION(profiler, name) \
+    auto HH_CONCAT(_nvtx_, __LINE__) = (profiler).nvtx().make_region((name)); \
+    for (bool \
+         HH_CONCAT(_nvtxr_, __LINE__) = HH_CONCAT(_nvtx_, __LINE__).begin(); \
+         HH_CONCAT(_nvtxr_, __LINE__); \
+         HH_CONCAT(_nvtxr_, __LINE__) = HH_CONCAT(_nvtx_, __LINE__).end())
+#else
+#define HH_THREAD_NVTX_REGION(profiler, name)
+#define HH_NVTX_REGION(profiler, name)
 #endif
 
 namespace hh {
@@ -118,6 +140,53 @@ struct Measure {
     }
 };
 
+// NVTX ////////////////////////////////////////////////////////////////////////
+
+#ifdef HH_USE_NVTX
+
+struct NvtxRegion {
+    nvtxDomainHandle_t *domain;
+    nvtxEventAttributes_t attr;
+    nvtxRangeId_t range_id;
+
+    bool begin() {
+        range_id = nvtxDomainRangeStartEx(*domain, &attr);
+        return true;
+    }
+
+    bool end() {
+        nvtxDomainRangeEnd(*domain, range_id);
+        return false;
+    }
+};
+
+struct NvtxProfiler {
+    nvtxDomainHandle_t domain;
+
+    void initialize(std::string const &name) {
+        domain = nvtxDomainCreateA(name.c_str());
+    }
+
+    void finalize() {
+        nvtxDomainDestroy(domain);
+    }
+
+    NvtxRegion make_region(std::string const &name) {
+        NvtxRegion region;
+        region.domain = &domain;
+        region.attr = {};
+        region.attr.version = NVTX_VERSION;
+        region.attr.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+        region.attr.colorType = NVTX_COLOR_ARGB;
+        region.attr.color = 0xFF72ff68;
+        region.attr.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
+        region.attr.message.registered = nvtxDomainRegisterStringA(domain, name.c_str());
+        return region;
+    }
+};
+
+#endif
+
 // Profile /////////////////////////////////////////////////////////////////////
 
 //
@@ -133,13 +202,6 @@ enum class ProfileKind {
 struct ProfileRegion {
     Measure measure;
     TimePoint t0;
-    #ifdef HH_USE_NVTX
-    struct ProfileNVTXRe {
-        nvtxDomainHandle_t *domain;
-        nvtxEventAttributes_t attr;
-        nvtxRangeId_t range_id;
-    } nvtx;
-    #endif
 };
 
 struct ProfileString {
@@ -151,41 +213,32 @@ struct Profile {
     ProfileKind   kind;
     ProfileRegion region;
     ProfileString string;
+    #ifdef HH_USE_NVTX
+    NvtxRegion nvtx_region;
+    bool has_nvtx = false;
+    #endif
 
     Profile(std::string label, ProfileKind kind): label(std::move(label)), kind(kind) {}
-
-    #ifdef HH_USE_NVTX
-    Profile(std::string label, nvtxDomainHandle_t *nvtx_domain): label(std::move(label)), kind(ProfileKind::Region) {
-        region.nvtx.domain = nvtx_domain;
-        region.nvtx.attr = {};
-        region.nvtx.attr.version = NVTX_VERSION;
-        region.nvtx.attr.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
-        region.nvtx.attr.colorType = NVTX_COLOR_ARGB;
-        region.nvtx.attr.color = 0xFF72ff68;
-        region.nvtx.attr.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
-        region.nvtx.attr.message.registered = nvtxDomainRegisterStringA(*nvtx_domain, this->label.c_str());
-    }
-    #endif
 
     bool begin_region() {
         #ifdef HH_ENABLE_PROFILING
         assert(kind == ProfileKind::Region);
         region.t0 = Clock::now();
-        #ifdef HH_USE_NVTX
-        region.nvtx.range_id = nvtxDomainRangeStartEx(*region.nvtx.domain, &region.nvtx.attr);
         #endif
+        #ifdef HH_USE_NVTX
+        if (has_nvtx) nvtx_region.begin();
         #endif
         return true;
     }
 
     bool end_region() {
+        #ifdef HH_USE_NVTX
+        if (has_nvtx) nvtx_region.end();
+        #endif
         #ifdef HH_ENABLE_PROFILING
         TimePoint t1 = Clock::now();
         Duration duration = t1 - this->region.t0;
         region.measure.add_value(duration.count());
-        #ifdef HH_USE_NVTX
-        nvtxDomainRangeEnd(*region.nvtx.domain, region.nvtx.range_id);
-        #endif
         #endif
         return false;
     }
@@ -206,35 +259,40 @@ struct Profiler {
     #ifdef HH_ENABLE_PROFILING
     std::mutex mutex;
     std::vector<std::unique_ptr<Profile>> profiles;
-    #ifdef HH_USE_NVTX
-    nvtxDomainHandle_t nvtx_domain;
     #endif
+    #ifdef HH_USE_NVTX
+    NvtxProfiler nvtx_;
     #endif
 
     void initialize([[maybe_unused]] std::string const &name) {
         #ifdef HH_ENABLE_PROFILING
         profiles.clear();
-        #ifdef HH_USE_NVTX
-        nvtx_domain = nvtxDomainCreateA(name.c_str());
         #endif
+        #ifdef HH_USE_NVTX
+        nvtx_.initialize(name);
         #endif
     }
 
     void finalize() {
         #ifdef HH_USE_NVTX
-        nvtxDomainDestroy(nvtx_domain);
+        nvtx_.finalize();
         #endif
     }
+
+    #ifdef HH_USE_NVTX
+    NvtxProfiler &nvtx() { return nvtx_; }
+    #endif
 
     Profile *profile_region([[maybe_unused]] std::string label) {
         #ifdef HH_ENABLE_PROFILING
         std::lock_guard<std::mutex> lock(mutex);
-        #ifdef HH_USE_NVTX
-        profiles.push_back(std::make_unique<Profile>(std::move(label), &nvtx_domain));
-        #else
         profiles.push_back(std::make_unique<Profile>(std::move(label), ProfileKind::Region));
+        auto *p = profiles.back().get();
+        #ifdef HH_USE_NVTX
+        p->nvtx_region = nvtx_.make_region(p->label);
+        p->has_nvtx = true;
         #endif
-        return profiles.back().get();
+        return p;
         #else
         static Profile dummy("dummy", ProfileKind::Region);
         return &dummy;
@@ -252,77 +310,48 @@ struct Profiler {
 
 // Report //////////////////////////////////////////////////////////////////////
 
+struct RegionEntry {
+    Measure measure;
+};
+
+struct StringEntry {
+    std::vector<std::string> values;
+};
+
+enum class EntryKind { Region, String };
+
 struct ProfileEntry {
     std::string label;
-    ProfileKind kind;
-    struct {
-        Measure measure;
-    } region;
-    struct {
-        std::vector<std::string> values;
-    } string;
+    std::variant<RegionEntry, StringEntry> data;
+
+    EntryKind kind() const { return static_cast<EntryKind>(data.index()); }
+
+    bool is_region() const { return kind() == EntryKind::Region; }
+    bool is_string() const { return kind() == EntryKind::String; }
+
+    RegionEntry       &region()       { return std::get<RegionEntry>(data); }
+    RegionEntry const &region() const { return std::get<RegionEntry>(data); }
+    StringEntry       &string()       { return std::get<StringEntry>(data); }
+    StringEntry const &string() const { return std::get<StringEntry>(data); }
+
+    void merge_data(ProfileEntry const &other) {
+        std::visit(overloaded{
+            [](RegionEntry &dst, RegionEntry const &src) { dst.measure.merge(src.measure); },
+            [](StringEntry &dst, StringEntry const &src) {
+                for (auto const &v : src.values) dst.values.push_back(v);
+            },
+            [](auto &, auto const &) { log::fatal("Profile inconsistency found."); },
+        }, data, other.data);
+    }
 };
 
 using ProfileEntries = std::vector<ProfileEntry>;
 
-enum class ProfileReportKind {
-    Node,
-    Edge,
-    Graph,
-    Pipeline,
-};
-
 struct ProfileReport {
-    ProfileReportKind kind = ProfileReportKind::Node;
-    ProfileReport *parent = nullptr;
-    std::string label = "";
-    uintptr_t id = 0;
-    uintptr_t sender_id = 0;
-    uintptr_t receiver_id = 0;
     ProfileEntries entries = {};
-    std::vector<ProfileReport> children = {};
 
-    static inline uintptr_t edge_counter = 0;
-
-    static ProfileReport edge(void *sender, void *receiver, std::string type) {
-        ProfileReport report;
-        report.kind = ProfileReportKind::Edge;
-        report.label = std::move(type);
-        report.id = edge_counter++;
-        report.sender_id = reinterpret_cast<uintptr_t>(sender);
-        report.receiver_id = reinterpret_cast<uintptr_t>(receiver);
-        return report;
-    }
-
-    static ProfileReport node(void *node, std::string name) {
-        ProfileReport report;
-        report.kind = ProfileReportKind::Node;
-        report.label = std::move(name);
-        report.id = reinterpret_cast<uintptr_t>(node);
-        return report;
-    }
-
-    static ProfileReport graph(void *graph, void *sink, std::string name) {
-        ProfileReport report;
-        report.kind = ProfileReportKind::Graph;
-        report.label = std::move(name);
-        report.id = reinterpret_cast<uintptr_t>(graph);
-        report.sender_id = reinterpret_cast<uintptr_t>(graph);
-        report.receiver_id = reinterpret_cast<uintptr_t>(sink);
-        return report;
-    }
-
-    static ProfileReport pipeline(void *pipeline, std::string name) {
-        ProfileReport report;
-        report.kind = ProfileReportKind::Pipeline;
-        report.label = std::move(name);
-        report.id = reinterpret_cast<uintptr_t>(pipeline);
-        return report;
-    }
-
-    void add_report(ProfileReport report) {
-        report.parent = this;
-        children.push_back(std::move(report));
+    void add_entry(ProfileEntry entry) {
+        entries.push_back(std::move(entry));
     }
 
     void add_entries(std::map<std::string, ProfileEntry> const &entry_map) {
@@ -331,35 +360,25 @@ struct ProfileReport {
         }
     }
 
-    void add_entry(ProfileEntry entry) {
-        entries.push_back(std::move(entry));
-    }
-
     void add_profiles([[maybe_unused]] Profiler const &profiler) {
         #ifdef HH_ENABLE_PROFILING
         for (auto &profile : profiler.profiles) {
             switch (profile->kind) {
             case ProfileKind::Region:
-                entries.push_back(ProfileEntry{
-                        profile->label,
-                        ProfileKind::Region,
-                        profile->region.measure,
-                        {},
-                });
+                entries.push_back(ProfileEntry{profile->label, RegionEntry{profile->region.measure}});
                 break;
             case ProfileKind::String:
-                entries.push_back(ProfileEntry{
-                        profile->label,
-                        ProfileKind::String,
-                        {},
-                        std::vector<std::string>({profile->string.value}),
-                });
+                entries.push_back(ProfileEntry{profile->label, StringEntry{{profile->string.value}}});
                 break;
             }
         }
         #endif
     }
 };
+
+using ProfileMap = std::map<uintptr_t, ProfileReport>;
+
+// Merge helpers ///////////////////////////////////////////////////////////////
 
 template <typename T>
 std::map<std::string, ProfileEntry> merge_profiles([[maybe_unused]] std::vector<T> const &components) {
@@ -370,93 +389,21 @@ std::map<std::string, ProfileEntry> merge_profiles([[maybe_unused]] std::vector<
         auto profiler = &component.profiler;
 
         for (auto &profile : profiler->profiles) {
+            ProfileEntry entry = (profile->kind == ProfileKind::Region)
+                ? ProfileEntry{profile->label, RegionEntry{profile->region.measure}}
+                : ProfileEntry{profile->label, StringEntry{{profile->string.value}}};
+
             auto entry_it = entry_map.find(profile->label);
             if (entry_it == entry_map.end()) {
-                ProfileEntry new_entry = {profile->label, profile->kind, profile->region.measure, {}};
-                if (profile->kind == ProfileKind::String) {
-                    new_entry.string.values.push_back(profile->string.value);
-                }
-                entry_map[profile->label] = new_entry;
+                entry_map[profile->label] = std::move(entry);
             } else {
-                if (entry_it->second.kind != profile->kind) {
-                    log::fatal("Profile inconsistency found.");
-                }
-                switch (entry_it->second.kind) {
-                case ProfileKind::Region: entry_it->second.region.measure.merge(profile->region.measure); break;
-                case ProfileKind::String: entry_it->second.string.values.push_back(profile->string.value); break;
-                }
+                entry_it->second.merge_data(entry);
             }
         }
     }
     #endif
 
     return entry_map;
-}
-
-void merge_reports_rec([[maybe_unused]] ProfileReport *dst, [[maybe_unused]] std::vector<ProfileReport> reports) {
-    #ifdef HH_ENABLE_PROFILING
-    if (reports.empty()) return;
-
-    // the current report is based on reports[0]
-    dst->kind        = reports[0].kind;
-    dst->label       = reports[0].label;
-    dst->id          = reports[0].id;
-    dst->sender_id   = reports[0].sender_id;
-    dst->receiver_id = reports[0].receiver_id;
-
-    // merge entries
-    std::map<std::string, ProfileEntry> entry_map;
-    for (auto &report : reports) {
-        for (auto &entry : report.entries) {
-            auto entry_it = entry_map.find(entry.label);
-            if (entry_it == entry_map.end()) {
-                entry_map[entry.label] = entry;
-            } else {
-                switch (entry_it->second.kind) {
-                case ProfileKind::Region: entry_it->second.region.measure.merge(entry.region.measure); break;
-                case ProfileKind::String:
-                    for (auto value : entry.string.values) {
-                        entry_it->second.string.values.push_back(value);
-                    }
-                    break;
-                }
-            }
-        }
-    }
-    dst->add_entries(entry_map);
-
-    // merge children
-    for (size_t child_idx = 0; child_idx < reports[0].children.size(); ++child_idx) {
-        ProfileReport child_report;
-
-        // collects all the report versions at child_idx
-        std::vector<ProfileReport> child_reports;
-        for (auto &report : reports) {
-            child_reports.push_back(report.children[child_idx]);
-        }
-
-        // merge child report and collect to dst
-        merge_reports_rec(&child_report, child_reports);
-        dst->add_report(child_report);
-    }
-    #endif
-}
-
-template <typename T>
-ProfileReport merge_reports([[maybe_unused]] std::vector<T> components) {
-    ProfileReport report;
-
-    #ifdef HH_ENABLE_PROFILING
-    if (components.empty()) return report;
-
-    std::vector<ProfileReport> reports;
-    for (auto &component : components) {
-        reports.push_back(component->profile());
-    }
-    merge_reports_rec(&report, reports);
-    #endif
-
-    return report;
 }
 
 } // end namespace hh

@@ -23,7 +23,6 @@
 #include <cstdio>
 #include <set>
 #include <sstream>
-
 #include <fstream>
 
 #include "info.hpp"
@@ -32,6 +31,7 @@
 #include "../tool/helpers.hpp"
 #include "../tool/concepts.hpp"
 #include "../tool/log.hpp"
+#include "../tool/graph_view.hpp"
 #include "../tool/profiling_report.hpp"
 
 namespace hh {
@@ -230,18 +230,43 @@ struct Graph : Node {
         Node::profiler().finalize();
     }
 
-    ProfileReport profile() override {
-        auto report = ProfileReport::graph(this, &sink_, Node::info().name);
-        #ifdef HH_ENABLE_PROFILING
-        report.add_profiles(Node::profiler());
+    void profile(ProfileMap &map) override {
+        Node::profile(map);
         for (auto &node : nodes_) {
-            report.add_report(node->profile());
+            node->profile(map);
         }
+    }
+
+    ProfileMap profile() {
+        ProfileMap map;
+        profile(map);
+        return map;
+    }
+
+    GraphViewNode graph_view() override {
+        auto view = GraphViewNode::make_graph(this);
+        auto &view_graph = view.graph();
+
+        type_list_map<InputTypes>([&]<typename T>() {
+            for (auto &edge : input_.template edges<T>()) {
+                view_graph.input_nodes.push_back(reinterpret_cast<Node *>(edge.receiver));
+            }
+        });
+        for (auto &node : output_nodes_) {
+            view_graph.output_nodes.push_back(node.get());
+        }
+
+        auto &children = view.children();
+        for (auto &node : nodes_) {
+            children.push_back(node->graph_view());
+        }
+        auto *sink_ptr = reinterpret_cast<Node *>(&sink_);
         for (auto const &conn : connections_) {
-            report.add_report(ProfileReport::edge(conn.sender, conn.receiver, conn.type_name));
+            if (conn.receiver != sink_ptr) {
+                children.push_back(GraphViewNode::make_edge(conn.sender, conn.receiver, conn.type_name));
+            }
         }
-        #endif
-        return report;
+        return view;
     }
 
     // edges ///////////////////////////////////////////////////////////////////
@@ -484,11 +509,14 @@ struct Graph : Node {
 
     // profiling ///////////////////////////////////////////////////////////////
 
-    void generate_dot_file([[maybe_unused]] std::string const &filename) {
-        #ifdef HH_ENABLE_PROFILING
-        auto report = this->profile();
+    void generate_dot_file(std::string const &filename) {
+        auto view = this->graph_view();
         std::ofstream ofs(filename);
-        report_to_dot(report, ofs);
+        #ifdef HH_ENABLE_PROFILING
+        auto profiles = this->profile();
+        graph_view_to_dot(view, profiles, ofs);
+        #else
+        graph_view_to_dot(view, ofs);
         #endif
     }
 };

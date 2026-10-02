@@ -20,8 +20,10 @@
 #define HEDGEHOG_GRAPH_NODE
 
 #include <memory>
+#include <map>
 #include "../tool/type_list.hpp"
 #include "../tool/profiling.hpp"
+#include "../tool/graph_view.hpp"
 #include "../tool/data.hpp"
 #include "info.hpp"
 
@@ -49,7 +51,15 @@ class Node {
     virtual void initialize(GraphInfo const &info) = 0;
     virtual void execute(ExecutionInfo const &info) = 0;
     virtual void finalize(GraphInfo const &info) = 0;
-    virtual ProfileReport profile() = 0;
+    virtual GraphViewNode graph_view() = 0;
+
+    virtual void profile(ProfileMap &map) {
+        ProfileReport report;
+        #ifdef HH_ENABLE_PROFILING
+        report.add_profiles(profiler_);
+        #endif
+        map[reinterpret_cast<uintptr_t>(this)] = std::move(report);
+    }
 };
 
 // Node IO /////////////////////////////////////////////////////////////////////
