@@ -122,49 +122,42 @@ struct TaskNode : Node {
         output_.initialize(init_info);
     }
 
-    void execute(ExecutionInfo const &info) override {
-        auto state = &states_[info.thread_index];
+    // execution is driven by the executor via TaskHandle
+    void execute(ExecutionInfo const &) override {}
 
-        if (info.direct) {
-
-            //
-            // Direct execution used by serial or scheduled graph executor. In
-            // this case, a thread will enter the function, operate the
-            // executor and leave directly.
-            //
-
-            switch (info.direct_phase) {
-            case ExecutionInfo::Initialize:
-                state->initialize(this, RuntimeInfo{&Node::info(), &graph_info_, info, &state->profiler});
-                break;
-            case ExecutionInfo::Execute:
-                input_.execute(state, state->context.info());
-                break;
-            case ExecutionInfo::Finalize:
-                state->finalize();
-                break;
-            }
-
-        } else {
-
-            //
-            // Standard execution of the task. The threads are trapped in the
-            // run loop until the graph terminates.
-            //
-
-            state->initialize(this, RuntimeInfo{&Node::info(), &graph_info_, info, &state->profiler});
-            WaitResult wait_result;
-            for (;;) {
-                HH_THREAD_PROFILE_REGION(state->profiler, "wait")
+    TaskHandle handle() {
+        using Self = TaskNode<Config>;
+        return TaskHandle{
+            .task = this,
+            .initialize = +[](Node *node, RuntimeInfo const &info) {
+                auto *self = static_cast<Self *>(node);
+                auto &state = self->states_[info.thread_index];
+                RuntimeInfo ri = info;
+                ri.node = &self->Node::info();
+                ri.graph = &self->graph_info_;
+                ri.profiler = &state.profiler;
+                state.initialize(self, ri);
+            },
+            .finalize = +[](Node *node, RuntimeInfo const &info) {
+                auto *self = static_cast<Self *>(node);
+                self->states_[info.thread_index].finalize();
+            },
+            .wait = +[](Node *node, RuntimeInfo const &info) -> WaitResult {
+                auto *self = static_cast<Self *>(node);
+                auto &state = self->states_[info.thread_index];
+                WaitResult wr;
+                HH_THREAD_PROFILE_REGION(state.profiler, "wait")
                 {
-                    wait_result = input_.wait(state->context.info());
+                    wr = self->input_.wait(state.context.info());
                 }
-                if (wait_result.terminate) [[unlikely]] break;
-                if (wait_result.skip) [[unlikely]] continue;
-                input_.execute(state, state->context.info());
-            }
-            state->finalize();
-        }
+                return wr;
+            },
+            .execute = +[](Node *node, RuntimeInfo const &info) {
+                auto *self = static_cast<Self *>(node);
+                auto &state = self->states_[info.thread_index];
+                self->input_.execute(&state, state.context.info());
+            },
+        };
     }
 
     void finalize(GraphInfo const &) override {

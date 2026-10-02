@@ -27,26 +27,42 @@ namespace hh {
 
 struct ThreadExecutor {
     std::vector<std::thread> threads = {};
+    std::vector<TaskHandle> handles_ = {};
+    std::vector<Node *> graph_nodes_ = {};
 
     void initialize(InitializationInfo const &) {}
 
-    void execute(std::set<std::shared_ptr<Node>> const &nodes, ExecutionInfo const &info) {
-        auto exec_info = info;
+    void register_node(auto node) {
+        if constexpr (requires { node->handle(); }) {
+            handles_.push_back(node->handle());
+        } else {
+            graph_nodes_.push_back(node);
+        }
+    }
 
-        exec_info.direct = false;
-        for (auto node : nodes) {
-            if (node->info().number_threads == 0) {
-                node->execute(exec_info);
-            } else {
-                for (size_t i = 0; i < node->info().number_threads; ++i) {
-                    exec_info.thread_index = i;
-                    threads.push_back(
-                        std::thread([node, exec_info]() {
-                            numa::pin_current_thread(exec_info.pipeline.numa_id);
-                            node->execute(exec_info);
-                        })
-                    );
-                }
+    void execute(ExecutionInfo const &info) {
+        for (auto *node : graph_nodes_) {
+            node->execute(info);
+        }
+
+        for (auto &handle : handles_) {
+            for (size_t i = 0; i < handle.task->info().number_threads; ++i) {
+                auto pipeline = info.pipeline;
+                threads.push_back(
+                    std::thread([&handle, i, info, pipeline]() {
+                        numa::pin_current_thread(pipeline.numa_id);
+                        RuntimeInfo ri{};
+                        ri.exec = info;
+                        ri.thread_index = i;
+                        handle.initialize(handle.task, ri);
+                        for (;;) {
+                            auto wr = handle.wait(handle.task, ri);
+                            if (wr.terminate) [[unlikely]] break;
+                            if (!wr.skip) [[unlikely]] handle.execute(handle.task, ri);
+                        }
+                        handle.finalize(handle.task, ri);
+                    })
+                );
             }
         }
     }
@@ -56,6 +72,8 @@ struct ThreadExecutor {
             thread.join();
         }
         threads.clear();
+        handles_.clear();
+        graph_nodes_.clear();
     }
 };
 

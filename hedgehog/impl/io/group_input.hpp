@@ -59,7 +59,7 @@ struct GroupNodeInput {
     }
 
     WaitResult wait(RuntimeInfo const &info) {
-        return groups_[info.exec.thread_index / GroupSize]->wait(info);
+        return groups_[info.thread_index / GroupSize]->wait(info);
     }
 
     void signal(SignalOpts const &opts) {
@@ -81,7 +81,7 @@ struct GroupNodeInput {
 
     template <typename Executable>
     void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
-        groups_[info.exec.thread_index / GroupSize]->execute(exec, info);
+        groups_[info.thread_index / GroupSize]->execute(exec, info);
     }
 };
 

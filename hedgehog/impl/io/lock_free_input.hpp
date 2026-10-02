@@ -97,7 +97,7 @@ struct MoodycamelMPMCInput : CondTrigger, MoodycamelMPMCInputPort<Inputs>... {
     void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
         ([&] {
             data_t<Inputs> data;
-            while (MoodycamelMPMCInputPort<Inputs>::pop(data, info.exec.thread_index)) [[likely]] {
+            while (MoodycamelMPMCInputPort<Inputs>::pop(data, info.thread_index)) [[likely]] {
                 exec->execute(std::move(data));
             }
         }(), ...);
@@ -132,7 +132,7 @@ struct MoodycamelAtomicInput : AtomicTrigger, MoodycamelMPMCInputPort<Inputs>...
     void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
         ([&] {
             data_t<Inputs> data;
-            while (MoodycamelMPMCInputPort<Inputs>::pop(data, info.exec.thread_index)) [[likely]] {
+            while (MoodycamelMPMCInputPort<Inputs>::pop(data, info.thread_index)) [[likely]] {
                 exec->execute(std::move(data));
             }
         }(), ...);

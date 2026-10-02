@@ -156,7 +156,7 @@ struct Graph : Node {
         exec_profile_ = Node::profiler().profile_region("execution");
         exec_profile_->begin_region();
         #endif
-        ExecutionInfo exec_info = {0, rank, PipelineInfo{}, false, ExecutionInfo::Execute};
+        ExecutionInfo exec_info = {rank, PipelineInfo{}};
         execute(exec_info);
     }
 
@@ -181,7 +181,7 @@ struct Graph : Node {
 
     template <typename T>
     void push_data(data_t<T> data) {
-        push_data<T>(std::move(data), RuntimeInfo{&Node::info(), &graph_info_, {}, &Node::profiler()});
+        push_data<T>(std::move(data), RuntimeInfo{&Node::info(), &graph_info_, {}, 0, &Node::profiler()});
     }
 
     auto get_result() {
@@ -215,7 +215,7 @@ struct Graph : Node {
     }
 
     void execute(ExecutionInfo const &info) override {
-        executor_->execute(nodes_, info);
+        executor_->execute(info);
     }
 
     void finalize(GraphInfo const &) override {
@@ -283,10 +283,12 @@ struct Graph : Node {
         return EdgeBuilder::template make_edge<T>(MakeEdgeArgs{sender, receiver, this});
     }
 
-    void register_node(std::shared_ptr<Node> node) {
+    template <typename ConcreteNode>
+    void register_node(std::shared_ptr<ConcreteNode> node) {
         if (node->parent() != nullptr) return;
         node->parent(this);
         nodes_.insert(node);
+        executor_->register_node(node.get());
     }
 
     //

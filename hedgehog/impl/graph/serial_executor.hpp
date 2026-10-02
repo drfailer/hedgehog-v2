@@ -23,67 +23,75 @@
 #include <queue>
 #include <thread>
 #include <cstdio>
+#include <unordered_map>
 #include "../../graph/node.hpp"
 
 namespace hh {
 
 struct SerialExecutor {
-    std::set<std::shared_ptr<Node>> const *nodes_ = nullptr;
-    std::queue<Node *> ready_nodes_;
-    bool executing_;
-    PipelineInfo pipeline_info_;
+    std::vector<TaskHandle> handles_ = {};
+    std::vector<Node *> graph_nodes_ = {};
+    std::unordered_map<Node *, size_t> handle_map_ = {};
+    std::queue<size_t> ready_handles_;
+    bool executing_ = false;
+    RuntimeInfo runtime_info_ = {};
 
-    ExecutionInfo make_execution_info(auto phase) {
-        return ExecutionInfo{0, 0, pipeline_info_, true, phase};
+    void initialize(InitializationInfo const &) {
+        executing_ = false;
     }
 
-    void execute(std::set<std::shared_ptr<Node>> const &nodes, ExecutionInfo const &info) {
-        // graphs are executed only once (a graph node never ends up in the
-        // ready list) so here we simply initialize the tasks and sub-graphs
-        nodes_ = &nodes;
-        pipeline_info_ = info.pipeline;
-        for (auto &node : nodes) {
-            node->execute(make_execution_info(ExecutionInfo::Initialize));
+    template <typename ConcreteNode>
+    void register_node(ConcreteNode *node) {
+        if constexpr (requires { node->handle(); }) {
+            handle_map_[node] = handles_.size();
+            handles_.push_back(node->handle());
+        } else {
+            graph_nodes_.push_back(node);
+        }
+    }
+
+    void execute(ExecutionInfo const &info) {
+        runtime_info_.exec = info;
+        runtime_info_.thread_index = 0;
+
+        for (auto *node : graph_nodes_) {
+            node->execute(info);
+        }
+        for (auto &handle : handles_) {
+            handle.initialize(handle.task, runtime_info_);
         }
     }
 
     void on_transfer(Node *node, RuntimeInfo const &) {
-        // we don't execute the node directly here, otherwize cyclic graphs
-        // with a lot of data would stack overflow.
-        ready_nodes_.push(node);
-        execute_ready_nodes(); // we can try to start the execution
+        auto it = handle_map_.find(node);
+        if (it == handle_map_.end()) return;
+        ready_handles_.push(it->second);
+        execute_ready_handles();
     }
 
-    void execute_ready_nodes() {
-        if (executing_) {
-            // here, we already are in the execution loop and we must leave to
-            // prevent recursion
-            return;
-        }
+    void execute_ready_handles() {
+        if (executing_) return;
         executing_ = true;
-        while (!ready_nodes_.empty()) {
-            auto node = ready_nodes_.front();
-            ready_nodes_.pop();
-            node->execute(make_execution_info(ExecutionInfo::Execute));
+        while (!ready_handles_.empty()) {
+            auto idx = ready_handles_.front();
+            ready_handles_.pop();
+            auto &handle = handles_[idx];
+            handle.execute(handle.task, runtime_info_);
         }
         executing_ = false;
     }
 
     void on_result() {
-        execute_ready_nodes();
-    }
-
-    void initialize(InitializationInfo const &) {
-        nodes_ = nullptr;
-        executing_ = false;
+        execute_ready_handles();
     }
 
     void finalize(InitializationInfo const &) {
-        // we finalize the state of the thread 0 for each node
-        for (auto &node : *nodes_) {
-            node->execute(make_execution_info(ExecutionInfo::Finalize));
+        for (auto &handle : handles_) {
+            handle.finalize(handle.task, runtime_info_);
         }
-        nodes_ = nullptr;
+        handles_.clear();
+        graph_nodes_.clear();
+        handle_map_.clear();
     }
 };
 

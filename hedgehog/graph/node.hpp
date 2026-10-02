@@ -77,6 +77,14 @@ struct WaitResult {
     bool skip;      // used to skip execution in the thread loop (no data, or defered)
 };
 
+struct TaskHandle {
+    Node *task;
+    void (*initialize)(Node *, RuntimeInfo const &);
+    void (*finalize)(Node *, RuntimeInfo const &);
+    WaitResult (*wait)(Node *, RuntimeInfo const &);
+    void (*execute)(Node *, RuntimeInfo const &);
+};
+
 //
 // Node input/output specifications.
 //
