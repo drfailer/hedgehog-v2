@@ -152,10 +152,10 @@ struct TaskNode : Node {
                 }
                 return wr;
             },
-            .execute = +[](Node *node, RuntimeInfo const &info) {
+            .execute = +[](Node *node, RuntimeInfo const &info) -> size_t {
                 auto *self = static_cast<Self *>(node);
                 auto &state = self->states_[info.thread_index];
-                self->input_.execute(&state, state.context.info());
+                return self->input_.execute(&state, state.context.info());
             },
         };
     }

@@ -80,8 +80,8 @@ struct GroupNodeInput {
     }
 
     template <typename Executable>
-    void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
-        groups_[info.thread_index / GroupSize]->execute(exec, info);
+    size_t execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        return groups_[info.thread_index / GroupSize]->execute(exec, info);
     }
 };
 

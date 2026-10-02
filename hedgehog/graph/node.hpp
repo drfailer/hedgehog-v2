@@ -38,6 +38,7 @@ class Node {
     Node *parent_{nullptr};
     NodeInfo info_{};
     Profiler profiler_{};
+    int executor_index_ = -1;
 
   public:
     Node(NodeInfo info) : info_(info) {}
@@ -47,6 +48,9 @@ class Node {
 
     Node *parent() { return parent_; }
     void parent(Node *parent) { parent_ = parent; }
+
+    int executor_index() const { return executor_index_; }
+    void executor_index(int idx) { executor_index_ = idx; }
 
     virtual void initialize(GraphInfo const &info) = 0;
     virtual void execute(ExecutionInfo const &info) = 0;
@@ -82,7 +86,7 @@ struct TaskHandle {
     void (*initialize)(Node *, RuntimeInfo const &);
     void (*finalize)(Node *, RuntimeInfo const &);
     WaitResult (*wait)(Node *, RuntimeInfo const &);
-    void (*execute)(Node *, RuntimeInfo const &);
+    size_t (*execute)(Node *, RuntimeInfo const &);
 };
 
 //
@@ -118,7 +122,7 @@ concept NodeOutputTrait = std::default_initializable<T>
         t.finalize(info);
     }
     && (requires(T t, data_t<Outputs> data) {
-        t.push_result(data, RuntimeInfo{});
+        t.push_result(data, RuntimeInfo{}); // TODO: this should be push_data
     } && ...)
     && (requires(T t, Edge<Outputs> e) {
         t.connect_edge(std::move(e));

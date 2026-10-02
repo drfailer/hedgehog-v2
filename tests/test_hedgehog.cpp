@@ -901,3 +901,101 @@ TEST(memory, cuda_pool) {
 }
 #endif // HH_USE_CUDA
 
+// TBB Executor ////////////////////////////////////////////////////////////////
+
+#ifdef HH_ENABLE_TBB
+#include "../hedgehog/impl/graph/tbb/tbb_executor.hpp"
+
+TEST(tbb_executor, simple) {
+    auto node1 = hh::make_task<Task>(1, "task1");
+    auto node2 = hh::make_task<Task>(1, "task2");
+    auto executor = std::make_shared<hh::TBBExecutor>();
+    auto graph = hh::make_graph<hh::TBBExecutor, 2, int, float, int, float>(executor);
+
+    graph->connect_inputs(node1);
+    graph->draw_edges(node1, node2);
+    graph->connect_outputs(node2);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(42));
+    graph->push_data(hh::make_data<float>(2.71f));
+
+    auto check = [](auto value) {
+        using V = decltype(value);
+        if constexpr (std::is_same_v<V, std::shared_ptr<int>>) {
+            EXPECT_EQ(*value, 42);
+        } else if constexpr (std::is_same_v<V, std::shared_ptr<float>>) {
+            EXPECT_FLOAT_EQ(*value, 2.71f);
+        }
+    };
+    std::visit(check, graph->get_result());
+    std::visit(check, graph->get_result());
+    graph->stop();
+}
+
+TEST(tbb_executor, multi_threaded_node) {
+    auto node1 = hh::make_task<Task>(4, "task1");
+    auto node2 = hh::make_task<Task>(4, "task2");
+    auto executor = std::make_shared<hh::TBBExecutor>(8);
+    auto graph = hh::make_graph<hh::TBBExecutor, 2, int, float, int, float>(executor);
+
+    graph->connect_inputs(node1);
+    graph->draw_edges(node1, node2);
+    graph->connect_outputs(node2);
+
+    graph->start();
+    constexpr int N = 100;
+    for (int i = 0; i < N; ++i) {
+        graph->push_data(hh::make_data<int>(i));
+    }
+
+    std::vector<int> results;
+    for (int i = 0; i < N; ++i) {
+        auto r = graph->get_result();
+        std::visit([&](auto value) {
+            using V = decltype(value);
+            if constexpr (std::is_same_v<V, std::shared_ptr<int>>) {
+                results.push_back(*value);
+            }
+        }, r);
+    }
+    graph->stop();
+
+    std::sort(results.begin(), results.end());
+    ASSERT_EQ(results.size(), static_cast<size_t>(N));
+    for (int i = 0; i < N; ++i) {
+        EXPECT_EQ(results[i], i);
+    }
+}
+
+TEST(tbb_executor, sub_graph) {
+    auto inner = hh::make_task<Task>(1, "inner");
+    auto executor_inner = std::make_shared<hh::TBBExecutor>(2);
+    auto subgraph = hh::make_graph<hh::TBBExecutor, 2, int, float, int, float>(executor_inner, "subgraph");
+    subgraph->connect_inputs(inner);
+    subgraph->connect_outputs(inner);
+
+    auto outer = hh::make_task<Task>(1, "outer");
+    auto executor = std::make_shared<hh::TBBExecutor>(4);
+    auto graph = hh::make_graph<hh::TBBExecutor, 2, int, float, int, float>(executor, "main");
+    graph->connect_inputs(outer);
+    graph->draw_edges(outer, subgraph);
+    graph->connect_outputs(subgraph);
+
+    graph->start();
+    graph->push_data(hh::make_data<int>(7));
+    graph->push_data(hh::make_data<float>(1.5f));
+
+    auto check = [](auto value) {
+        using V = decltype(value);
+        if constexpr (std::is_same_v<V, std::shared_ptr<int>>) {
+            EXPECT_EQ(*value, 7);
+        } else if constexpr (std::is_same_v<V, std::shared_ptr<float>>) {
+            EXPECT_FLOAT_EQ(*value, 1.5f);
+        }
+    };
+    std::visit(check, graph->get_result());
+    std::visit(check, graph->get_result());
+    graph->stop();
+}
+#endif // HH_ENABLE_TBB

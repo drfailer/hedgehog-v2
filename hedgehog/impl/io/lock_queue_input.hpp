@@ -88,12 +88,15 @@ struct LockQueueInputPorts : LockQueueInputPort<Inputs>... {
     }
 
     template <typename Executable>
-    void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+    size_t execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        size_t count = 0;
         ([&] {
             if (auto data = LockQueueInputPort<Inputs>::pop()) [[likely]] {
                 exec->execute(std::move(*data));
+                ++count;
             }
         }(), ...);
+        return count;
     }
 };
 

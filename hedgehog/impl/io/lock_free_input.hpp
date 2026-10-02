@@ -94,13 +94,16 @@ struct MoodycamelMPMCInput : CondTrigger, MoodycamelMPMCInputPort<Inputs>... {
     }
 
     template <typename Executable>
-    void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+    size_t execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        size_t count = 0;
         ([&] {
             data_t<Inputs> data;
             while (MoodycamelMPMCInputPort<Inputs>::pop(data, info.thread_index)) [[likely]] {
                 exec->execute(std::move(data));
+                ++count;
             }
         }(), ...);
+        return count;
     }
 };
 
@@ -129,13 +132,16 @@ struct MoodycamelAtomicInput : AtomicTrigger, MoodycamelMPMCInputPort<Inputs>...
     }
 
     template <typename Executable>
-    void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+    size_t execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        size_t count = 0;
         ([&] {
             data_t<Inputs> data;
             while (MoodycamelMPMCInputPort<Inputs>::pop(data, info.thread_index)) [[likely]] {
                 exec->execute(std::move(data));
+                ++count;
             }
         }(), ...);
+        return count;
     }
 };
 
@@ -181,13 +187,16 @@ struct DakingMPSCInput : CondTrigger, DakingMPSCInputPort<Inputs>... {
     }
 
     template <typename Executable>
-    void execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+    size_t execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+        size_t count = 0;
         ([&] {
             data_t<Inputs> data;
             while (DakingMPSCInputPort<Inputs>::pop(data)) [[likely]] {
                 exec->execute(std::move(data));
+                ++count;
             }
         }(), ...);
+        return count;
     }
 };
 
