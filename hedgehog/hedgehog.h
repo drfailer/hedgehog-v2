@@ -33,6 +33,8 @@
 #include "api/execution_context.hpp"
 
 #include "impl/graph/thread_runner.hpp"
+#include "impl/graph/serial_runner.hpp"
+#include "impl/graph/tbb/tbb_runner.hpp"
 #include "impl/io/lock_queue_input.hpp"
 #include "impl/io/lock_free_input.hpp"
 #include "impl/io/group_input.hpp"
