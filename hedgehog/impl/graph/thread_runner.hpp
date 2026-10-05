@@ -16,82 +16,65 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_IMPL_GRAPH_SERIAL_EXECUTOR_H
-#define HEDGEHOG_IMPL_GRAPH_SERIAL_EXECUTOR_H
+#ifndef HEDGEHOG_IMPL_GRAPH_THREAD_RUNNER
+#define HEDGEHOG_IMPL_GRAPH_THREAD_RUNNER
 
-#include <set>
-#include <queue>
+#include <vector>
 #include <thread>
-#include <cstdio>
-#include <unordered_map>
-#include "../../graph/node.hpp"
+#include "../../tool/numa.hpp"
 
 namespace hh {
 
-struct SerialExecutor {
+struct ThreadRunner {
+    std::vector<std::thread> threads = {};
     std::vector<TaskHandle> handles_ = {};
     std::vector<Node *> graph_nodes_ = {};
-    std::unordered_map<Node *, size_t> handle_map_ = {};
-    std::queue<size_t> ready_handles_;
-    bool executing_ = false;
-    RuntimeInfo runtime_info_ = {};
 
-    void initialize(InitializationInfo const &) {
-        executing_ = false;
-    }
+    void initialize(InitializationInfo const &) {}
 
-    template <typename ConcreteNode>
-    void register_node(ConcreteNode *node) {
+    void register_node(auto node) {
         if constexpr (requires { node->handle(); }) {
-            handle_map_[node] = handles_.size();
             handles_.push_back(node->handle());
         } else {
             graph_nodes_.push_back(node);
         }
     }
 
-    void execute(ExecutionInfo const &info) {
-        runtime_info_.exec = info;
-        runtime_info_.thread_index = 0;
-
+    void run(RunInfo const &info) {
         for (auto *node : graph_nodes_) {
-            node->execute(info);
+            node->run(info);
         }
+
         for (auto &handle : handles_) {
-            handle.initialize(handle.task, runtime_info_);
+            for (size_t i = 0; i < handle.task->info().number_threads; ++i) {
+                auto pipeline = info.pipeline;
+                threads.push_back(
+                    std::thread([&handle, i, info, pipeline]() {
+                        numa::pin_current_thread(pipeline.numa_id);
+                        RuntimeInfo ri{};
+                        ri.run = info;
+                        ri.thread_index = i;
+                        handle.initialize(handle.task, ri);
+                        for (;;) {
+                            auto wr = handle.wait(handle.task, ri);
+                            if (wr.terminate) [[unlikely]] break;
+                            if (wr.skip) [[unlikely]] continue;
+                            handle.execute_all(handle.task, ri);
+                        }
+                        handle.finalize(handle.task, ri);
+                    })
+                );
+            }
         }
-    }
-
-    void on_transfer(Node *node, RuntimeInfo const &) {
-        auto it = handle_map_.find(node);
-        if (it == handle_map_.end()) return;
-        ready_handles_.push(it->second);
-        execute_ready_handles();
-    }
-
-    void execute_ready_handles() {
-        if (executing_) return;
-        executing_ = true;
-        while (!ready_handles_.empty()) {
-            auto idx = ready_handles_.front();
-            ready_handles_.pop();
-            auto &handle = handles_[idx];
-            handle.execute(handle.task, runtime_info_);
-        }
-        executing_ = false;
-    }
-
-    void on_result() {
-        execute_ready_handles();
     }
 
     void finalize(InitializationInfo const &) {
-        for (auto &handle : handles_) {
-            handle.finalize(handle.task, runtime_info_);
+        for (auto &thread : threads) {
+            thread.join();
         }
+        threads.clear();
         handles_.clear();
         graph_nodes_.clear();
-        handle_map_.clear();
     }
 };
 

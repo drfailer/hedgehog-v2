@@ -94,7 +94,7 @@ struct MoodycamelMPMCInput : CondTrigger, MoodycamelMPMCInputPort<Inputs>... {
     }
 
     template <typename Executable>
-    size_t execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+    size_t execute_all(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
         size_t count = 0;
         ([&] {
             data_t<Inputs> data;
@@ -146,7 +146,7 @@ struct MoodycamelAtomicInput : AtomicTrigger, MoodycamelMPMCInputPort<Inputs>...
     }
 
     template <typename Executable>
-    size_t execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+    size_t execute_all(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
         size_t count = 0;
         ([&] {
             data_t<Inputs> data;
@@ -215,7 +215,7 @@ struct DakingMPSCInput : CondTrigger, DakingMPSCInputPort<Inputs>... {
     }
 
     template <typename Executable>
-    size_t execute(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
+    size_t execute_all(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
         size_t count = 0;
         ([&] {
             data_t<Inputs> data;

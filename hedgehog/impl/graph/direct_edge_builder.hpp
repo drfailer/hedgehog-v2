@@ -26,14 +26,14 @@ struct DirectEdgeBuilder {
     static Edge<T> make_edge(auto args) {
         using Receiver = std::remove_pointer_t<decltype(args.receiver)>;
         using Graph = std::remove_pointer_t<decltype(args.graph)>;
-        using Executor = Graph::Executor;
+        using Runner = Graph::Runner;
 
         return Edge<T>(args.receiver, args.graph, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
             auto receiver = static_cast<Receiver *>(e->receiver);
             auto graph = static_cast<Graph *>(e->graph);
             receiver->push_data(std::move(data), info);
-            if constexpr (HasOnTransfer<Executor, Receiver, RuntimeInfo>) {
-                graph->executor()->on_transfer(receiver, info);
+            if constexpr (HasOnTransfer<Runner, Receiver, RuntimeInfo>) {
+                graph->runner()->on_transfer(receiver, info);
             }
         });
     }

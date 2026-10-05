@@ -94,10 +94,11 @@ struct TaskNode : Node {
 
     // attributes & constructors ///////////////////////////////////////////////
 
-    Input                    input_      = {};
-    Output                   output_     = {};
-    GraphInfo                graph_info_ = {};
-    std::vector<ThreadState> states_     = {};
+    Input                    input_        = {};
+    Output                   output_       = {};
+    GraphInfo                graph_info_   = {};
+    std::vector<ThreadState> states_       = {};
+    int                      runner_index_ = 0;
 
     TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), states_(info.number_threads) {
         states_[0].task = std::move(task);
@@ -107,10 +108,12 @@ struct TaskNode : Node {
     Output &output() { return output_; }
     std::vector<ThreadState> const &states() const { return states_; } // may be usefull for some executors
     std::shared_ptr<Task> task() { return states_[0].task; } // should not be used after execute
+    int  runner_index() const { return runner_index_; }
+    void runner_index(int idx) { runner_index_ = idx; }
 
     void resize_threads(size_t n) {
         states_.resize(n);
-        Node::set_number_threads(n);
+        Node::number_threads(n);
     }
 
     // node api ////////////////////////////////////////////////////////////////
@@ -127,8 +130,11 @@ struct TaskNode : Node {
         output_.initialize(init_info);
     }
 
-    // execution is driven by the executor via TaskHandle
-    void execute(ExecutionInfo const &) override {}
+    void run(RunInfo const &) override {
+        //
+        // The task node doesn't have a runner so this function is empty.
+        //
+    }
 
     TaskHandle handle() {
         using Self = TaskNode<Config>;
@@ -157,10 +163,10 @@ struct TaskNode : Node {
                 }
                 return wr;
             },
-            .execute = +[](Node *node, RuntimeInfo const &info) -> size_t {
+            .execute_all = +[](Node *node, RuntimeInfo const &info) -> size_t {
                 auto *self = static_cast<Self *>(node);
                 auto &state = self->states_[info.thread_index];
-                return self->input_.execute(&state, state.context.info());
+                return self->input_.execute_all(&state, state.context.info());
             },
             .execute_one = +[](Node *node, RuntimeInfo const &info) -> bool {
                 auto *self = static_cast<Self *>(node);

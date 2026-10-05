@@ -25,10 +25,10 @@
 #include "../tool/type_list.hpp"
 #include "../impl/io/lock_queue_input.hpp"
 #include "../impl/io/lock_free_input.hpp"
-#include "../impl/graph/thread_executor.hpp"
+#include "../impl/graph/thread_runner.hpp"
 #include "../impl/graph/graph_sink.hpp"
 #include "../impl/graph/serial_sink.hpp"
-#include "../impl/graph/serial_executor.hpp"
+#include "../impl/graph/serial_runner.hpp"
 #include "../impl/graph/direct_edge_builder.hpp"
 
 namespace hh {
@@ -41,7 +41,7 @@ using DefaultNodeInput = type_list_dispatch<InputList, LockQueueNodeInput>;
 template <typename OutputList>
 using DefaultNodeOutput = type_list_dispatch<OutputList, EdgeSlots>;
 
-using DefaultGraphExecutor = ThreadExecutor;
+using DefaultGraphRunner = ThreadRunner;
 
 // Fields deducers /////////////////////////////////////////////////////////////
 
@@ -90,21 +90,21 @@ struct make_task_config {
 // make_graph //////////////////////////////////////////////////////////////////
 
 template <typename Impl, size_t Sep, typename ...Types>
-auto make_graph(std::shared_ptr<Impl> executor, std::string const &name = "Graph") {
+auto make_graph(std::shared_ptr<Impl> runner, std::string const &name = "Graph") {
     using io = io_types<Sep, Types...>;
     struct Config {
         using InputTypes = io::inputs;
         using OutputTypes = io::outputs;
         using Sink = type_list_dispatch<OutputTypes, GraphSink>;
-        using Executor = Impl;
+        using Runner = Impl;
         using EdgeBuilder = DirectEdgeBuilder;
     };
-    return std::make_shared<Graph<Config>>(executor, NodeInfo{name, 0});
+    return std::make_shared<Graph<Config>>(runner, NodeInfo{name, 0});
 }
 
 template <size_t Sep, typename ...Types>
 auto make_graph(std::string const &name = "Graph") {
-    return make_graph<DefaultGraphExecutor, Sep, Types...>(std::make_shared<DefaultGraphExecutor>(), name);
+    return make_graph<DefaultGraphRunner, Sep, Types...>(std::make_shared<DefaultGraphRunner>(), name);
 }
 
 template <size_t Sep, typename ...Types>
@@ -114,11 +114,11 @@ auto make_serial_graph(std::string const &name = "Graph") {
         using InputTypes = io::outputs;
         using OutputTypes = io::outputs;
         using Sink = type_list_dispatch<OutputTypes, SerialSink>;
-        using Executor = SerialExecutor;
+        using Runner = SerialRunner;
         using EdgeBuilder = DirectEdgeBuilder;
     };
-    auto executor = std::make_shared<SerialExecutor>();
-    return std::make_shared<Graph<Config>>(executor, NodeInfo{name, 0});
+    auto runner = std::make_shared<SerialRunner>();
+    return std::make_shared<Graph<Config>>(runner, NodeInfo{name, 0});
 }
 
 } // end namespace hh

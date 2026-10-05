@@ -904,13 +904,13 @@ TEST(memory, cuda_pool) {
 // TBB Executor ////////////////////////////////////////////////////////////////
 
 #ifdef HH_ENABLE_TBB
-#include "../hedgehog/impl/graph/tbb/tbb_executor.hpp"
+#include "../hedgehog/impl/graph/tbb/tbb_runner.hpp"
 
 TEST(tbb_executor, simple) {
     auto node1 = hh::make_task<Task>(1, "task1");
     auto node2 = hh::make_task<Task>(1, "task2");
-    auto executor = std::make_shared<hh::TBBExecutor>();
-    auto graph = hh::make_graph<hh::TBBExecutor, 2, int, float, int, float>(executor);
+    auto executor = std::make_shared<hh::TBBRunner>();
+    auto graph = hh::make_graph<hh::TBBRunner, 2, int, float, int, float>(executor);
 
     graph->connect_inputs(node1);
     graph->draw_edges(node1, node2);
@@ -936,8 +936,8 @@ TEST(tbb_executor, simple) {
 TEST(tbb_executor, multi_threaded_node) {
     auto node1 = hh::make_task<Task>(4, "task1");
     auto node2 = hh::make_task<Task>(4, "task2");
-    auto executor = std::make_shared<hh::TBBExecutor>(8);
-    auto graph = hh::make_graph<hh::TBBExecutor, 2, int, float, int, float>(executor);
+    auto executor = std::make_shared<hh::TBBRunner>(8);
+    auto graph = hh::make_graph<hh::TBBRunner, 2, int, float, int, float>(executor);
 
     graph->connect_inputs(node1);
     graph->draw_edges(node1, node2);
@@ -970,14 +970,14 @@ TEST(tbb_executor, multi_threaded_node) {
 
 TEST(tbb_executor, sub_graph) {
     auto inner = hh::make_task<Task>(1, "inner");
-    auto executor_inner = std::make_shared<hh::TBBExecutor>(2);
-    auto subgraph = hh::make_graph<hh::TBBExecutor, 2, int, float, int, float>(executor_inner, "subgraph");
+    auto executor_inner = std::make_shared<hh::TBBRunner>(2);
+    auto subgraph = hh::make_graph<hh::TBBRunner, 2, int, float, int, float>(executor_inner, "subgraph");
     subgraph->connect_inputs(inner);
     subgraph->connect_outputs(inner);
 
     auto outer = hh::make_task<Task>(1, "outer");
-    auto executor = std::make_shared<hh::TBBExecutor>(4);
-    auto graph = hh::make_graph<hh::TBBExecutor, 2, int, float, int, float>(executor, "main");
+    auto executor = std::make_shared<hh::TBBRunner>(4);
+    auto graph = hh::make_graph<hh::TBBRunner, 2, int, float, int, float>(executor, "main");
     graph->connect_inputs(outer);
     graph->draw_edges(outer, subgraph);
     graph->connect_outputs(subgraph);

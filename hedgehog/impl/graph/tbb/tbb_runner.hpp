@@ -16,8 +16,8 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_IMPL_GRAPH_TBB_EXECUTOR
-#define HEDGEHOG_IMPL_GRAPH_TBB_EXECUTOR
+#ifndef HEDGEHOG_IMPL_GRAPH_TBB_RUNNER
+#define HEDGEHOG_IMPL_GRAPH_TBB_RUNNER
 
 #include <deque>
 #include <atomic>
@@ -28,7 +28,7 @@
 
 namespace hh {
 
-struct TBBExecutor {
+struct TBBRunner {
     struct NodeData {
         TaskHandle handle = {};
         std::atomic<bool> busy{false};
@@ -47,7 +47,7 @@ struct TBBExecutor {
     tbb::task_group tg_;
     RuntimeInfo runtime_info_ = {};
 
-    TBBExecutor(int num_threads = tbb::task_arena::automatic)
+    TBBRunner(int num_threads = tbb::task_arena::automatic)
         : arena_(num_threads) {}
 
     void initialize(InitializationInfo const &) {}
@@ -55,7 +55,7 @@ struct TBBExecutor {
     void register_node(auto node) {
         if constexpr (requires { node->handle(); }) {
             int idx = static_cast<int>(node_data_.size());
-            node->executor_index(idx);
+            node->runner_index(idx);
 
             bool parallel = node->info().number_threads > 1;
             int max_concurrent = static_cast<int>(node->info().number_threads);
@@ -74,11 +74,11 @@ struct TBBExecutor {
         }
     }
 
-    void execute(ExecutionInfo const &info) {
-        runtime_info_.exec = info;
+    void run(RunInfo const &info) {
+        runtime_info_.run = info;
 
         for (auto *node : graph_nodes_) {
-            node->execute(info);
+            node->run(info);
         }
 
         for (auto &nd : node_data_) {
@@ -153,7 +153,7 @@ struct TBBExecutor {
 
                     ri.thread_index = 0;
                     for (;;) {
-                        size_t count = nd.handle.execute(nd.handle.task, ri);
+                        size_t count = nd.handle.execute_all(nd.handle.task, ri);
                         if (count == 0) break;
                         nd.pending.fetch_sub(
                             static_cast<int>(count), std::memory_order_acq_rel);
@@ -172,7 +172,7 @@ struct TBBExecutor {
     }
 
     void on_transfer(Node *node, RuntimeInfo const &) {
-        int idx = node->executor_index();
+        int idx = node->runner_index();
         if (idx < 0) return;
         auto &nd = node_data_[idx];
         int prev = nd.pending.fetch_add(1, std::memory_order_acq_rel);

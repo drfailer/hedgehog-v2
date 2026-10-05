@@ -16,64 +16,82 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_IMPL_GRAPH_THREAD_EXECUTOR
-#define HEDGEHOG_IMPL_GRAPH_THREAD_EXECUTOR
+#ifndef HEDGEHOG_IMPL_GRAPH_SERIAL_RUNNER_H
+#define HEDGEHOG_IMPL_GRAPH_SERIAL_RUNNER_H
 
-#include <vector>
+#include <set>
+#include <queue>
 #include <thread>
-#include "../../tool/numa.hpp"
+#include <cstdio>
+#include <unordered_map>
+#include "../../graph/node.hpp"
 
 namespace hh {
 
-struct ThreadExecutor {
-    std::vector<std::thread> threads = {};
+struct SerialRunner {
     std::vector<TaskHandle> handles_ = {};
     std::vector<Node *> graph_nodes_ = {};
+    std::unordered_map<Node *, size_t> handle_map_ = {};
+    std::queue<size_t> ready_handles_;
+    bool executing_ = false;
+    RuntimeInfo runtime_info_ = {};
 
-    void initialize(InitializationInfo const &) {}
+    void initialize(InitializationInfo const &) {
+        executing_ = false;
+    }
 
-    void register_node(auto node) {
+    template <typename ConcreteNode>
+    void register_node(ConcreteNode *node) {
         if constexpr (requires { node->handle(); }) {
+            handle_map_[node] = handles_.size();
             handles_.push_back(node->handle());
         } else {
             graph_nodes_.push_back(node);
         }
     }
 
-    void execute(ExecutionInfo const &info) {
-        for (auto *node : graph_nodes_) {
-            node->execute(info);
-        }
+    void run(RunInfo const &info) {
+        runtime_info_.run = info;
+        runtime_info_.thread_index = 0;
 
+        for (auto *node : graph_nodes_) {
+            node->run(info);
+        }
         for (auto &handle : handles_) {
-            for (size_t i = 0; i < handle.task->info().number_threads; ++i) {
-                auto pipeline = info.pipeline;
-                threads.push_back(
-                    std::thread([&handle, i, info, pipeline]() {
-                        numa::pin_current_thread(pipeline.numa_id);
-                        RuntimeInfo ri{};
-                        ri.exec = info;
-                        ri.thread_index = i;
-                        handle.initialize(handle.task, ri);
-                        for (;;) {
-                            auto wr = handle.wait(handle.task, ri);
-                            if (wr.terminate) [[unlikely]] break;
-                            if (!wr.skip) [[unlikely]] handle.execute(handle.task, ri);
-                        }
-                        handle.finalize(handle.task, ri);
-                    })
-                );
-            }
+            handle.initialize(handle.task, runtime_info_);
         }
     }
 
-    void finalize(InitializationInfo const &) {
-        for (auto &thread : threads) {
-            thread.join();
+    void on_transfer(Node *node, RuntimeInfo const &) {
+        auto it = handle_map_.find(node);
+        if (it == handle_map_.end()) return;
+        ready_handles_.push(it->second);
+        execute_ready_handles();
+    }
+
+    void execute_ready_handles() {
+        if (executing_) return;
+        executing_ = true;
+        while (!ready_handles_.empty()) {
+            auto idx = ready_handles_.front();
+            ready_handles_.pop();
+            auto &handle = handles_[idx];
+            handle.execute_all(handle.task, runtime_info_);
         }
-        threads.clear();
+        executing_ = false;
+    }
+
+    void on_result() {
+        execute_ready_handles();
+    }
+
+    void finalize(InitializationInfo const &) {
+        for (auto &handle : handles_) {
+            handle.finalize(handle.task, runtime_info_);
+        }
         handles_.clear();
         graph_nodes_.clear();
+        handle_map_.clear();
     }
 };
 

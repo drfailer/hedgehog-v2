@@ -38,7 +38,6 @@ class Node {
     Node *parent_{nullptr};
     NodeInfo info_{};
     Profiler profiler_{};
-    int executor_index_ = -1;
 
   public:
     Node(NodeInfo info) : info_(info) {}
@@ -49,13 +48,14 @@ class Node {
     Node *parent() { return parent_; }
     void parent(Node *parent) { parent_ = parent; }
 
-    int executor_index() const { return executor_index_; }
-    void executor_index(int idx) { executor_index_ = idx; }
+    size_t number_threads() const { return info_.number_threads; }
+    void number_threads(size_t n) { info_.number_threads = n; }
 
-    void set_number_threads(size_t n) { info_.number_threads = n; }
+    std::string name() const { return info_.name; }
+    void name(std::string name) { info_.name = std::move(name); }
 
     virtual void initialize(GraphInfo const &info) = 0;
-    virtual void execute(ExecutionInfo const &info) = 0;
+    virtual void run(RunInfo const &info) = 0;
     virtual void finalize(GraphInfo const &info) = 0;
     virtual GraphViewNode graph_view() = 0;
 
@@ -68,10 +68,7 @@ class Node {
     }
 };
 
-// Node IO /////////////////////////////////////////////////////////////////////
-
-template <typename T>
-struct Edge;
+// Task Handle /////////////////////////////////////////////////////////////////
 
 struct SignalOpts {
     size_t count;        // number of threads to signal
@@ -85,12 +82,17 @@ struct WaitResult {
 
 struct TaskHandle {
     Node *task;
-    void (*initialize)(Node *, RuntimeInfo const &);
-    void (*finalize)(Node *, RuntimeInfo const &);
+    void       (*initialize)(Node *, RuntimeInfo const &);
+    void       (*finalize)(Node *, RuntimeInfo const &);
     WaitResult (*wait)(Node *, RuntimeInfo const &);
-    size_t (*execute)(Node *, RuntimeInfo const &);
-    bool (*execute_one)(Node *, RuntimeInfo const &);
+    size_t     (*execute_all)(Node *, RuntimeInfo const &);
+    bool       (*execute_one)(Node *, RuntimeInfo const &);
 };
+
+// Node IO /////////////////////////////////////////////////////////////////////
+
+template <typename T>
+struct Edge;
 
 //
 // Node input/output specifications.
@@ -112,7 +114,8 @@ concept NodeInputTrait = std::default_initializable<T>
         { t.signal(opts) };
     }
     && requires(T t, void *exec, RuntimeInfo const &ri) {
-        t.execute(exec, ri);
+        t.execute_one(exec, ri);
+        t.execute_all(exec, ri);
     }
     && (requires(T t, data_t<Inputs> d, RuntimeInfo const &i) {
         t.push_data(std::move(d), i);
@@ -125,7 +128,7 @@ concept NodeOutputTrait = std::default_initializable<T>
         t.finalize(info);
     }
     && (requires(T t, data_t<Outputs> data) {
-        t.push_result(data, RuntimeInfo{}); // TODO: this should be push_data
+        t.push_data(data, RuntimeInfo{});
     } && ...)
     && (requires(T t, Edge<Outputs> e) {
         t.connect_edge(std::move(e));
