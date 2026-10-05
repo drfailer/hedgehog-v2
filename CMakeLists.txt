@@ -17,6 +17,7 @@ option(HH_TEST "Downloads google unit test API and runs google test scripts to t
 option(HH_TEST_META "Test meta-functions" OFF)
 option(HH_ENABLE_PROFILING "Enable profiling." OFF)
 option(HH_ENABLE_CONCEPTS "Enable concept constraints on template parameters (slower compile)" OFF)
+option(HH_ENABLE_TBB "Enable TBB-based executor (fetched via FetchContent if not found)" OFF)
 option(ENABLE_NVTX "Enable NVTX if CUDA is found" OFF)
 
 set(CACHE_LINE_SIZE 64)
@@ -37,6 +38,33 @@ target_include_directories(
 
 target_compile_features(hedgehog INTERFACE cxx_std_20)
 target_link_libraries(hedgehog INTERFACE Threads::Threads)
+
+if (HH_ENABLE_TBB)
+    find_package(TBB QUIET)
+    if (NOT TBB_FOUND)
+        message(STATUS "TBB not found on system, fetching via FetchContent...")
+        set(BUILD_SHARED_LIBS ON)
+        set(TBB_TEST OFF CACHE BOOL "" FORCE)
+        set(TBB_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(TBB_STRICT OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            onetbb
+            GIT_REPOSITORY https://github.com/uxlfoundation/oneTBB.git
+            GIT_TAG        v2023.1.0
+            GIT_SHALLOW    TRUE
+            OVERRIDE_FIND_PACKAGE
+        )
+        FetchContent_MakeAvailable(onetbb)
+        if (TARGET tbb AND NOT TARGET TBB::tbb)
+            add_library(TBB::tbb ALIAS tbb)
+        endif()
+        unset(BUILD_SHARED_LIBS)
+    else()
+        message(STATUS "Using system TBB: ${TBB_DIR}")
+    endif()
+    target_link_libraries(hedgehog INTERFACE TBB::tbb)
+    target_compile_definitions(hedgehog INTERFACE HH_ENABLE_TBB)
+endif()
 
 if (HH_ENABLE_PROFILING)
     target_compile_definitions(hedgehog INTERFACE HH_ENABLE_PROFILING)

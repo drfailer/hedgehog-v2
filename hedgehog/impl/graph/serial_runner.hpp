@@ -16,46 +16,76 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_IMPL_GRAPH_THREAD_EXECUTOR
-#define HEDGEHOG_IMPL_GRAPH_THREAD_EXECUTOR
+#ifndef HEDGEHOG_IMPL_GRAPH_SERIAL_RUNNER_H
+#define HEDGEHOG_IMPL_GRAPH_SERIAL_RUNNER_H
 
-#include <vector>
-#include <thread>
-#include "../../tool/numa.hpp"
+#include <queue>
+#include <type_traits>
+#include "../../graph/node.hpp"
 
 namespace hh {
 
-struct ThreadExecutor {
-    std::vector<std::thread> threads = {};
+struct SerialRunner {
+    std::vector<Runnable *> runnables_ = {};
+    std::vector<Node *> graph_nodes_ = {};
+    std::queue<int> ready_queue_;
+    bool executing_ = false;
+    RuntimeInfo runtime_info_ = {};
 
-    void initialize(InitializationInfo const &) {}
+    void initialize(InitializationInfo const &) {
+        executing_ = false;
+    }
 
-    void execute(std::set<std::shared_ptr<Node>> const &nodes, ExecutionInfo const &info) {
-        auto exec_info = info;
-
-        exec_info.direct = false;
-        for (auto node : nodes) {
-            if (node->info().number_threads == 0) {
-                node->execute(exec_info);
-            } else {
-                for (size_t i = 0; i < node->info().number_threads; ++i) {
-                    exec_info.thread_index = i;
-                    threads.push_back(
-                        std::thread([node, exec_info]() {
-                            numa::pin_current_thread(exec_info.pipeline.numa_id);
-                            node->execute(exec_info);
-                        })
-                    );
-                }
-            }
+    template <typename ConcreteNode>
+    void register_node(ConcreteNode *node) {
+        if constexpr (std::is_base_of_v<Runnable, ConcreteNode>) {
+            node->runner_index(static_cast<int>(runnables_.size()));
+            runnables_.push_back(node);
+        } else {
+            graph_nodes_.push_back(node);
         }
     }
 
-    void finalize(InitializationInfo const &) {
-        for (auto &thread : threads) {
-            thread.join();
+    void run(RunInfo const &info) {
+        runtime_info_.run = info;
+        runtime_info_.thread_index = 0;
+
+        for (auto *node : graph_nodes_) {
+            node->run(info);
         }
-        threads.clear();
+        for (auto *runnable : runnables_) {
+            runnable->initialize(runtime_info_);
+        }
+    }
+
+    void on_transfer(Runnable *runnable, RuntimeInfo const &) {
+        int idx = runnable->runner_index();
+        if (idx < 0) return;
+        ready_queue_.push(idx);
+        execute_ready();
+    }
+
+    void execute_ready() {
+        if (executing_) return;
+        executing_ = true;
+        while (!ready_queue_.empty()) {
+            auto idx = ready_queue_.front();
+            ready_queue_.pop();
+            runnables_[idx]->execute_all(runtime_info_);
+        }
+        executing_ = false;
+    }
+
+    void on_result() {
+        execute_ready();
+    }
+
+    void finalize(InitializationInfo const &) {
+        for (auto *runnable : runnables_) {
+            runnable->finalize(runtime_info_);
+        }
+        runnables_.clear();
+        graph_nodes_.clear();
     }
 };
 

@@ -47,7 +47,7 @@ concept Lockable = requires(S &s) {
     s.unlock();
 };
 
-// Executor capabilities ///////////////////////////////////////////////////////
+// Runner capabilities /////////////////////////////////////////////////////////
 
 template <typename E, typename N, typename I>
 concept HasOnTransfer = requires(E &e, N *n, I const &i) { e.on_transfer(n, i); };

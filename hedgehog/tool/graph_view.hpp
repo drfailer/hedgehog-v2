@@ -51,6 +51,7 @@ struct ViewPipeline {
 
 enum class ViewKind { Node, Edge, Graph, Pipeline };
 
+// TODO: we need a parent view node here as well
 struct GraphViewNode {
     Node *node = nullptr;
     std::variant<ViewNode, ViewEdge, ViewGraph, ViewPipeline> data;

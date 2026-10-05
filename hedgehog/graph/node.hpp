@@ -48,8 +48,14 @@ class Node {
     Node *parent() { return parent_; }
     void parent(Node *parent) { parent_ = parent; }
 
+    size_t number_threads() const { return info_.number_threads; }
+    void number_threads(size_t n) { info_.number_threads = n; }
+
+    std::string name() const { return info_.name; }
+    void name(std::string name) { info_.name = std::move(name); }
+
     virtual void initialize(GraphInfo const &info) = 0;
-    virtual void execute(ExecutionInfo const &info) = 0;
+    virtual void run(RunInfo const &info) = 0;
     virtual void finalize(GraphInfo const &info) = 0;
     virtual GraphViewNode graph_view() = 0;
 
@@ -62,10 +68,7 @@ class Node {
     }
 };
 
-// Node IO /////////////////////////////////////////////////////////////////////
-
-template <typename T>
-struct Edge;
+// Task Handle /////////////////////////////////////////////////////////////////
 
 struct SignalOpts {
     size_t count;        // number of threads to signal
@@ -76,6 +79,25 @@ struct WaitResult {
     bool terminate; // used to leave the thread loop
     bool skip;      // used to skip execution in the thread loop (no data, or defered)
 };
+
+struct Runnable {
+    int runner_index_ = -1;
+
+    int runner_index() const { return runner_index_; }
+    void runner_index(int idx) { runner_index_ = idx; }
+
+    virtual void initialize(RuntimeInfo const &) = 0;
+    virtual void finalize(RuntimeInfo const &) = 0;
+    virtual WaitResult wait(RuntimeInfo const &) = 0;
+    virtual size_t execute_all(RuntimeInfo const &) = 0;
+    virtual bool execute_one(RuntimeInfo const &) = 0;
+    virtual ~Runnable() = default;
+};
+
+// Node IO /////////////////////////////////////////////////////////////////////
+
+template <typename T>
+struct Edge;
 
 //
 // Node input/output specifications.
@@ -97,7 +119,8 @@ concept NodeInputTrait = std::default_initializable<T>
         { t.signal(opts) };
     }
     && requires(T t, void *exec, RuntimeInfo const &ri) {
-        t.execute(exec, ri);
+        t.execute_one(exec, ri);
+        t.execute_all(exec, ri);
     }
     && (requires(T t, data_t<Inputs> d, RuntimeInfo const &i) {
         t.push_data(std::move(d), i);
@@ -110,7 +133,7 @@ concept NodeOutputTrait = std::default_initializable<T>
         t.finalize(info);
     }
     && (requires(T t, data_t<Outputs> data) {
-        t.push_result(data, RuntimeInfo{});
+        t.push_data(data, RuntimeInfo{});
     } && ...)
     && (requires(T t, Edge<Outputs> e) {
         t.connect_edge(std::move(e));

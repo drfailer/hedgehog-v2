@@ -45,7 +45,7 @@ struct Graph : Node {
     using InputTypes  = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
     using Sink        = Config::Sink;
-    using Executor    = Config::Executor;
+    using Runner      = Config::Runner;
     using EdgeBuilder = Config::EdgeBuilder;
     using Input       = type_list_dispatch<InputTypes, EdgeSlots>;
     using Output      = type_list_dispatch<OutputTypes, EdgeConnectors>;
@@ -73,7 +73,7 @@ struct Graph : Node {
     GraphInfo graph_info_ = {};
     Input input_   = {};
     Output output_ = {};
-    std::shared_ptr<Executor> executor_ = {};
+    std::shared_ptr<Runner> runner_ = {};
     Sink sink_ = {};
     std::set<std::shared_ptr<Node>> nodes_ = {};
     std::set<std::shared_ptr<Node>> input_nodes_ = {};
@@ -85,17 +85,17 @@ struct Graph : Node {
     Profile *exec_profile_ = nullptr;
     #endif
 
-    Graph(std::shared_ptr<Executor>     executor,
+    Graph(std::shared_ptr<Runner>     runner,
           NodeInfo const               &info)
         : Node(info),
-          executor_(std::move(executor)) {
+          runner_(std::move(runner)) {
         graph_info_.name = info.name;
         graph_info_.id = graph_id_gen_++;
     }
 
     Input &input() { return input_; }
     Output &output() { return output_; }
-    Executor *executor() { return executor_.get(); }
+    Runner *runner() { return runner_.get(); }
     Sink &sink() { return sink_; }
     std::set<std::shared_ptr<Node>> const &nodes() const { return nodes_; }
     std::set<std::shared_ptr<Node>> const &input_nodes() const { return input_nodes_; }
@@ -156,8 +156,8 @@ struct Graph : Node {
         exec_profile_ = Node::profiler().profile_region("execution");
         exec_profile_->begin_region();
         #endif
-        ExecutionInfo exec_info = {0, rank, PipelineInfo{}, false, ExecutionInfo::Execute};
-        execute(exec_info);
+        RunInfo run_info = {rank, PipelineInfo{}};
+        run(run_info);
     }
 
     void stop() {
@@ -181,12 +181,12 @@ struct Graph : Node {
 
     template <typename T>
     void push_data(data_t<T> data) {
-        push_data<T>(std::move(data), RuntimeInfo{&Node::info(), &graph_info_, {}, &Node::profiler()});
+        push_data<T>(std::move(data), RuntimeInfo{&Node::info(), &graph_info_, {}, 0, &Node::profiler()});
     }
 
     auto get_result() {
-        if constexpr (HasOnResult<Executor>) {
-            executor_->on_result();
+        if constexpr (HasOnResult<Runner>) {
+            runner_->on_result();
         }
         return sink_.get_result();
     }
@@ -206,7 +206,7 @@ struct Graph : Node {
         for (auto &node : nodes_) {
             node->initialize(graph_info_);
         }
-        executor_->initialize(init_info);
+        runner_->initialize(init_info);
     }
 
     void initialize(GraphInfo const &) override {
@@ -214,8 +214,8 @@ struct Graph : Node {
         initialize_components();
     }
 
-    void execute(ExecutionInfo const &info) override {
-        executor_->execute(nodes_, info);
+    void run(RunInfo const &info) override {
+        runner_->run(info);
     }
 
     void finalize(GraphInfo const &) override {
@@ -223,7 +223,7 @@ struct Graph : Node {
         for (auto &node : nodes_) {
             node->finalize(graph_info_);
         }
-        executor_->finalize(init_info);
+        runner_->finalize(init_info);
         input_.finalize(init_info);
         output_.finalize(init_info);
         sink_.finalize(init_info);
@@ -283,10 +283,12 @@ struct Graph : Node {
         return EdgeBuilder::template make_edge<T>(MakeEdgeArgs{sender, receiver, this});
     }
 
-    void register_node(std::shared_ptr<Node> node) {
+    template <typename ConcreteNode>
+    void register_node(std::shared_ptr<ConcreteNode> node) {
         if (node->parent() != nullptr) return;
         node->parent(this);
         nodes_.insert(node);
+        runner_->register_node(node.get());
     }
 
     //

@@ -16,74 +16,72 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_IMPL_GRAPH_SERIAL_EXECUTOR_H
-#define HEDGEHOG_IMPL_GRAPH_SERIAL_EXECUTOR_H
+#ifndef HEDGEHOG_IMPL_GRAPH_THREAD_RUNNER
+#define HEDGEHOG_IMPL_GRAPH_THREAD_RUNNER
 
-#include <set>
-#include <queue>
+#include <vector>
 #include <thread>
-#include <cstdio>
-#include "../../graph/node.hpp"
+#include <type_traits>
+#include "../../tool/numa.hpp"
 
 namespace hh {
 
-struct SerialExecutor {
-    std::set<std::shared_ptr<Node>> const *nodes_ = nullptr;
-    std::queue<Node *> ready_nodes_;
-    bool executing_;
-    PipelineInfo pipeline_info_;
+struct ThreadRunner {
+    struct RunEntry {
+        Runnable *runnable;
+        size_t number_threads;
+    };
 
-    ExecutionInfo make_execution_info(auto phase) {
-        return ExecutionInfo{0, 0, pipeline_info_, true, phase};
-    }
+    std::vector<std::thread> threads = {};
+    std::vector<RunEntry> runnables_ = {};
+    std::vector<Node *> graph_nodes_ = {};
 
-    void execute(std::set<std::shared_ptr<Node>> const &nodes, ExecutionInfo const &info) {
-        // graphs are executed only once (a graph node never ends up in the
-        // ready list) so here we simply initialize the tasks and sub-graphs
-        nodes_ = &nodes;
-        pipeline_info_ = info.pipeline;
-        for (auto &node : nodes) {
-            node->execute(make_execution_info(ExecutionInfo::Initialize));
+    void initialize(InitializationInfo const &) {}
+
+    void register_node(auto node) {
+        if constexpr (std::is_base_of_v<Runnable, std::remove_pointer_t<decltype(node)>>) {
+            runnables_.push_back({node, node->info().number_threads});
+        } else {
+            graph_nodes_.push_back(node);
         }
     }
 
-    void on_transfer(Node *node, RuntimeInfo const &) {
-        // we don't execute the node directly here, otherwize cyclic graphs
-        // with a lot of data would stack overflow.
-        ready_nodes_.push(node);
-        execute_ready_nodes(); // we can try to start the execution
-    }
-
-    void execute_ready_nodes() {
-        if (executing_) {
-            // here, we already are in the execution loop and we must leave to
-            // prevent recursion
-            return;
+    void run(RunInfo const &info) {
+        for (auto *node : graph_nodes_) {
+            node->run(info);
         }
-        executing_ = true;
-        while (!ready_nodes_.empty()) {
-            auto node = ready_nodes_.front();
-            ready_nodes_.pop();
-            node->execute(make_execution_info(ExecutionInfo::Execute));
+
+        for (auto &entry : runnables_) {
+            for (size_t i = 0; i < entry.number_threads; ++i) {
+                auto pipeline = info.pipeline;
+                auto *runnable = entry.runnable;
+                threads.push_back(
+                    std::thread([runnable, i, info, pipeline]() {
+                        numa::pin_current_thread(pipeline.numa_id);
+                        RuntimeInfo ri{};
+                        ri.run = info;
+                        ri.thread_index = i;
+                        runnable->initialize(ri);
+                        for (;;) {
+                            auto wr = runnable->wait(ri);
+                            if (wr.terminate) [[unlikely]] break;
+                            if (wr.skip) [[unlikely]] continue;
+                            runnable->execute_all(ri);
+                        }
+                        runnable->finalize(ri);
+                    })
+                );
+            }
         }
-        executing_ = false;
-    }
-
-    void on_result() {
-        execute_ready_nodes();
-    }
-
-    void initialize(InitializationInfo const &) {
-        nodes_ = nullptr;
-        executing_ = false;
     }
 
     void finalize(InitializationInfo const &) {
-        // we finalize the state of the thread 0 for each node
-        for (auto &node : *nodes_) {
-            node->execute(make_execution_info(ExecutionInfo::Finalize));
+        for (auto &thread : threads) {
+            thread.join();
         }
-        nodes_ = nullptr;
+        threads.clear();
+        runnables_.clear();
+        graph_nodes_.clear();
     }
 };
 

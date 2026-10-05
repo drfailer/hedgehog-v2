@@ -66,18 +66,15 @@ struct NodeInfo {
     size_t number_threads;
 };
 
-// ExecutionInfo //////////////////////////////////////////////////////////////
+// RunInfo /////////////////////////////////////////////////////////////////////
 
 //
-// Information from the executor.
+// Information from the runner.
 //
 
-struct ExecutionInfo {
-    size_t thread_index;
+struct RunInfo {
     int rank;
     PipelineInfo pipeline;
-    bool direct;
-    enum { Initialize, Execute, Finalize } direct_phase;
 };
 
 /******************************************************************************/
@@ -105,7 +102,8 @@ struct InitializationInfo {
 struct RuntimeInfo {
     NodeInfo const *node;
     GraphInfo const *graph;
-    ExecutionInfo exec;
+    RunInfo run;
+    size_t thread_index = 0;
     Profiler *profiler;
 };
 

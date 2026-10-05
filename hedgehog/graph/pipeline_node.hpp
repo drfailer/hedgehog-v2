@@ -59,12 +59,12 @@ struct PipelineNode : Node {
         }
     }
 
-    void execute(ExecutionInfo const &info) override {
-        auto exec_info = info;
+    void run(RunInfo const &info) override {
+        auto run_info = info;
 
         for (size_t i = 0; i < graphs_.size(); ++i) {
-            exec_info.pipeline = configs_[i];
-            graphs_[i]->execute(exec_info);
+            run_info.pipeline = configs_[i];
+            graphs_[i]->run(run_info);
         }
     }
 
