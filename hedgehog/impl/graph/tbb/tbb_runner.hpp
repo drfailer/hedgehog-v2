@@ -18,6 +18,7 @@
 
 #ifndef HEDGEHOG_IMPL_GRAPH_TBB_RUNNER
 #define HEDGEHOG_IMPL_GRAPH_TBB_RUNNER
+#ifdef HH_ENABLE_TBB
 
 #include <deque>
 #include <atomic>
@@ -214,4 +215,5 @@ struct TBBRunner {
 
 } // end namespace hh
 
+#endif
 #endif
