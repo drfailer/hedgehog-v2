@@ -80,13 +80,18 @@ struct WaitResult {
     bool skip;      // used to skip execution in the thread loop (no data, or defered)
 };
 
-struct TaskHandle {
-    Node *task;
-    void       (*initialize)(Node *, RuntimeInfo const &);
-    void       (*finalize)(Node *, RuntimeInfo const &);
-    WaitResult (*wait)(Node *, RuntimeInfo const &);
-    size_t     (*execute_all)(Node *, RuntimeInfo const &);
-    bool       (*execute_one)(Node *, RuntimeInfo const &);
+struct Runnable {
+    int runner_index_ = -1;
+
+    int runner_index() const { return runner_index_; }
+    void runner_index(int idx) { runner_index_ = idx; }
+
+    virtual void initialize(RuntimeInfo const &) = 0;
+    virtual void finalize(RuntimeInfo const &) = 0;
+    virtual WaitResult wait(RuntimeInfo const &) = 0;
+    virtual size_t execute_all(RuntimeInfo const &) = 0;
+    virtual bool execute_one(RuntimeInfo const &) = 0;
+    virtual ~Runnable() = default;
 };
 
 // Node IO /////////////////////////////////////////////////////////////////////

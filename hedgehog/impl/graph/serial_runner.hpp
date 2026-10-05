@@ -19,20 +19,16 @@
 #ifndef HEDGEHOG_IMPL_GRAPH_SERIAL_RUNNER_H
 #define HEDGEHOG_IMPL_GRAPH_SERIAL_RUNNER_H
 
-#include <set>
 #include <queue>
-#include <thread>
-#include <cstdio>
-#include <unordered_map>
+#include <type_traits>
 #include "../../graph/node.hpp"
 
 namespace hh {
 
 struct SerialRunner {
-    std::vector<TaskHandle> handles_ = {};
+    std::vector<Runnable *> runnables_ = {};
     std::vector<Node *> graph_nodes_ = {};
-    std::unordered_map<Node *, size_t> handle_map_ = {};
-    std::queue<size_t> ready_handles_;
+    std::queue<int> ready_queue_;
     bool executing_ = false;
     RuntimeInfo runtime_info_ = {};
 
@@ -42,9 +38,9 @@ struct SerialRunner {
 
     template <typename ConcreteNode>
     void register_node(ConcreteNode *node) {
-        if constexpr (requires { node->handle(); }) {
-            handle_map_[node] = handles_.size();
-            handles_.push_back(node->handle());
+        if constexpr (std::is_base_of_v<Runnable, ConcreteNode>) {
+            node->runner_index(static_cast<int>(runnables_.size()));
+            runnables_.push_back(node);
         } else {
             graph_nodes_.push_back(node);
         }
@@ -57,41 +53,39 @@ struct SerialRunner {
         for (auto *node : graph_nodes_) {
             node->run(info);
         }
-        for (auto &handle : handles_) {
-            handle.initialize(handle.task, runtime_info_);
+        for (auto *runnable : runnables_) {
+            runnable->initialize(runtime_info_);
         }
     }
 
-    void on_transfer(Node *node, RuntimeInfo const &) {
-        auto it = handle_map_.find(node);
-        if (it == handle_map_.end()) return;
-        ready_handles_.push(it->second);
-        execute_ready_handles();
+    void on_transfer(Runnable *runnable, RuntimeInfo const &) {
+        int idx = runnable->runner_index();
+        if (idx < 0) return;
+        ready_queue_.push(idx);
+        execute_ready();
     }
 
-    void execute_ready_handles() {
+    void execute_ready() {
         if (executing_) return;
         executing_ = true;
-        while (!ready_handles_.empty()) {
-            auto idx = ready_handles_.front();
-            ready_handles_.pop();
-            auto &handle = handles_[idx];
-            handle.execute_all(handle.task, runtime_info_);
+        while (!ready_queue_.empty()) {
+            auto idx = ready_queue_.front();
+            ready_queue_.pop();
+            runnables_[idx]->execute_all(runtime_info_);
         }
         executing_ = false;
     }
 
     void on_result() {
-        execute_ready_handles();
+        execute_ready();
     }
 
     void finalize(InitializationInfo const &) {
-        for (auto &handle : handles_) {
-            handle.finalize(handle.task, runtime_info_);
+        for (auto *runnable : runnables_) {
+            runnable->finalize(runtime_info_);
         }
-        handles_.clear();
+        runnables_.clear();
         graph_nodes_.clear();
-        handle_map_.clear();
     }
 };
 

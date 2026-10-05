@@ -39,7 +39,11 @@ namespace hh {
 //
 
 template <typename Config>
-struct TaskNode : Node {
+struct TaskNode : Node, Runnable {
+    using Node::initialize;
+    using Runnable::initialize;
+    using Node::finalize;
+    using Runnable::finalize;
     // config //////////////////////////////////////////////////////////////////
 
     using InputTypes  = Config::InputTypes;
@@ -98,7 +102,6 @@ struct TaskNode : Node {
     Output                   output_       = {};
     GraphInfo                graph_info_   = {};
     std::vector<ThreadState> states_       = {};
-    int                      runner_index_ = 0;
 
     TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), states_(info.number_threads) {
         states_[0].task = std::move(task);
@@ -106,10 +109,8 @@ struct TaskNode : Node {
 
     Input &input() { return input_; }
     Output &output() { return output_; }
-    std::vector<ThreadState> const &states() const { return states_; } // may be usefull for some executors
-    std::shared_ptr<Task> task() { return states_[0].task; } // should not be used after execute
-    int  runner_index() const { return runner_index_; }
-    void runner_index(int idx) { runner_index_ = idx; }
+    std::vector<ThreadState> const &states() const { return states_; }
+    std::shared_ptr<Task> task() { return states_[0].task; }
 
     void resize_threads(size_t n) {
         states_.resize(n);
@@ -130,51 +131,7 @@ struct TaskNode : Node {
         output_.initialize(init_info);
     }
 
-    void run(RunInfo const &) override {
-        //
-        // The task node doesn't have a runner so this function is empty.
-        //
-    }
-
-    TaskHandle handle() {
-        using Self = TaskNode<Config>;
-        return TaskHandle{
-            .task = this,
-            .initialize = +[](Node *node, RuntimeInfo const &info) {
-                auto *self = static_cast<Self *>(node);
-                auto &state = self->states_[info.thread_index];
-                RuntimeInfo ri = info;
-                ri.node = &self->Node::info();
-                ri.graph = &self->graph_info_;
-                ri.profiler = &state.profiler;
-                state.initialize(self, ri);
-            },
-            .finalize = +[](Node *node, RuntimeInfo const &info) {
-                auto *self = static_cast<Self *>(node);
-                self->states_[info.thread_index].finalize();
-            },
-            .wait = +[](Node *node, RuntimeInfo const &info) -> WaitResult {
-                auto *self = static_cast<Self *>(node);
-                auto &state = self->states_[info.thread_index];
-                WaitResult wr;
-                HH_THREAD_PROFILE_REGION(state.profiler, "wait")
-                {
-                    wr = self->input_.wait(state.context.info());
-                }
-                return wr;
-            },
-            .execute_all = +[](Node *node, RuntimeInfo const &info) -> size_t {
-                auto *self = static_cast<Self *>(node);
-                auto &state = self->states_[info.thread_index];
-                return self->input_.execute_all(&state, state.context.info());
-            },
-            .execute_one = +[](Node *node, RuntimeInfo const &info) -> bool {
-                auto *self = static_cast<Self *>(node);
-                auto &state = self->states_[info.thread_index];
-                return self->input_.execute_one(&state, state.context.info());
-            },
-        };
-    }
+    void run(RunInfo const &) override {}
 
     void finalize(GraphInfo const &) override {
         auto init_info = InitializationInfo{&Node::info(), &graph_info_, &Node::profiler()};
@@ -194,6 +151,41 @@ struct TaskNode : Node {
 
     GraphViewNode graph_view() override {
         return GraphViewNode::make_node(this);
+    }
+
+    // Runnable interface //////////////////////////////////////////////////////
+
+    void initialize(RuntimeInfo const &info) override {
+        auto &state = states_[info.thread_index];
+        RuntimeInfo ri = info;
+        ri.node = &Node::info();
+        ri.graph = &graph_info_;
+        ri.profiler = &state.profiler;
+        state.initialize(this, ri);
+    }
+
+    void finalize(RuntimeInfo const &info) override {
+        states_[info.thread_index].finalize();
+    }
+
+    WaitResult wait(RuntimeInfo const &info) override {
+        auto &state = states_[info.thread_index];
+        WaitResult wr;
+        HH_THREAD_PROFILE_REGION(state.profiler, "wait")
+        {
+            wr = input_.wait(state.context.info());
+        }
+        return wr;
+    }
+
+    size_t execute_all(RuntimeInfo const &info) override {
+        auto &state = states_[info.thread_index];
+        return input_.execute_all(&state, state.context.info());
+    }
+
+    bool execute_one(RuntimeInfo const &info) override {
+        auto &state = states_[info.thread_index];
+        return input_.execute_one(&state, state.context.info());
     }
 
     // io //////////////////////////////////////////////////////////////////////

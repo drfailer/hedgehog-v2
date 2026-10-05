@@ -21,20 +21,26 @@
 
 #include <vector>
 #include <thread>
+#include <type_traits>
 #include "../../tool/numa.hpp"
 
 namespace hh {
 
 struct ThreadRunner {
+    struct RunEntry {
+        Runnable *runnable;
+        size_t number_threads;
+    };
+
     std::vector<std::thread> threads = {};
-    std::vector<TaskHandle> handles_ = {};
+    std::vector<RunEntry> runnables_ = {};
     std::vector<Node *> graph_nodes_ = {};
 
     void initialize(InitializationInfo const &) {}
 
     void register_node(auto node) {
-        if constexpr (requires { node->handle(); }) {
-            handles_.push_back(node->handle());
+        if constexpr (std::is_base_of_v<Runnable, std::remove_pointer_t<decltype(node)>>) {
+            runnables_.push_back({node, node->info().number_threads});
         } else {
             graph_nodes_.push_back(node);
         }
@@ -45,23 +51,24 @@ struct ThreadRunner {
             node->run(info);
         }
 
-        for (auto &handle : handles_) {
-            for (size_t i = 0; i < handle.task->info().number_threads; ++i) {
+        for (auto &entry : runnables_) {
+            for (size_t i = 0; i < entry.number_threads; ++i) {
                 auto pipeline = info.pipeline;
+                auto *runnable = entry.runnable;
                 threads.push_back(
-                    std::thread([&handle, i, info, pipeline]() {
+                    std::thread([runnable, i, info, pipeline]() {
                         numa::pin_current_thread(pipeline.numa_id);
                         RuntimeInfo ri{};
                         ri.run = info;
                         ri.thread_index = i;
-                        handle.initialize(handle.task, ri);
+                        runnable->initialize(ri);
                         for (;;) {
-                            auto wr = handle.wait(handle.task, ri);
+                            auto wr = runnable->wait(ri);
                             if (wr.terminate) [[unlikely]] break;
                             if (wr.skip) [[unlikely]] continue;
-                            handle.execute_all(handle.task, ri);
+                            runnable->execute_all(ri);
                         }
-                        handle.finalize(handle.task, ri);
+                        runnable->finalize(ri);
                     })
                 );
             }
@@ -73,7 +80,7 @@ struct ThreadRunner {
             thread.join();
         }
         threads.clear();
-        handles_.clear();
+        runnables_.clear();
         graph_nodes_.clear();
     }
 };

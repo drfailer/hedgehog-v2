@@ -22,6 +22,7 @@
 #include <deque>
 #include <atomic>
 #include <algorithm>
+#include <type_traits>
 #include <tbb/task_arena.h>
 #include <tbb/task_group.h>
 #include "../../../graph/node.hpp"
@@ -30,7 +31,7 @@ namespace hh {
 
 struct TBBRunner {
     struct NodeData {
-        TaskHandle handle = {};
+        Runnable *runnable = nullptr;
         std::atomic<bool> busy{false};
         std::atomic<int> active{0};
         std::atomic<int> pending{0};
@@ -53,7 +54,7 @@ struct TBBRunner {
     void initialize(InitializationInfo const &) {}
 
     void register_node(auto node) {
-        if constexpr (requires { node->handle(); }) {
+        if constexpr (std::is_base_of_v<Runnable, std::remove_pointer_t<decltype(node)>>) {
             int idx = static_cast<int>(node_data_.size());
             node->runner_index(idx);
 
@@ -65,7 +66,7 @@ struct TBBRunner {
             }
 
             auto &nd = node_data_.emplace_back();
-            nd.handle = node->handle();
+            nd.runnable = node;
             nd.max_threads = node->info().number_threads;
             nd.max_concurrent = max_concurrent;
             nd.parallel = parallel;
@@ -85,7 +86,7 @@ struct TBBRunner {
             for (size_t i = 0; i < nd.max_threads; ++i) {
                 RuntimeInfo ri = runtime_info_;
                 ri.thread_index = i;
-                nd.handle.initialize(nd.handle.task, ri);
+                nd.runnable->initialize(ri);
             }
         }
     }
@@ -128,7 +129,7 @@ struct TBBRunner {
 
                     int processed = 0;
                     for (;;) {
-                        if (!nd.handle.execute_one(nd.handle.task, ri)) break;
+                        if (!nd.runnable->execute_one(ri)) break;
                         ++processed;
 
                         int expected = expected_workers(idx);
@@ -153,7 +154,7 @@ struct TBBRunner {
 
                     ri.thread_index = 0;
                     for (;;) {
-                        size_t count = nd.handle.execute_all(nd.handle.task, ri);
+                        size_t count = nd.runnable->execute_all(ri);
                         if (count == 0) break;
                         nd.pending.fetch_sub(
                             static_cast<int>(count), std::memory_order_acq_rel);
@@ -171,8 +172,8 @@ struct TBBRunner {
         });
     }
 
-    void on_transfer(Node *node, RuntimeInfo const &) {
-        int idx = node->runner_index();
+    void on_transfer(Runnable *runnable, RuntimeInfo const &) {
+        int idx = runnable->runner_index();
         if (idx < 0) return;
         auto &nd = node_data_[idx];
         int prev = nd.pending.fetch_add(1, std::memory_order_acq_rel);
@@ -194,7 +195,7 @@ struct TBBRunner {
             for (size_t i = 0; i < nd.max_threads; ++i) {
                 RuntimeInfo ri = runtime_info_;
                 ri.thread_index = i;
-                nd.handle.finalize(nd.handle.task, ri);
+                nd.runnable->finalize(ri);
             }
         }
 
