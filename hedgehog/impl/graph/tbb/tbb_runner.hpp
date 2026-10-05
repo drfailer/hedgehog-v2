@@ -129,12 +129,19 @@ struct TBBRunner {
 
                     int processed = 0;
                     for (;;) {
-                        if (!nd.runnable->execute_one(ri)) break;
-                        ++processed;
-
                         int expected = expected_workers(idx);
+                        int batch = std::max(
+                            nd.pending.load(std::memory_order_relaxed) / std::max(expected, 1),
+                            1);
+
+                        for (int b = 0; b < batch; ++b) {
+                            if (!nd.runnable->execute_one(ri)) goto done;
+                            ++processed;
+                        }
+
                         if (nd.active.load(std::memory_order_relaxed) > expected) break;
                     }
+                    done:
                     if (processed > 0) {
                         nd.pending.fetch_sub(processed, std::memory_order_acq_rel);
                     }
