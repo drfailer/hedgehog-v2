@@ -266,7 +266,7 @@ struct Profiler {
 
     Profiler() = default;
     Profiler(Profiler const &) = delete;
-    Profiler(Profiler &&other) {
+    Profiler([[maybe_unused]] Profiler &&other) {
         #ifdef HH_ENABLE_PROFILING
         std::swap(profiles, other.profiles);
         #endif
