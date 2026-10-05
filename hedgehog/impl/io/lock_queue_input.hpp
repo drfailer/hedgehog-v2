@@ -24,7 +24,6 @@
 #include <optional>
 #include <queue>
 #include <condition_variable>
-#include <semaphore>
 #include <memory>
 #include <tuple>
 #include "../../graph/node.hpp"
@@ -140,50 +139,6 @@ struct LockQueueNodeInput : CondTrigger, LockQueueInputPorts<Inputs...> {
     }
 };
 
-
-// sema trigger input //////////////////////////////////////////////////////////
-
-template <typename ...Inputs>
-struct LockQueueSemaNodeInput : SemaTrigger, LockQueueInputPorts<Inputs...> {
-    void initialize(InitializationInfo const &info) {
-        LockQueueInputPorts<Inputs...>::initialize(info);
-        SemaTrigger::initialize(info.node->number_threads);
-    }
-
-    void finalize([[maybe_unused]] InitializationInfo const &info) {
-        SemaTrigger::finalize();
-        LockQueueInputPorts<Inputs...>::finalize(info);
-    }
-
-    template <typename T>
-    void push_data(data_t<T> data, RuntimeInfo const &info) {
-        LockQueueInputPort<T>::push_data(std::move(data), info);
-        SemaTrigger::signal(SignalOpts{1, 0});
-    }
-};
-
-// futex trigger input /////////////////////////////////////////////////////////
-
-template <size_t SpinCount, typename ...Inputs>
-struct LockQueueFutexNodeInput : FutexTrigger<SpinCount>, LockQueueInputPorts<Inputs...> {
-    using Trigger = FutexTrigger<SpinCount>;
-
-    void initialize(InitializationInfo const &info) {
-        LockQueueInputPorts<Inputs...>::initialize(info);
-        Trigger::initialize(info.node->number_threads);
-    }
-
-    void finalize([[maybe_unused]] InitializationInfo const &info) {
-        Trigger::finalize();
-        LockQueueInputPorts<Inputs...>::finalize(info);
-    }
-
-    template <typename T>
-    void push_data(data_t<T> data, RuntimeInfo const &info) {
-        LockQueueInputPort<T>::push_data(std::move(data), info);
-        Trigger::signal(SignalOpts{1, 0});
-    }
-};
 
 } // end namespace
 
