@@ -124,15 +124,19 @@ if (HH_TEST)
 
     file(GLOB_RECURSE test_hedgehog_header tests/*.h)
     add_executable(gtest_hedgehog ${test_hedgehog_header} tests/test_hedgehog.cpp)
+    add_executable(gtest_allocators ${test_hedgehog_header} tests/test_allocators.cpp)
 
     if (MSVC)
         target_compile_options(gtest_hedgehog PRIVATE /bigobj)
+        target_compile_options(gtest_allocators PRIVATE /bigobj)
     endif (MSVC)
 
     target_link_libraries(gtest_hedgehog gtest_main hedgehog)
+    target_link_libraries(gtest_allocators gtest_main hedgehog)
 
     include(GoogleTest)
     gtest_discover_tests(gtest_hedgehog)
+    gtest_discover_tests(gtest_allocators)
 endif (HH_TEST)
 
 # Install
