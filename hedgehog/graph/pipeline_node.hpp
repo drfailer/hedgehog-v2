@@ -83,7 +83,7 @@ struct PipelineNode : Node {
 
     GraphViewNode graph_view() override {
         auto view = GraphViewNode::make_pipeline(this);
-        auto &children = view.children();
+        auto &children = view.pipeline.children;
 
         for (auto &graph : graphs_) {
             type_list_map<InputTypes>([&]<typename T>() {

@@ -21,7 +21,6 @@
 
 #include <string>
 #include <vector>
-#include <variant>
 
 #include "helpers.hpp"
 
@@ -31,7 +30,8 @@ class Node;
 
 struct GraphViewNode;
 
-struct ViewNode {};
+// TODO: this data structure should probably be recursive (use GraphViewNode*
+//       instead of Node* so that we can access to more information)
 
 struct ViewEdge {
     Node *sender;
@@ -53,62 +53,42 @@ enum class ViewKind { Node, Edge, Graph, Pipeline };
 
 // TODO: we need a parent view node here as well
 struct GraphViewNode {
-    Node *node = nullptr;
-    std::variant<ViewNode, ViewEdge, ViewGraph, ViewPipeline> data;
+    ViewKind     kind     = ViewKind::Node;
+    Node        *node     = nullptr;
+    ViewEdge     edge     = {};
+    ViewGraph    graph    = {};
+    ViewPipeline pipeline = {};
 
     // factory methods /////////////////////////////////////////////////////////
 
     static GraphViewNode make_node(Node *n) {
-        return {n, ViewNode{}};
+        GraphViewNode view;
+        view.kind = ViewKind::Node;
+        view.node = n;
+        return view;
     }
 
     static GraphViewNode make_edge(Node *sender, Node *receiver, std::string type_name) {
-        return {nullptr, ViewEdge{sender, receiver, std::move(type_name)}};
+        GraphViewNode view;
+        view.kind = ViewKind::Edge;
+        view.edge = ViewEdge{sender, receiver, std::move(type_name)};
+        return view;
     }
 
     static GraphViewNode make_graph(Node *n) {
-        return {n, ViewGraph{}};
+        GraphViewNode view;
+        view.kind = ViewKind::Graph;
+        view.node = n;
+        return view;
     }
 
     static GraphViewNode make_pipeline(Node *n) {
-        return {n, ViewPipeline{}};
-    }
-
-    // tag & accessors /////////////////////////////////////////////////////////
-
-    ViewKind kind() const { return static_cast<ViewKind>(data.index()); }
-
-    bool is_node() const { return kind() == ViewKind::Node; }
-    bool is_edge() const { return kind() == ViewKind::Edge; }
-    bool is_graph() const { return kind() == ViewKind::Graph; }
-    bool is_pipeline() const { return kind() == ViewKind::Pipeline; }
-
-    ViewNode       &view_node()           { return std::get<ViewNode>(data); }
-    ViewNode const &view_node()     const { return std::get<ViewNode>(data); }
-    ViewEdge       &edge()           { return std::get<ViewEdge>(data); }
-    ViewEdge const &edge()     const { return std::get<ViewEdge>(data); }
-    ViewGraph       &graph()           { return std::get<ViewGraph>(data); }
-    ViewGraph const &graph()     const { return std::get<ViewGraph>(data); }
-    ViewPipeline       &pipeline()           { return std::get<ViewPipeline>(data); }
-    ViewPipeline const &pipeline()     const { return std::get<ViewPipeline>(data); }
-
-    std::vector<GraphViewNode> &children() {
-        if (auto *g = std::get_if<ViewGraph>(&data)) return g->children;
-        return std::get<ViewPipeline>(data).children;
-    }
-
-    std::vector<GraphViewNode> const &children() const {
-        if (auto *g = std::get_if<ViewGraph>(&data)) return g->children;
-        return std::get<ViewPipeline>(data).children;
+        GraphViewNode view;
+        view.kind = ViewKind::Pipeline;
+        view.node = n;
+        return view;
     }
 };
-
-// visit ///////////////////////////////////////////////////////////////////////
-
-template <typename ...Fs>
-decltype(auto) visit(GraphViewNode const &node, Fs &&...fs) {
-    return std::visit(overloaded{std::forward<Fs>(fs)...}, node.data);
-}
 
 // traverse ////////////////////////////////////////////////////////////////////
 //
@@ -117,14 +97,12 @@ decltype(auto) visit(GraphViewNode const &node, Fs &&...fs) {
 //
 
 template <typename F>
-void traverse(GraphViewNode const &node, F &&fn) {
-    bool go_deeper = fn(node);
-    if (go_deeper) {
-        if (auto *g = std::get_if<ViewGraph>(&node.data)) {
-            for (auto &child : g->children) traverse(child, fn);
-        } else if (auto *p = std::get_if<ViewPipeline>(&node.data)) {
-            for (auto &child : p->children) traverse(child, fn);
-        }
+void traverse(GraphViewNode const &view, F &&fn) {
+    if (!fn(view)) return;
+    switch (view.kind) {
+    case ViewKind::Graph:    for (auto &child : view.graph.children) traverse(child, fn); break;
+    case ViewKind::Pipeline: for (auto &child : view.pipeline.children) traverse(child, fn); break;
+    default: break;
     }
 }
 
