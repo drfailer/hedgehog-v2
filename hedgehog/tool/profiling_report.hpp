@@ -89,19 +89,19 @@ inline void report_to_text(GraphViewNode const &view, ProfileMap const &profiles
         auto it = profiles.find(node_id(view.node));
         if (it != profiles.end()) {
             for (auto &entry : it->second.entries) {
-                std::visit(overloaded{
-                    [&](RegionEntry const &r) {
-                        os << pad << "  " << entry.label << ": "
-                           << format_duration(r.measure.mean) << " +/- " << format_duration(r.measure.stddev())
-                           << " [" << format_duration(r.measure.min) << "; " << format_duration(r.measure.max) << "]"
-                           << " (" << r.measure.count << ")\n";
-                    },
-                    [&](StringEntry const &s) {
-                        os << pad << "    ";
-                        for (auto const &str : s.values) { os << str << "<BR/>"; }
-                        os << "\n";
-                    },
-                }, entry.data);
+                switch (entry.kind) {
+                case EntryKind::Region:
+                    os << pad << "  " << entry.label << ": "
+                       << format_duration(entry.region.measure.mean) << " +/- " << format_duration(entry.region.measure.stddev())
+                       << " [" << format_duration(entry.region.measure.min) << "; " << format_duration(entry.region.measure.max) << "]"
+                       << " (" << entry.region.measure.count << ")\n";
+                    break;
+                case EntryKind::String:
+                    os << pad << "    ";
+                    for (auto const &str : entry.string.values) { os << str << "<BR/>"; }
+                    os << "\n";
+                    break;
+                }
             }
         }
     }
@@ -118,9 +118,9 @@ inline void report_to_text(GraphViewNode const &view, ProfileMap const &profiles
 inline double compute_node_exec_time(ProfileReport const &report) {
     double total = 0;
     for (auto &entry : report.entries) {
-        if (auto *r = std::get_if<RegionEntry>(&entry.data);
-            r && entry.label.starts_with("execute")) {
-            total += r->measure.mean * r->measure.count;
+        if (entry.kind != EntryKind::Region) continue;
+        if (entry.label.starts_with("execute")) {
+            total += entry.region.measure.mean * entry.region.measure.count;
         }
     }
     return total;
@@ -166,21 +166,21 @@ inline void write_node_label(std::ostream &os, std::string const &label,
     }
     for (auto &entry : entries) {
         os << "<tr><td align=\"left\">" << html_escape(entry.label) << "</td><td align=\"left\">";
-        std::visit(overloaded{
-            [&](RegionEntry const &r) {
-                auto &m = r.measure;
-                os << "avg: " << format_duration(m.mean) << " +/- " << format_duration(m.stddev())
-                   << " | ttl: " << format_duration(m.mean * m.count)
-                   << " | min: " << format_duration(m.min)
-                   << " - max: " << format_duration(m.max)
-                   << " | count: " << m.count;
-            },
-            [&](StringEntry const &s) {
-                for (auto const &str : s.values) {
-                    os << html_escape(str) << "<BR/>";
-                }
-            },
-        }, entry.data);
+        switch (entry.kind) {
+        case EntryKind::Region: {
+            auto &m = entry.region.measure;
+            os << "avg: " << format_duration(m.mean) << " +/- " << format_duration(m.stddev())
+               << " | ttl: " << format_duration(m.mean * m.count)
+               << " | min: " << format_duration(m.min)
+               << " - max: " << format_duration(m.max)
+               << " | count: " << m.count;
+        } break;
+        case EntryKind::String: {
+            for (auto const &str : entry.string.values) {
+                os << html_escape(str) << "<BR/>";
+            }
+        } break;
+        }
         os << "</td></tr>\n";
     }
     os << "</table>";
