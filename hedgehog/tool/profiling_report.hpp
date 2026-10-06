@@ -129,14 +129,14 @@ inline double compute_node_exec_time(ProfileReport const &report) {
 inline double find_max_exec(GraphViewNode const &view, ProfileMap const &profiles) {
     double max_exec = 0;
     traverse(view, [&](GraphViewNode const &n) -> bool {
-        if (n.kind == ViewKind::Node && n.node) {
+        if (n.node) {
             auto it = profiles.find(node_id(n.node));
             if (it != profiles.end()) {
                 max_exec = std::max(max_exec, compute_node_exec_time(it->second));
             }
         }
         return true;
-    });
+    }, {ViewKind::Node});
     return max_exec;
 }
 

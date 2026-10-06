@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <set>
 
 #include "helpers.hpp"
 #include "../impl/memory/allocators.hpp"
@@ -99,6 +100,7 @@ struct GraphViewNode {
 };
 
 // GraphView ///////////////////////////////////////////////////////////////////
+
 //
 // Owns the arena and root pointer. All GraphViewNode* in the tree point into
 // this arena's memory.
@@ -127,17 +129,20 @@ inline void propagate_output_edges(GraphViewNode const *n, std::vector<ViewOutpu
 }
 
 // traverse ////////////////////////////////////////////////////////////////////
+
 //
 // Depth-first traversal. The callback receives each GraphViewNode and returns
 // bool: true to recurse into children (for graph/pipeline), false to skip.
 //
 
 template <typename F>
-void traverse(GraphViewNode const &view, F &&fn) {
-    if (!fn(view)) return;
+void traverse(GraphViewNode const &view, F &&fn, std::set<ViewKind> filter = {ViewKind::Node, ViewKind::Edge, ViewKind::Graph, ViewKind::Pipeline}) {
+    if (filter.contains(view.kind)) {
+        if (!fn(view)) return;
+    }
     switch (view.kind) {
-    case ViewKind::Graph:    for (auto *child : view.graph.children) traverse(*child, fn); break;
-    case ViewKind::Pipeline: for (auto *child : view.pipeline.children) traverse(*child, fn); break;
+    case ViewKind::Graph:    for (auto *child : view.graph.children) traverse(*child, fn, filter); break;
+    case ViewKind::Pipeline: for (auto *child : view.pipeline.children) traverse(*child, fn, filter); break;
     default: break;
     }
 }
