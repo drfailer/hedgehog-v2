@@ -249,6 +249,7 @@ struct Graph : Node {
 
         auto *view = GraphViewNode::make_graph(arena, this);
         map[this] = view;
+        gv->all_graphs.push_back(view);
 
         for (auto &node : nodes_) {
             auto *child = node->graph_view(gv);
@@ -260,7 +261,7 @@ struct Graph : Node {
             for (auto &edge : input_.template edges<T>()) {
                 auto *receiver = reinterpret_cast<Node *>(edge.receiver);
                 if (auto it = map.find(receiver); it != map.end()) {
-                    view->graph.input_nodes.push_back(it->second);
+                    view->graph.input_edges.push_back({it->second, type_to_string<T>()});
                 }
             }
         });
@@ -275,8 +276,9 @@ struct Graph : Node {
                 auto *e = GraphViewNode::make_edge(arena, sender_it->second, receiver_it->second, conn.type_name);
                 e->parent = view;
                 view->graph.edges.push_back(e);
+                gv->all_edges.push_back(e);
             } else {
-                view->graph.output_edges.push_back({sender_it->second, conn.type_name});
+                view->graph.output_edges.push_back({sender_it->second, std::string(conn.type_name)});
             }
         }
 

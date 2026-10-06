@@ -152,6 +152,7 @@ struct TaskNode : Node, Runnable {
     GraphViewNode *graph_view(GraphView *gv) override {
         auto *view = GraphViewNode::make_node(gv->arena, this);
         gv->node_map[this] = view;
+        gv->all_nodes.push_back(view);
         return view;
     }
 

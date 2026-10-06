@@ -295,7 +295,7 @@ inline void graph_view_to_dot(GraphViewNode const &view, ProfileMap const &profi
     }
     for (auto &oe : g.output_edges) {
         using namespace std::string_literals;
-        auto sender = "node_"s + std::to_string(node_id(oe.sender->node));
+        auto sender = "node_"s + std::to_string(node_id(oe.node->node));
         auto edge = "edge_"s + std::to_string(edge_counter++);
         os << sender << " -> " << edge << " [dir=none];\n";
         os << edge << "[shape=rect, style=filled, fillcolor=\"#ffffff\", label=\"" << oe.type_name << "\"];\n";

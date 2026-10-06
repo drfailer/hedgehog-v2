@@ -87,6 +87,7 @@ struct PipelineNode : Node {
 
         auto *view = GraphViewNode::make_pipeline(arena, this);
         map[this] = view;
+        gv->all_pipelines.push_back(view);
 
         for (auto &graph : graphs_) {
             auto *child = graph->graph_view(gv);
@@ -101,6 +102,7 @@ struct PipelineNode : Node {
                         auto *edge_view = GraphViewNode::make_edge(arena, view, it->second, type_to_string<T>());
                         edge_view->parent = view;
                         view->pipeline.edges.push_back(edge_view);
+                        gv->all_edges.push_back(edge_view);
                     }
                 }
             });
