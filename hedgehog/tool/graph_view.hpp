@@ -40,9 +40,15 @@ struct ViewEdge {
     std::string type_name;
 };
 
+struct ViewOutputEdge {
+    GraphViewNode *sender;
+    std::string type_name;
+};
+
 struct ViewGraph {
+    Node *sink = nullptr;
     std::vector<GraphViewNode *> input_nodes;
-    std::vector<GraphViewNode *> output_nodes;
+    std::vector<ViewOutputEdge> output_edges;
     std::vector<GraphViewNode *> children;
 };
 
@@ -105,6 +111,20 @@ struct GraphView {
 
     GraphView(size_t block_size = 4096) : arena(block_size) {}
 };
+
+// helpers /////////////////////////////////////////////////////////////////////
+
+inline void propagate_output_edges(GraphViewNode const *n, std::vector<ViewOutputEdge> &edges) {
+    switch (n->kind) {
+    case ViewKind::Graph:
+        edges.insert(edges.end(), n->graph.output_edges.begin(), n->graph.output_edges.end());
+        break;
+    case ViewKind::Pipeline:
+        for (auto *child : n->pipeline.children) propagate_output_edges(child, edges);
+        break;
+    default: break;
+    }
+}
 
 // traverse ////////////////////////////////////////////////////////////////////
 //

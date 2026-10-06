@@ -265,21 +265,26 @@ struct Graph : Node {
                 }
             }
         });
-        for (auto &node : output_nodes_) {
-            if (auto it = map.find(node.get()); it != map.end()) {
-                view->graph.output_nodes.push_back(it->second);
+
+        view->graph.sink = reinterpret_cast<Node *>(&sink_);
+        for (auto const &conn : connections_) {
+            auto sender_it = map.find(conn.sender);
+            if (sender_it == map.end()) continue;
+
+            auto receiver_it = map.find(conn.receiver);
+            if (receiver_it != map.end()) {
+                auto *edge = GraphViewNode::make_edge(arena, sender_it->second, receiver_it->second, conn.type_name);
+                edge->parent = view;
+                children.push_back(edge);
+            } else {
+                view->graph.output_edges.push_back({sender_it->second, conn.type_name});
             }
         }
 
-        auto *sink_ptr = reinterpret_cast<Node *>(&sink_);
-        for (auto const &conn : connections_) {
-            if (conn.receiver == sink_ptr) continue;
-            auto sender_it = map.find(conn.sender);
-            auto receiver_it = map.find(conn.receiver);
-            if (sender_it == map.end() || receiver_it == map.end()) continue;
-            auto *edge = GraphViewNode::make_edge(arena, sender_it->second, receiver_it->second, conn.type_name);
-            edge->parent = view;
-            children.push_back(edge);
+        for (auto &node : output_nodes_) {
+            if (auto it = map.find(node.get()); it != map.end()) {
+                propagate_output_edges(it->second, view->graph.output_edges);
+            }
         }
         return view;
     }

@@ -272,14 +272,19 @@ inline void graph_view_to_dot(GraphViewNode const &view, ProfileMap const &profi
     auto &g = view.graph;
     os << "node_" << id << " [label=\"\", width=.1, shape=circle];\n";
     auto sink_name = "sink_" + std::to_string(id);
-    if (!g.output_nodes.empty()) {
+    if (!g.output_edges.empty()) {
         os << sink_name << " [label=\"\", width=.1, shape=point];\n";
     }
     for (auto *child : g.children) {
         graph_view_content_to_dot(os, *child, profiles, max_exec, edge_counter);
     }
-    for (auto *n : g.output_nodes) {
-        os << "node_" << node_id(n->node) << " -> " << sink_name << ";\n";
+    for (auto &oe : g.output_edges) {
+        using namespace std::string_literals;
+        auto sender = "node_"s + std::to_string(node_id(oe.sender->node));
+        auto edge = "edge_"s + std::to_string(edge_counter++);
+        os << sender << " -> " << edge << " [dir=none];\n";
+        os << edge << "[shape=rect, style=filled, fillcolor=\"#ffffff\", label=\"" << oe.type_name << "\"];\n";
+        os << edge << " -> " << sink_name << ";\n";
     }
     os << "}\n";
 }
