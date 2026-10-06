@@ -245,18 +245,17 @@ struct Graph : Node {
 
     GraphViewNode graph_view() override {
         auto view = GraphViewNode::make_graph(this);
-        auto &view_graph = view.graph();
 
         type_list_map<InputTypes>([&]<typename T>() {
             for (auto &edge : input_.template edges<T>()) {
-                view_graph.input_nodes.push_back(reinterpret_cast<Node *>(edge.receiver));
+                view.graph.input_nodes.push_back(reinterpret_cast<Node *>(edge.receiver));
             }
         });
         for (auto &node : output_nodes_) {
-            view_graph.output_nodes.push_back(node.get());
+            view.graph.output_nodes.push_back(node.get());
         }
 
-        auto &children = view.children();
+        auto &children = view.graph.children;
         for (auto &node : nodes_) {
             children.push_back(node->graph_view());
         }

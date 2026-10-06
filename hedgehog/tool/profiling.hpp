@@ -22,7 +22,6 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <variant>
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
@@ -189,11 +188,6 @@ struct NvtxProfiler {
 
 // Profile /////////////////////////////////////////////////////////////////////
 
-//
-// Using a union for this might be better, but I don't want to use a variant
-// (too slow) and unions don't work with RAII...
-//
-
 enum class ProfileKind {
     Region,
     String,
@@ -332,27 +326,31 @@ struct StringEntry {
 enum class EntryKind { Region, String };
 
 struct ProfileEntry {
+    EntryKind   kind;
     std::string label;
-    std::variant<RegionEntry, StringEntry> data;
+    RegionEntry region;
+    StringEntry string;
 
-    EntryKind kind() const { return static_cast<EntryKind>(data.index()); }
+    static ProfileEntry make_region(std::string label, Measure measure) {
+        return ProfileEntry{EntryKind::Region, std::move(label), RegionEntry{measure}, StringEntry{}};
+    }
 
-    bool is_region() const { return kind() == EntryKind::Region; }
-    bool is_string() const { return kind() == EntryKind::String; }
-
-    RegionEntry       &region()       { return std::get<RegionEntry>(data); }
-    RegionEntry const &region() const { return std::get<RegionEntry>(data); }
-    StringEntry       &string()       { return std::get<StringEntry>(data); }
-    StringEntry const &string() const { return std::get<StringEntry>(data); }
+    static ProfileEntry make_string(std::string label, std::string str) {
+        return ProfileEntry{EntryKind::String, std::move(label), RegionEntry{}, StringEntry{{std::move(str)}}};
+    }
 
     void merge_data(ProfileEntry const &other) {
-        std::visit(overloaded{
-            [](RegionEntry &dst, RegionEntry const &src) { dst.measure.merge(src.measure); },
-            [](StringEntry &dst, StringEntry const &src) {
-                for (auto const &v : src.values) dst.values.push_back(v);
-            },
-            [](auto &, auto const &) { log::fatal("Profile inconsistency found."); },
-        }, data, other.data);
+        if (other.kind != this->kind) {
+            log::fatal("Profile inconsistency found.");
+        }
+        switch (kind) {
+        case EntryKind::Region: this->region.measure.merge(other.region.measure); break;
+        case EntryKind::String:
+            for (auto const &value : other.string.values) {
+                this->string.values.push_back(value);
+            }
+            break;
+        }
     }
 };
 
@@ -376,10 +374,10 @@ struct ProfileReport {
         for (auto &profile : profiler.profiles) {
             switch (profile->kind) {
             case ProfileKind::Region:
-                entries.push_back(ProfileEntry{profile->label, RegionEntry{profile->region.measure}});
+                entries.push_back(ProfileEntry::make_region(profile->label, profile->region.measure));
                 break;
             case ProfileKind::String:
-                entries.push_back(ProfileEntry{profile->label, StringEntry{{profile->string.value}}});
+                entries.push_back(ProfileEntry::make_string(profile->label, profile->string.value));
                 break;
             }
         }
@@ -401,8 +399,8 @@ std::map<std::string, ProfileEntry> merge_profiles([[maybe_unused]] std::vector<
 
         for (auto &profile : profiler->profiles) {
             ProfileEntry entry = (profile->kind == ProfileKind::Region)
-                ? ProfileEntry{profile->label, RegionEntry{profile->region.measure}}
-                : ProfileEntry{profile->label, StringEntry{{profile->string.value}}};
+                ? ProfileEntry::make_region(profile->label, profile->region.measure)
+                : ProfileEntry::make_string(profile->label, profile->string.value);
 
             auto entry_it = entry_map.find(profile->label);
             if (entry_it == entry_map.end()) {

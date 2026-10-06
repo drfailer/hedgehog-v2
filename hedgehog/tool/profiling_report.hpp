@@ -78,39 +78,39 @@ inline std::string node_name(Node *n) {
 inline void report_to_text(GraphViewNode const &view, ProfileMap const &profiles, std::ostream &os, size_t indent = 0) {
     auto pad = std::string(indent * 2, ' ');
 
-    hh::visit(view,
-        [&](ViewNode const &)     { os << pad << "node " << node_name(view.node) << ":\n"; },
-        [&](ViewEdge const &e)    { os << pad << "edge " << e.type_name << ":\n"; },
-        [&](ViewGraph const &)    { os << pad << "graph " << view.node->info().name << ":\n"; },
-        [&](ViewPipeline const &) { os << pad << "pipeline " << view.node->info().name << ":\n"; }
-    );
+    switch (view.kind) {
+    case ViewKind::Node:     os << pad << "node " << node_name(view.node) << ":\n"; break;
+    case ViewKind::Edge:     os << pad << "edge " << view.edge.type_name << ":\n"; break;
+    case ViewKind::Graph:    os << pad << "graph " << view.node->info().name << ":\n"; break;
+    case ViewKind::Pipeline: os << pad << "pipeline " << view.node->info().name << ":\n"; break;
+    }
 
     if (view.node) {
         auto it = profiles.find(node_id(view.node));
         if (it != profiles.end()) {
             for (auto &entry : it->second.entries) {
-                std::visit(overloaded{
-                    [&](RegionEntry const &r) {
-                        os << pad << "  " << entry.label << ": "
-                           << format_duration(r.measure.mean) << " +/- " << format_duration(r.measure.stddev())
-                           << " [" << format_duration(r.measure.min) << "; " << format_duration(r.measure.max) << "]"
-                           << " (" << r.measure.count << ")\n";
-                    },
-                    [&](StringEntry const &s) {
-                        os << pad << "    ";
-                        for (auto const &str : s.values) { os << str << "<BR/>"; }
-                        os << "\n";
-                    },
-                }, entry.data);
+                switch (entry.kind) {
+                case EntryKind::Region:
+                    os << pad << "  " << entry.label << ": "
+                       << format_duration(entry.region.measure.mean) << " +/- " << format_duration(entry.region.measure.stddev())
+                       << " [" << format_duration(entry.region.measure.min) << "; " << format_duration(entry.region.measure.max) << "]"
+                       << " (" << entry.region.measure.count << ")\n";
+                    break;
+                case EntryKind::String:
+                    os << pad << "    ";
+                    for (auto const &str : entry.string.values) { os << str << "<BR/>"; }
+                    os << "\n";
+                    break;
+                }
             }
         }
     }
 
-    hh::visit(view,
-        [&](ViewGraph const &g)    { for (auto &c : g.children) report_to_text(c, profiles, os, indent + 1); },
-        [&](ViewPipeline const &p) { for (auto &c : p.children) report_to_text(c, profiles, os, indent + 1); },
-        [](auto const &) {}
-    );
+    switch (view.kind) {
+    case ViewKind::Graph:    for (auto &c : view.graph.children) report_to_text(c, profiles, os, indent + 1); break;
+    case ViewKind::Pipeline: for (auto &c : view.pipeline.children) report_to_text(c, profiles, os, indent + 1); break;
+    default: break;
+    }
 }
 
 // dot output //////////////////////////////////////////////////////////////////
@@ -118,9 +118,9 @@ inline void report_to_text(GraphViewNode const &view, ProfileMap const &profiles
 inline double compute_node_exec_time(ProfileReport const &report) {
     double total = 0;
     for (auto &entry : report.entries) {
-        if (auto *r = std::get_if<RegionEntry>(&entry.data);
-            r && entry.label.starts_with("execute")) {
-            total += r->measure.mean * r->measure.count;
+        if (entry.kind != EntryKind::Region) continue;
+        if (entry.label.starts_with("execute")) {
+            total += entry.region.measure.mean * entry.region.measure.count;
         }
     }
     return total;
@@ -129,7 +129,7 @@ inline double compute_node_exec_time(ProfileReport const &report) {
 inline double find_max_exec(GraphViewNode const &view, ProfileMap const &profiles) {
     double max_exec = 0;
     traverse(view, [&](GraphViewNode const &n) -> bool {
-        if (n.is_node() && n.node) {
+        if (n.kind == ViewKind::Node && n.node) {
             auto it = profiles.find(node_id(n.node));
             if (it != profiles.end()) {
                 max_exec = std::max(max_exec, compute_node_exec_time(it->second));
@@ -166,21 +166,21 @@ inline void write_node_label(std::ostream &os, std::string const &label,
     }
     for (auto &entry : entries) {
         os << "<tr><td align=\"left\">" << html_escape(entry.label) << "</td><td align=\"left\">";
-        std::visit(overloaded{
-            [&](RegionEntry const &r) {
-                auto &m = r.measure;
-                os << "avg: " << format_duration(m.mean) << " +/- " << format_duration(m.stddev())
-                   << " | ttl: " << format_duration(m.mean * m.count)
-                   << " | min: " << format_duration(m.min)
-                   << " - max: " << format_duration(m.max)
-                   << " | count: " << m.count;
-            },
-            [&](StringEntry const &s) {
-                for (auto const &str : s.values) {
-                    os << html_escape(str) << "<BR/>";
-                }
-            },
-        }, entry.data);
+        switch (entry.kind) {
+        case EntryKind::Region: {
+            auto &m = entry.region.measure;
+            os << "avg: " << format_duration(m.mean) << " +/- " << format_duration(m.stddev())
+               << " | ttl: " << format_duration(m.mean * m.count)
+               << " | min: " << format_duration(m.min)
+               << " - max: " << format_duration(m.max)
+               << " | count: " << m.count;
+        } break;
+        case EntryKind::String: {
+            for (auto const &str : entry.string.values) {
+                os << html_escape(str) << "<BR/>";
+            }
+        } break;
+        }
         os << "</td></tr>\n";
     }
     os << "</table>";
@@ -195,59 +195,59 @@ inline void write_view_label(std::ostream &os, std::string const &label) {
 inline void graph_view_content_to_dot(std::ostream &os, GraphViewNode const &view,
                                        ProfileMap const &profiles, double max_exec,
                                        size_t &edge_counter) {
-    hh::visit(view,
-        [&](ViewNode const &) {
-            auto id = node_id(view.node);
-            auto name = node_name(view.node);
-            auto it = profiles.find(id);
-            if (it != profiles.end()) {
-                auto color = compute_node_color(view.node, profiles, max_exec);
-                os << "node_" << id << " [shape=none, margin=0, label=<";
-                write_node_label(os, name, it->second.entries, color);
-                os << ">];\n";
-            } else {
-                os << "node_" << id << " [shape=none, margin=0, label=<";
-                write_view_label(os, name);
-                os << ">];\n";
-            }
-        },
-        [&](ViewEdge const &e) {
-            using namespace std::string_literals;
-            auto sender = "node_"s + std::to_string(node_id(e.sender));
-            auto receiver = "node_"s + std::to_string(node_id(e.receiver));
-            auto edge = "edge_"s + std::to_string(edge_counter++);
-
-            os << sender << " -> " << edge << " [dir=none];\n";
-            os << edge << "[shape=rect, style=filled, fillcolor=\"#ffffff\", label=\"" << e.type_name << "\"];\n";
-            os << edge << " -> " << receiver << ";\n";
-        },
-        [&](ViewGraph const &g) {
-            auto id = node_id(view.node);
-            auto name = view.node->info().name;
-            os << "subgraph cluster_" << id << " {\n";
-            os << "label=\"" << name << "\"; fontsize=25; penwidth=5; labelloc=top; labeljust=left;\n";
-            os << "style=filled;\n";
-            os << "fillcolor=\"#ffffff\";\n";
-            for (auto &child : g.children) {
-                graph_view_content_to_dot(os, child, profiles, max_exec, edge_counter);
-            }
-            os << "}\n";
-        },
-        [&](ViewPipeline const &p) {
-            auto id = node_id(view.node);
-            auto name = view.node->info().name;
-            os << "subgraph cluster_" << id << " {\n";
-            os << "style=filled;\n";
-            os << "fillcolor=\"#e8e8e8\";\n";
-            os << "label=\"" << name << "\"; fontsize=25; penwidth=5; labelloc=top; labeljust=left;\n";
-            os << "node_" << id
-               << " [label=\"\", shape=diamond, width=.3, style=filled, fillcolor=\"#606060\"];\n";
-            for (auto &child : p.children) {
-                graph_view_content_to_dot(os, child, profiles, max_exec, edge_counter);
-            }
-            os << "}\n";
+    switch (view.kind) {
+    case ViewKind::Node: {
+        auto id = node_id(view.node);
+        auto name = node_name(view.node);
+        auto it = profiles.find(id);
+        if (it != profiles.end()) {
+            auto color = compute_node_color(view.node, profiles, max_exec);
+            os << "node_" << id << " [shape=none, margin=0, label=<";
+            write_node_label(os, name, it->second.entries, color);
+            os << ">];\n";
+        } else {
+            os << "node_" << id << " [shape=none, margin=0, label=<";
+            write_view_label(os, name);
+            os << ">];\n";
         }
-    );
+    } break;
+    case ViewKind::Edge: {
+        using namespace std::string_literals;
+        auto sender = "node_"s + std::to_string(node_id(view.edge.sender));
+        auto receiver = "node_"s + std::to_string(node_id(view.edge.receiver));
+        auto edge = "edge_"s + std::to_string(edge_counter++);
+
+        os << sender << " -> " << edge << " [dir=none];\n";
+        os << edge << "[shape=rect, style=filled, fillcolor=\"#ffffff\", label=\"" << view.edge.type_name << "\"];\n";
+        os << edge << " -> " << receiver << ";\n";
+    } break;
+    case ViewKind::Graph: {
+        auto id = node_id(view.node);
+        auto name = view.node->info().name;
+        os << "subgraph cluster_" << id << " {\n";
+        os << "label=\"" << name << "\"; fontsize=25; penwidth=5; labelloc=top; labeljust=left;\n";
+        os << "style=filled;\n";
+        os << "fillcolor=\"#ffffff\";\n";
+        for (auto &child : view.graph.children) {
+            graph_view_content_to_dot(os, child, profiles, max_exec, edge_counter);
+        }
+        os << "}\n";
+    } break;
+    case ViewKind::Pipeline: {
+        auto id = node_id(view.node);
+        auto name = view.node->info().name;
+        os << "subgraph cluster_" << id << " {\n";
+        os << "style=filled;\n";
+        os << "fillcolor=\"#e8e8e8\";\n";
+        os << "label=\"" << name << "\"; fontsize=25; penwidth=5; labelloc=top; labeljust=left;\n";
+        os << "node_" << id
+           << " [label=\"\", shape=diamond, width=.3, style=filled, fillcolor=\"#606060\"];\n";
+        for (auto &child : view.pipeline.children) {
+            graph_view_content_to_dot(os, child, profiles, max_exec, edge_counter);
+        }
+        os << "}\n";
+    } break;
+    }
 }
 
 inline void graph_view_to_dot(GraphViewNode const &view, ProfileMap const &profiles, std::ostream &os) {
@@ -269,7 +269,7 @@ inline void graph_view_to_dot(GraphViewNode const &view, ProfileMap const &profi
         os << "label=\"" << name << "\"; fontsize=25; penwidth=5; labelloc=top; labeljust=left;\n";
     }
 
-    auto &g = std::get<ViewGraph>(view.data);
+    auto &g = view.graph;
     os << "node_" << id << " [label=\"\", width=.1, shape=circle];\n";
     auto sink_name = "sink_" + std::to_string(id);
     if (!g.output_nodes.empty()) {
