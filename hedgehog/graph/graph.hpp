@@ -243,29 +243,51 @@ struct Graph : Node {
         return map;
     }
 
-    GraphViewNode graph_view() override {
-        auto view = GraphViewNode::make_graph(this);
+    GraphViewNode *graph_view(GraphView *gv) override {
+        auto &arena = gv->arena;
+        auto &map = gv->node_map;
+
+        auto *view = GraphViewNode::make_graph(arena, this);
+        map[this] = view;
+
+        auto &children = view->graph.children;
+        for (auto &node : nodes_) {
+            auto *child = node->graph_view(gv);
+            child->parent = view;
+            children.push_back(child);
+        }
 
         type_list_map<InputTypes>([&]<typename T>() {
             for (auto &edge : input_.template edges<T>()) {
-                view.graph.input_nodes.push_back(reinterpret_cast<Node *>(edge.receiver));
+                auto *receiver = reinterpret_cast<Node *>(edge.receiver);
+                if (auto it = map.find(receiver); it != map.end()) {
+                    view->graph.input_nodes.push_back(it->second);
+                }
             }
         });
         for (auto &node : output_nodes_) {
-            view.graph.output_nodes.push_back(node.get());
-        }
-
-        auto &children = view.graph.children;
-        for (auto &node : nodes_) {
-            children.push_back(node->graph_view());
-        }
-        auto *sink_ptr = reinterpret_cast<Node *>(&sink_);
-        for (auto const &conn : connections_) {
-            if (conn.receiver != sink_ptr) {
-                children.push_back(GraphViewNode::make_edge(conn.sender, conn.receiver, conn.type_name));
+            if (auto it = map.find(node.get()); it != map.end()) {
+                view->graph.output_nodes.push_back(it->second);
             }
         }
+
+        auto *sink_ptr = reinterpret_cast<Node *>(&sink_);
+        for (auto const &conn : connections_) {
+            if (conn.receiver == sink_ptr) continue;
+            auto sender_it = map.find(conn.sender);
+            auto receiver_it = map.find(conn.receiver);
+            if (sender_it == map.end() || receiver_it == map.end()) continue;
+            auto *edge = GraphViewNode::make_edge(arena, sender_it->second, receiver_it->second, conn.type_name);
+            edge->parent = view;
+            children.push_back(edge);
+        }
         return view;
+    }
+
+    GraphView build_graph_view() {
+        GraphView gv;
+        gv.root = this->graph_view(&gv);
+        return gv;
     }
 
     // edges ///////////////////////////////////////////////////////////////////
@@ -511,13 +533,13 @@ struct Graph : Node {
     // profiling ///////////////////////////////////////////////////////////////
 
     void generate_dot_file(std::string const &filename) {
-        auto view = this->graph_view();
+        auto gv = this->build_graph_view();
         std::ofstream ofs(filename);
         #ifdef HH_ENABLE_PROFILING
         auto profiles = this->profile();
-        graph_view_to_dot(view, profiles, ofs);
+        graph_view_to_dot(*gv.root, profiles, ofs);
         #else
-        graph_view_to_dot(view, ofs);
+        graph_view_to_dot(*gv.root, ofs);
         #endif
     }
 };

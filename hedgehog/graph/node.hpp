@@ -57,7 +57,7 @@ class Node {
     virtual void initialize(GraphInfo const &info) = 0;
     virtual void run(RunInfo const &info) = 0;
     virtual void finalize(GraphInfo const &info) = 0;
-    virtual GraphViewNode graph_view() = 0;
+    virtual GraphViewNode *graph_view(GraphView *gv) = 0;
 
     virtual void profile(ProfileMap &map) {
         ProfileReport report;

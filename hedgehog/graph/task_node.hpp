@@ -149,8 +149,10 @@ struct TaskNode : Node, Runnable {
         map[reinterpret_cast<uintptr_t>(this)] = std::move(report);
     }
 
-    GraphViewNode graph_view() override {
-        return GraphViewNode::make_node(this);
+    GraphViewNode *graph_view(GraphView *gv) override {
+        auto *view = GraphViewNode::make_node(gv->arena, this);
+        gv->node_map[this] = view;
+        return view;
     }
 
     // Runnable interface //////////////////////////////////////////////////////

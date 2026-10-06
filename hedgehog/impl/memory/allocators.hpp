@@ -170,7 +170,9 @@ struct Arena {
 
     template <typename T>
     [[nodiscard]] T* allocate(size_t count = 1) {
-        return reinterpret_cast<T*>(allocate(count * sizeof(T), alignof(T)));
+        auto *ptr = reinterpret_cast<T*>(allocate(count * sizeof(T), alignof(T)));
+        if (ptr) { for (size_t i = 0; i < count; ++i) new (ptr + i) T(); }
+        return ptr;
     }
 
     void deallocate([[maybe_unused]] void* p, [[maybe_unused]] size_t bytes) noexcept {
@@ -379,7 +381,9 @@ struct DynamicArena {
 
     template <typename T>
     [[nodiscard]] T* allocate(size_t count = 1) {
-        return reinterpret_cast<T*>(allocate(count * sizeof(T), alignof(T)));
+        auto *ptr = reinterpret_cast<T*>(allocate(count * sizeof(T), alignof(T)));
+        if (ptr) { for (size_t i = 0; i < count; ++i) new (ptr + i) T(); }
+        return ptr;
     }
 
     void deallocate([[maybe_unused]] void* p, [[maybe_unused]] size_t bytes) noexcept {
