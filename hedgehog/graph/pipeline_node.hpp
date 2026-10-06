@@ -87,11 +87,11 @@ struct PipelineNode : Node {
 
         auto *view = GraphViewNode::make_pipeline(arena, this);
         map[this] = view;
-        auto &children = view->pipeline.children;
 
         for (auto &graph : graphs_) {
             auto *child = graph->graph_view(gv);
             child->parent = view;
+            view->pipeline.graphs.push_back(child);
 
             type_list_map<InputTypes>([&]<typename T>() {
                 auto const &edges = graph->input().template edges<T>();
@@ -100,11 +100,10 @@ struct PipelineNode : Node {
                     if (auto it = map.find(receiver); it != map.end()) {
                         auto *edge_view = GraphViewNode::make_edge(arena, view, it->second, type_to_string<T>());
                         edge_view->parent = view;
-                        children.push_back(edge_view);
+                        view->pipeline.edges.push_back(edge_view);
                     }
                 }
             });
-            children.push_back(child);
         }
         return view;
     }

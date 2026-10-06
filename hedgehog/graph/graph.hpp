@@ -250,11 +250,10 @@ struct Graph : Node {
         auto *view = GraphViewNode::make_graph(arena, this);
         map[this] = view;
 
-        auto &children = view->graph.children;
         for (auto &node : nodes_) {
             auto *child = node->graph_view(gv);
             child->parent = view;
-            children.push_back(child);
+            view->graph.nodes.push_back(child);
         }
 
         type_list_map<InputTypes>([&]<typename T>() {
@@ -273,9 +272,9 @@ struct Graph : Node {
 
             auto receiver_it = map.find(conn.receiver);
             if (receiver_it != map.end()) {
-                auto *edge = GraphViewNode::make_edge(arena, sender_it->second, receiver_it->second, conn.type_name);
-                edge->parent = view;
-                children.push_back(edge);
+                auto *e = GraphViewNode::make_edge(arena, sender_it->second, receiver_it->second, conn.type_name);
+                e->parent = view;
+                view->graph.edges.push_back(e);
             } else {
                 view->graph.output_edges.push_back({sender_it->second, conn.type_name});
             }

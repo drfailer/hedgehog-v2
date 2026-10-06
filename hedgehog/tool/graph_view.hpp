@@ -50,11 +50,13 @@ struct ViewGraph {
     Node *sink = nullptr;
     std::vector<GraphViewNode *> input_nodes;
     std::vector<ViewOutputEdge> output_edges;
-    std::vector<GraphViewNode *> children;
+    std::vector<GraphViewNode *> nodes;
+    std::vector<GraphViewNode *> edges;
 };
 
 struct ViewPipeline {
-    std::vector<GraphViewNode *> children;
+    std::vector<GraphViewNode *> graphs;
+    std::vector<GraphViewNode *> edges;
 };
 
 enum class ViewKind { Node, Edge, Graph, Pipeline };
@@ -122,7 +124,7 @@ inline void propagate_output_edges(GraphViewNode const *n, std::vector<ViewOutpu
         edges.insert(edges.end(), n->graph.output_edges.begin(), n->graph.output_edges.end());
         break;
     case ViewKind::Pipeline:
-        for (auto *child : n->pipeline.children) propagate_output_edges(child, edges);
+        for (auto *g : n->pipeline.graphs) propagate_output_edges(g, edges);
         break;
     default: break;
     }
@@ -141,8 +143,14 @@ void traverse(GraphViewNode const &view, F &&fn, std::set<ViewKind> filter = {Vi
         if (!fn(view)) return;
     }
     switch (view.kind) {
-    case ViewKind::Graph:    for (auto *child : view.graph.children) traverse(*child, fn, filter); break;
-    case ViewKind::Pipeline: for (auto *child : view.pipeline.children) traverse(*child, fn, filter); break;
+    case ViewKind::Graph:
+        for (auto *n : view.graph.nodes) traverse(*n, fn, filter);
+        for (auto *e : view.graph.edges) traverse(*e, fn, filter);
+        break;
+    case ViewKind::Pipeline:
+        for (auto *g : view.pipeline.graphs) traverse(*g, fn, filter);
+        for (auto *e : view.pipeline.edges) traverse(*e, fn, filter);
+        break;
     default: break;
     }
 }
