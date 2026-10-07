@@ -87,40 +87,6 @@ struct make_task_config {
     using Task = Impl;
 };
 
-// make_graph //////////////////////////////////////////////////////////////////
-
-template <typename Impl, size_t Sep, typename ...Types>
-auto make_graph(std::shared_ptr<Impl> runner, std::string const &name = "Graph") {
-    using io = io_types<Sep, Types...>;
-    struct Config {
-        using InputTypes = io::inputs;
-        using OutputTypes = io::outputs;
-        using Sink = type_list_dispatch<OutputTypes, GraphSink>;
-        using Runner = Impl;
-        using EdgeBuilder = DirectEdgeBuilder;
-    };
-    return std::make_shared<Graph<Config>>(runner, NodeInfo{name, 0});
-}
-
-template <size_t Sep, typename ...Types>
-auto make_graph(std::string const &name = "Graph") {
-    return make_graph<DefaultGraphRunner, Sep, Types...>(std::make_shared<DefaultGraphRunner>(), name);
-}
-
-template <size_t Sep, typename ...Types>
-auto make_serial_graph(std::string const &name = "Graph") {
-    using io = io_types<Sep, Types...>;
-    struct Config {
-        using InputTypes = io::outputs;
-        using OutputTypes = io::outputs;
-        using Sink = type_list_dispatch<OutputTypes, SerialSink>;
-        using Runner = SerialRunner;
-        using EdgeBuilder = DirectEdgeBuilder;
-    };
-    auto runner = std::make_shared<SerialRunner>();
-    return std::make_shared<Graph<Config>>(runner, NodeInfo{name, 0});
-}
-
 } // end namespace hh
 
 #endif
