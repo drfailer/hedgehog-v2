@@ -16,41 +16,52 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_H
-#define HEDGEHOG_H
+#ifndef HEDGEHOG_API_GRAPH_H
+#define HEDGEHOG_API_GRAPH_H
 
+#include <memory>
 
-#include "graph/graph.hpp"
-#include "graph/node.hpp"
-#include "graph/info.hpp"
-#include "graph/edge.hpp"
-#include "graph/task_node.hpp"
-#include "graph/pipeline_node.hpp"
+#include "../graph/graph.hpp"
+#include "../tool/config.hpp"
 
-#include "api/graph.hpp"
-#include "api/task.hpp"
-#include "api/state.hpp"
-#include "api/pipeline.hpp"
-#include "api/execution_context.hpp"
+namespace hh {
 
-#include "impl/graph/thread_runner.hpp"
-#include "impl/graph/serial_runner.hpp"
-#include "impl/graph/tbb/tbb_runner.hpp"
-#include "impl/io/lock_queue_input.hpp"
-#include "impl/io/lock_free_input.hpp"
-#include "impl/io/group_input.hpp"
-#include "impl/io/trigger.hpp"
-#include "impl/memory/automatic_pool.hpp"
-#include "impl/memory/pool.hpp"
-#include "impl/task/cuda_task.hpp"
+// graph ///////////////////////////////////////////////////////////////////////
 
-#include "tool/concepts.hpp"
-#include "tool/config.hpp"
-#include "tool/graph_view.hpp"
-#include "tool/graph_analysis.hpp"
-#include "tool/type_list.hpp"
-#include "tool/helpers.hpp"
-#include "tool/numa.hpp"
-#include "tool/numa_alloc.hpp"
+template <typename Impl, size_t Sep, typename ...Types>
+auto make_graph(std::shared_ptr<Impl> runner, std::string const &name = "Graph") {
+    using io = io_types<Sep, Types...>;
+    struct Config {
+        using InputTypes = io::inputs;
+        using OutputTypes = io::outputs;
+        using Sink = type_list_dispatch<OutputTypes, GraphSink>;
+        using Runner = Impl;
+        using EdgeBuilder = DirectEdgeBuilder;
+    };
+    return std::make_shared<Graph<Config>>(runner, NodeInfo{name, 0});
+}
+
+template <size_t Sep, typename ...Types>
+auto make_graph(std::string const &name = "Graph") {
+    return make_graph<DefaultGraphRunner, Sep, Types...>(std::make_shared<DefaultGraphRunner>(), name);
+}
+
+// serial graph ////////////////////////////////////////////////////////////////
+
+template <size_t Sep, typename ...Types>
+auto make_serial_graph(std::string const &name = "Graph") {
+    using io = io_types<Sep, Types...>;
+    struct Config {
+        using InputTypes = io::outputs;
+        using OutputTypes = io::outputs;
+        using Sink = type_list_dispatch<OutputTypes, SerialSink>;
+        using Runner = SerialRunner;
+        using EdgeBuilder = DirectEdgeBuilder;
+    };
+    auto runner = std::make_shared<SerialRunner>();
+    return std::make_shared<Graph<Config>>(runner, NodeInfo{name, 0});
+}
+
+} // end namespace hh
 
 #endif

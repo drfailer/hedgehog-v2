@@ -216,6 +216,7 @@ using ConnectFunction = std::function<void(Edge<T>)>;
 template <typename T>
 struct EdgeConnector {
     std::vector<ConnectFunction<T>> connects_;
+    std::vector<Node *> nodes_;
 };
 
 template <typename ...Types>
@@ -234,6 +235,14 @@ struct EdgeConnectors : EdgeConnector<Types>... {
     void add_connect(ConnectFunction<T> connect) {
         EdgeConnector<T>::connects_.push_back(std::move(connect));
     }
+
+    template <typename T>
+    void add_node(Node *node) {
+        EdgeConnector<T>::nodes_.push_back(node);
+    }
+
+    template <typename T>
+    std::vector<Node *> const &nodes() const { return EdgeConnector<T>::nodes_; }
 };
 
 } // end namespace hh

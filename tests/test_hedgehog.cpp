@@ -999,3 +999,229 @@ TEST(tbb_executor, sub_graph) {
     graph->stop();
 }
 #endif // HH_ENABLE_TBB
+
+TEST(graph_analysis, cycle_detection_no_cycle) {
+    auto graph = hh::make_graph<1, int, int>("Graph");
+    auto task1 = hh::make_task<Task>(1, "Task1");
+    auto task2 = hh::make_task<Task>(1, "Task2");
+    auto task3 = hh::make_task<Task>(1, "Task3");
+
+    graph->connect_inputs(task1);
+    graph->draw_edges(task1, task2);
+    graph->draw_edges(task2, task3);
+    graph->connect_outputs(task3);
+
+    EXPECT_EQ(ga_cycle_detection(graph->build_graph_view()), 0);
+}
+
+struct ConvertTask {
+    using inputs  = hh::type_list<int>;
+    using outputs = hh::type_list<float>;
+
+    void execute(auto ctx, hh::data_t<int> data) {
+        ctx->push_result(hh::make_data<float>(*data));
+    }
+};
+
+TEST(graph_analysis, cycle_detection_1_cycle) {
+    auto graph = hh::make_graph<1, int, float>("Graph");
+    auto task1 = hh::make_task<Task>(1, "Task1");
+    auto task2 = hh::make_task<ConvertTask>(1, "Task2(convert)");
+    auto task3 = hh::make_task<Task>(1, "Task3");
+
+    graph->connect_inputs(task1);
+    graph->draw_edges(task1, task2);
+    graph->draw_edges(task2, task3);
+    graph->draw_edge<float>(task3, task1);
+    graph->connect_outputs(task1);
+
+    EXPECT_EQ(ga_cycle_detection(graph->build_graph_view()), 1);
+}
+
+// self-loop: A -> A
+TEST(graph_analysis, cycle_detection_self_loop) {
+    auto graph = hh::make_graph<1, int, int>("Graph");
+    auto task1 = hh::make_task<Task>(1, "Task1");
+
+    graph->connect_inputs(task1);
+    graph->draw_edge<int>(task1, task1);
+    graph->connect_outputs(task1);
+
+    EXPECT_EQ(ga_cycle_detection(graph->build_graph_view()), 1);
+}
+
+// two independent cycles: A->B->A and C->D->C
+TEST(graph_analysis, cycle_detection_2_independent_cycles) {
+    auto graph = hh::make_graph<2, int, float, int, float>("Graph");
+    auto a = hh::make_task<Task>(1, "A");
+    auto b = hh::make_task<Task>(1, "B");
+    auto c = hh::make_task<Task>(1, "C");
+    auto d = hh::make_task<Task>(1, "D");
+
+    graph->connect_input<int>(a);
+    graph->connect_input<float>(c);
+    graph->draw_edge<int>(a, b);
+    graph->draw_edge<int>(b, a);
+    graph->draw_edge<float>(c, d);
+    graph->draw_edge<float>(d, c);
+    graph->connect_output<int>(a);
+    graph->connect_output<float>(c);
+
+    EXPECT_EQ(ga_cycle_detection(graph->build_graph_view()), 2);
+}
+
+// diamond: A->B->D->A and A->C->D->A (2 distinct paths through same back-edge)
+TEST(graph_analysis, cycle_detection_diamond) {
+    auto graph = hh::make_graph<1, int, int>("Graph");
+    auto a = hh::make_task<Task>(1, "A");
+    auto b = hh::make_task<Task>(1, "B");
+    auto c = hh::make_task<Task>(1, "C");
+    auto d = hh::make_task<Task>(1, "D");
+
+    graph->connect_inputs(a);
+    graph->draw_edge<int>(a, b);
+    graph->draw_edge<int>(a, c);
+    graph->draw_edge<int>(b, d);
+    graph->draw_edge<int>(c, d);
+    graph->draw_edge<int>(d, a);
+    graph->connect_outputs(a);
+
+    EXPECT_EQ(ga_cycle_detection(graph->build_graph_view()), 2);
+}
+
+// no cycle with sub-graph: outer -> subgraph(inner1->inner2) -> outer_out
+TEST(graph_analysis, cycle_detection_subgraph_no_cycle) {
+    auto inner1 = hh::make_task<Task>(1, "inner1");
+    auto inner2 = hh::make_task<Task>(1, "inner2");
+    auto subgraph = hh::make_graph<1, int, int>("subgraph");
+    subgraph->connect_inputs(inner1);
+    subgraph->draw_edges(inner1, inner2);
+    subgraph->connect_outputs(inner2);
+
+    auto outer_in  = hh::make_task<Task>(1, "outer_in");
+    auto outer_out = hh::make_task<Task>(1, "outer_out");
+    auto graph = hh::make_graph<1, int, int>("main");
+    graph->connect_inputs(outer_in);
+    graph->draw_edges(outer_in, subgraph);
+    graph->draw_edges(subgraph, outer_out);
+    graph->connect_outputs(outer_out);
+
+    EXPECT_EQ(ga_cycle_detection(graph->build_graph_view()), 0);
+}
+
+// cycle entirely inside a sub-graph: subgraph contains inner1->inner2->inner1
+TEST(graph_analysis, cycle_detection_cycle_inside_subgraph) {
+    auto inner1 = hh::make_task<Task>(1, "inner1");
+    auto inner2 = hh::make_task<Task>(1, "inner2");
+    auto subgraph = hh::make_graph<1, int, int>("subgraph");
+    subgraph->connect_inputs(inner1);
+    subgraph->draw_edge<int>(inner1, inner2);
+    subgraph->draw_edge<int>(inner2, inner1);
+    subgraph->connect_outputs(inner1);
+
+    auto outer_in = hh::make_task<Task>(1, "outer_in");
+    auto graph = hh::make_graph<1, int, int>("main");
+    graph->connect_inputs(outer_in);
+    graph->draw_edges(outer_in, subgraph);
+    graph->connect_outputs(subgraph);
+
+    EXPECT_GE(ga_cycle_detection(graph->build_graph_view()), 1);
+}
+
+// no cycle with pipeline
+TEST(graph_analysis, cycle_detection_pipeline_no_cycle) {
+    auto pipeline = hh::make_lambda_pipeline({{0, 0}}, [](size_t) {
+        auto t1 = hh::make_task<Task>(1, "p_task1");
+        auto t2 = hh::make_task<Task>(1, "p_task2");
+        auto g  = hh::make_graph<1, int, int>();
+        g->connect_inputs(t1);
+        g->draw_edges(t1, t2);
+        g->connect_outputs(t2);
+        return g;
+    });
+    pipeline->set_send_to<int>([](auto) -> size_t { return 0; });
+
+    auto graph = hh::make_graph<1, int, int>("main");
+    graph->connect_inputs(pipeline);
+    graph->connect_outputs(pipeline);
+
+    EXPECT_EQ(ga_cycle_detection(graph->build_graph_view()), 0);
+}
+
+// long chain, no cycle
+TEST(graph_analysis, cycle_detection_long_chain_no_cycle) {
+    auto graph = hh::make_graph<1, int, int>("Graph");
+    auto t1 = hh::make_task<Task>(1, "T1");
+    auto t2 = hh::make_task<Task>(1, "T2");
+    auto t3 = hh::make_task<Task>(1, "T3");
+    auto t4 = hh::make_task<Task>(1, "T4");
+    auto t5 = hh::make_task<Task>(1, "T5");
+
+    graph->connect_inputs(t1);
+    graph->draw_edge<int>(t1, t2);
+    graph->draw_edge<int>(t2, t3);
+    graph->draw_edge<int>(t3, t4);
+    graph->draw_edge<int>(t4, t5);
+    graph->connect_outputs(t5);
+
+    EXPECT_EQ(ga_cycle_detection(graph->build_graph_view()), 0);
+}
+
+// cycle THROUGH a sub-graph: outer_in -> subgraph(inner1->inner2) -> outer_in
+TEST(graph_analysis, cycle_detection_cycle_through_subgraph) {
+    auto inner1 = hh::make_task<Task>(1, "inner1");
+    auto inner2 = hh::make_task<Task>(1, "inner2");
+    auto subgraph = hh::make_graph<1, int, int>("subgraph");
+    subgraph->connect_inputs(inner1);
+    subgraph->draw_edges(inner1, inner2);
+    subgraph->connect_outputs(inner2);
+
+    auto outer = hh::make_task<Task>(1, "outer");
+    auto graph = hh::make_graph<1, int, int>("main");
+    graph->connect_inputs(outer);
+    graph->draw_edges(outer, subgraph);
+    graph->draw_edges(subgraph, outer);
+    graph->connect_outputs(outer);
+
+    EXPECT_GE(ga_cycle_detection(graph->build_graph_view()), 1);
+}
+
+// cycle through a pipeline: outer -> pipeline(t1->t2) -> outer
+TEST(graph_analysis, cycle_detection_cycle_through_pipeline) {
+    auto pipeline = hh::make_lambda_pipeline({{0, 0}}, [](size_t) {
+        auto t1 = hh::make_task<Task>(1, "p_task1");
+        auto t2 = hh::make_task<Task>(1, "p_task2");
+        auto g  = hh::make_graph<1, int, int>();
+        g->connect_inputs(t1);
+        g->draw_edges(t1, t2);
+        g->connect_outputs(t2);
+        return g;
+    });
+    pipeline->set_send_to<int>([](auto) -> size_t { return 0; });
+
+    auto outer = hh::make_task<Task>(1, "outer");
+    auto graph = hh::make_graph<1, int, int>("main");
+    graph->connect_inputs(outer);
+    graph->draw_edges(outer, pipeline);
+    graph->draw_edges(pipeline, outer);
+    graph->connect_outputs(outer);
+
+    EXPECT_GE(ga_cycle_detection(graph->build_graph_view()), 1);
+}
+
+// multiple back-edges: A->B->C->A and B->A (overlapping cycles)
+TEST(graph_analysis, cycle_detection_overlapping_cycles) {
+    auto graph = hh::make_graph<1, int, int>("Graph");
+    auto a = hh::make_task<Task>(1, "A");
+    auto b = hh::make_task<Task>(1, "B");
+    auto c = hh::make_task<Task>(1, "C");
+
+    graph->connect_inputs(a);
+    graph->draw_edge<int>(a, b);
+    graph->draw_edge<int>(b, c);
+    graph->draw_edge<int>(c, a);
+    graph->draw_edge<int>(b, a);
+    graph->connect_outputs(a);
+
+    EXPECT_EQ(ga_cycle_detection(graph->build_graph_view()), 2);
+}

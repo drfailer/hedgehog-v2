@@ -21,8 +21,11 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <set>
 
 #include "helpers.hpp"
+#include "../impl/memory/allocators.hpp"
 
 namespace hh {
 
@@ -30,78 +33,154 @@ class Node;
 
 struct GraphViewNode;
 
-// TODO: this data structure should probably be recursive (use GraphViewNode*
-//       instead of Node* so that we can access to more information)
+using NodeViewMap = std::unordered_map<Node *, GraphViewNode *>;
 
 struct ViewEdge {
-    Node *sender;
-    Node *receiver;
+    GraphViewNode *sender;
+    GraphViewNode *receiver;
+    std::string type_name;
+};
+
+struct ViewIOEdge {
+    GraphViewNode *node;
     std::string type_name;
 };
 
 struct ViewGraph {
-    std::vector<Node *> input_nodes;
-    std::vector<Node *> output_nodes;
-    std::vector<GraphViewNode> children;
+    std::vector<ViewIOEdge> input_edges;
+    std::vector<ViewIOEdge> output_edges;
+    std::vector<GraphViewNode *> nodes;
+    std::vector<GraphViewNode *> edges;
 };
 
 struct ViewPipeline {
-    std::vector<GraphViewNode> children;
+    std::vector<GraphViewNode *> graphs;
+    std::vector<GraphViewNode *> edges;
 };
 
 enum class ViewKind { Node, Edge, Graph, Pipeline };
 
-// TODO: we need a parent view node here as well
 struct GraphViewNode {
-    ViewKind     kind     = ViewKind::Node;
-    Node        *node     = nullptr;
-    ViewEdge     edge     = {};
-    ViewGraph    graph    = {};
-    ViewPipeline pipeline = {};
+    ViewKind         kind     = ViewKind::Node;
+    Node            *node     = nullptr;
+    GraphViewNode   *parent   = nullptr;
+    ViewEdge         edge     = {};
+    ViewGraph        graph    = {};
+    ViewPipeline     pipeline = {};
 
     // factory methods /////////////////////////////////////////////////////////
 
-    static GraphViewNode make_node(Node *n) {
-        GraphViewNode view;
-        view.kind = ViewKind::Node;
-        view.node = n;
+    static GraphViewNode *make_node(DynamicArena &arena, Node *n) {
+        auto *view = arena.allocate<GraphViewNode>();
+        view->kind = ViewKind::Node;
+        view->node = n;
         return view;
     }
 
-    static GraphViewNode make_edge(Node *sender, Node *receiver, std::string type_name) {
-        GraphViewNode view;
-        view.kind = ViewKind::Edge;
-        view.edge = ViewEdge{sender, receiver, std::move(type_name)};
+    static GraphViewNode *make_edge(DynamicArena &arena, GraphViewNode *sender,
+                                    GraphViewNode *receiver, std::string type_name) {
+        auto *view = arena.allocate<GraphViewNode>();
+        view->kind = ViewKind::Edge;
+        view->edge = ViewEdge{sender, receiver, std::move(type_name)};
         return view;
     }
 
-    static GraphViewNode make_graph(Node *n) {
-        GraphViewNode view;
-        view.kind = ViewKind::Graph;
-        view.node = n;
+    static GraphViewNode *make_graph(DynamicArena &arena, Node *n) {
+        auto *view = arena.allocate<GraphViewNode>();
+        view->kind = ViewKind::Graph;
+        view->node = n;
         return view;
     }
 
-    static GraphViewNode make_pipeline(Node *n) {
-        GraphViewNode view;
-        view.kind = ViewKind::Pipeline;
-        view.node = n;
+    static GraphViewNode *make_pipeline(DynamicArena &arena, Node *n) {
+        auto *view = arena.allocate<GraphViewNode>();
+        view->kind = ViewKind::Pipeline;
+        view->node = n;
         return view;
     }
 };
 
+// GraphView ///////////////////////////////////////////////////////////////////
+
+//
+// Owns the arena and root pointer. All GraphViewNode* in the tree point into
+// this arena's memory.
+//
+
+struct PendingConnection {
+    Node *sender;
+    Node *receiver;
+    std::string type_name;
+    GraphViewNode *parent_view;
+};
+
+struct GraphView {
+    DynamicArena arena;
+    GraphViewNode *root = nullptr;
+    NodeViewMap node_map;
+
+    std::vector<GraphViewNode *> all_nodes;
+    std::vector<GraphViewNode *> all_edges;
+    std::vector<GraphViewNode *> all_graphs;
+    std::vector<GraphViewNode *> all_pipelines;
+    std::vector<PendingConnection> pending_connections;
+
+    GraphView(size_t block_size = 4096) : arena(block_size) {}
+
+    void resolve_pending_connections() {
+        for (auto &pc : pending_connections) {
+            auto sender_it = node_map.find(pc.sender);
+            auto receiver_it = node_map.find(pc.receiver);
+            if (sender_it != node_map.end() && receiver_it != node_map.end()) {
+                auto *e = GraphViewNode::make_edge(arena, sender_it->second, receiver_it->second, pc.type_name);
+                e->parent = pc.parent_view;
+                if (pc.parent_view->kind == ViewKind::Pipeline) {
+                    pc.parent_view->pipeline.edges.push_back(e);
+                } else {
+                    pc.parent_view->graph.edges.push_back(e);
+                }
+                all_edges.push_back(e);
+            }
+        }
+        pending_connections.clear();
+    }
+};
+
+// helpers /////////////////////////////////////////////////////////////////////
+
+inline void propagate_output_edges(GraphViewNode const *n, std::vector<ViewIOEdge> &edges) {
+    switch (n->kind) {
+    case ViewKind::Graph:
+        edges.insert(edges.end(), n->graph.output_edges.begin(), n->graph.output_edges.end());
+        break;
+    case ViewKind::Pipeline:
+        for (auto *g : n->pipeline.graphs) propagate_output_edges(g, edges);
+        break;
+    default: break;
+    }
+}
+
 // traverse ////////////////////////////////////////////////////////////////////
+
 //
 // Depth-first traversal. The callback receives each GraphViewNode and returns
 // bool: true to recurse into children (for graph/pipeline), false to skip.
 //
 
 template <typename F>
-void traverse(GraphViewNode const &view, F &&fn) {
-    if (!fn(view)) return;
+void traverse(GraphViewNode const &view, F &&fn, std::set<ViewKind> filter = {ViewKind::Node, ViewKind::Edge, ViewKind::Graph, ViewKind::Pipeline}) {
+    if (filter.contains(view.kind)) {
+        if (!fn(view)) return;
+    }
     switch (view.kind) {
-    case ViewKind::Graph:    for (auto &child : view.graph.children) traverse(child, fn); break;
-    case ViewKind::Pipeline: for (auto &child : view.pipeline.children) traverse(child, fn); break;
+    case ViewKind::Graph:
+        for (auto *n : view.graph.nodes) traverse(*n, fn, filter);
+        for (auto *e : view.graph.edges) traverse(*e, fn, filter);
+        break;
+    case ViewKind::Pipeline:
+        for (auto *g : view.pipeline.graphs) traverse(*g, fn, filter);
+        for (auto *e : view.pipeline.edges) traverse(*e, fn, filter);
+        break;
     default: break;
     }
 }

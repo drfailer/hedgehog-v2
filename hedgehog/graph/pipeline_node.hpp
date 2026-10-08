@@ -81,18 +81,25 @@ struct PipelineNode : Node {
         }
     }
 
-    GraphViewNode graph_view() override {
-        auto view = GraphViewNode::make_pipeline(this);
-        auto &children = view.pipeline.children;
+    GraphViewNode *graph_view(GraphView *gv) override {
+        auto &arena = gv->arena;
+        auto &map = gv->node_map;
+
+        auto *view = GraphViewNode::make_pipeline(arena, this);
+        map[this] = view;
+        gv->all_pipelines.push_back(view);
 
         for (auto &graph : graphs_) {
+            auto *child = graph->graph_view(gv);
+            child->parent = view;
+            view->pipeline.graphs.push_back(child);
+
             type_list_map<InputTypes>([&]<typename T>() {
-                auto const &edges = graph->input().template edges<T>();
-                for (auto const &edge : edges) {
-                    children.push_back(GraphViewNode::make_edge(this, reinterpret_cast<Node *>(edge.receiver), type_to_string<T>()));
+                for (auto const &edge : graph->input().template edges<T>()) {
+                    auto *receiver = reinterpret_cast<Node *>(edge.receiver);
+                    gv->pending_connections.push_back({this, receiver, type_to_string<T>(), view});
                 }
             });
-            children.push_back(graph->graph_view());
         }
         return view;
     }
