@@ -251,12 +251,14 @@ struct Graph : Node {
         map[this] = view;
         gv->all_graphs.push_back(view);
 
+        // nodes
         for (auto &node : nodes_) {
             auto *child = node->graph_view(gv);
             child->parent = view;
             view->graph.nodes.push_back(child);
         }
 
+        // input edges
         type_list_map<InputTypes>([&]<typename T>() {
             for (auto &edge : input_.template edges<T>()) {
                 auto *receiver = reinterpret_cast<Node *>(edge.receiver);
@@ -266,22 +268,19 @@ struct Graph : Node {
             }
         });
 
-        view->graph.sink = reinterpret_cast<Node *>(&sink_);
+        // inner edges (deferred: resolved after all nodes are in the map)
         for (auto const &conn : connections_) {
-            auto sender_it = map.find(conn.sender);
-            if (sender_it == map.end()) continue;
-
-            auto receiver_it = map.find(conn.receiver);
-            if (receiver_it != map.end()) {
-                auto *e = GraphViewNode::make_edge(arena, sender_it->second, receiver_it->second, conn.type_name);
-                e->parent = view;
-                view->graph.edges.push_back(e);
-                gv->all_edges.push_back(e);
-            } else {
-                view->graph.output_edges.push_back({sender_it->second, std::string(conn.type_name)});
-            }
+            gv->pending_connections.push_back({conn.sender, conn.receiver, conn.type_name, view});
         }
 
+        // output edges
+        type_list_map<OutputTypes>([&]<typename T>() {
+            for (auto *node : output_.template nodes<T>()) {
+                if (auto it = map.find(node); it != map.end()) {
+                    view->graph.output_edges.push_back({it->second, type_to_string<T>()});
+                }
+            }
+        });
         for (auto &node : output_nodes_) {
             if (auto it = map.find(node.get()); it != map.end()) {
                 propagate_output_edges(it->second, view->graph.output_edges);
@@ -293,6 +292,7 @@ struct Graph : Node {
     GraphView build_graph_view() {
         GraphView gv;
         gv.root = this->graph_view(&gv);
+        gv.resolve_pending_connections();
         return gv;
     }
 
@@ -505,13 +505,18 @@ struct Graph : Node {
         using NodeType = decltype(node)::element_type;
         register_node(node);
         output_nodes_.insert(node);
+        if constexpr (!IsGraph<NodeType> && !IsPipeline<NodeType>) {
+            output_.template add_node<T>(node.get());
+        }
         output_.template add_connect<T>([node, this](Edge<T> edge) {
             if constexpr (!IsGraph<NodeType> && !IsPipeline<NodeType>) {
-                connections_.push_back(Connection{
-                    .sender = node.get(),
-                    .receiver = static_cast<Node *>(edge.receiver),
-                    .type_name = type_to_string<T>(),
-                });
+                if (edge.receiver != static_cast<void *>(&sink_)) {
+                    connections_.push_back(Connection{
+                        .sender = node.get(),
+                        .receiver = static_cast<Node *>(edge.receiver),
+                        .type_name = type_to_string<T>(),
+                    });
+                }
             }
             node->connect_output_edge(std::move(edge));
         });

@@ -95,15 +95,9 @@ struct PipelineNode : Node {
             view->pipeline.graphs.push_back(child);
 
             type_list_map<InputTypes>([&]<typename T>() {
-                auto const &edges = graph->input().template edges<T>();
-                for (auto const &edge : edges) {
+                for (auto const &edge : graph->input().template edges<T>()) {
                     auto *receiver = reinterpret_cast<Node *>(edge.receiver);
-                    if (auto it = map.find(receiver); it != map.end()) {
-                        auto *edge_view = GraphViewNode::make_edge(arena, view, it->second, type_to_string<T>());
-                        edge_view->parent = view;
-                        view->pipeline.edges.push_back(edge_view);
-                        gv->all_edges.push_back(edge_view);
-                    }
+                    gv->pending_connections.push_back({this, receiver, type_to_string<T>(), view});
                 }
             });
         }

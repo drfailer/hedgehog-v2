@@ -47,7 +47,6 @@ struct ViewIOEdge {
 };
 
 struct ViewGraph {
-    Node *sink = nullptr;
     std::vector<ViewIOEdge> input_edges;
     std::vector<ViewIOEdge> output_edges;
     std::vector<GraphViewNode *> nodes;
@@ -108,6 +107,13 @@ struct GraphViewNode {
 // this arena's memory.
 //
 
+struct PendingConnection {
+    Node *sender;
+    Node *receiver;
+    std::string type_name;
+    GraphViewNode *parent_view;
+};
+
 struct GraphView {
     DynamicArena arena;
     GraphViewNode *root = nullptr;
@@ -117,8 +123,27 @@ struct GraphView {
     std::vector<GraphViewNode *> all_edges;
     std::vector<GraphViewNode *> all_graphs;
     std::vector<GraphViewNode *> all_pipelines;
+    std::vector<PendingConnection> pending_connections;
 
     GraphView(size_t block_size = 4096) : arena(block_size) {}
+
+    void resolve_pending_connections() {
+        for (auto &pc : pending_connections) {
+            auto sender_it = node_map.find(pc.sender);
+            auto receiver_it = node_map.find(pc.receiver);
+            if (sender_it != node_map.end() && receiver_it != node_map.end()) {
+                auto *e = GraphViewNode::make_edge(arena, sender_it->second, receiver_it->second, pc.type_name);
+                e->parent = pc.parent_view;
+                if (pc.parent_view->kind == ViewKind::Pipeline) {
+                    pc.parent_view->pipeline.edges.push_back(e);
+                } else {
+                    pc.parent_view->graph.edges.push_back(e);
+                }
+                all_edges.push_back(e);
+            }
+        }
+        pending_connections.clear();
+    }
 };
 
 // helpers /////////////////////////////////////////////////////////////////////
