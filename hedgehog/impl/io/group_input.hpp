@@ -29,7 +29,6 @@ namespace hh {
 // per type) to each group. This allows to reduce contention when there are a
 // lot of threads.
 //
-
 template <size_t GroupSize, typename InputType>
 struct GroupNodeInput {
     inline thread_local static size_t index_ = 0;

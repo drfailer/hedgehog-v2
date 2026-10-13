@@ -19,15 +19,25 @@
 #ifndef HEDGEHOG_TOOL_MACROS_H
 #define HEDGEHOG_TOOL_MACROS_H
 
+//
+// Concat macro use to generate names.
+//
 #define HH_CONCAT_INDIRECT(a, b) a##b
 #define HH_CONCAT(a, b) HH_CONCAT_INDIRECT(a, b)
 
+//
+// Macro used to bypass concept when the are deactivated (prevents compile-time
+// when not necessary check).
+//
 #ifdef HH_ENABLE_CONCEPTS
 #define HH_CONCEPT(C) C
 #else
 #define HH_CONCEPT(C) typename
 #endif
 
+//
+// Cross-platform pause (calls mm_pause).
+//
 #if defined(_MSC_VER)
     #include <intrin.h>
     #if defined(_M_IX86) || defined(_M_X64)

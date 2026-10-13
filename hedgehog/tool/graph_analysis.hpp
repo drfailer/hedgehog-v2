@@ -27,6 +27,10 @@
 #include "graph_view.hpp"
 #include "../graph/node.hpp"
 
+//
+// Collection of functions used to analyze the graph topology (GraphView).
+//
+
 namespace hh {
 
 inline void ga_node_input_edges(GraphView const &view, Node *node, std::vector<GraphViewNode *> &edges) {

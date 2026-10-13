@@ -22,7 +22,7 @@
 #include "../../tool/macros.hpp"
 
 //
-// Triggers allow thread to wait and be notified.
+// Triggers allow threads to wait and be notified.
 //
 
 namespace hh {

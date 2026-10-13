@@ -19,12 +19,19 @@
 #ifndef HEDGEHOG_TOOL_NUMA_H
 #define HEDGEHOG_TOOL_NUMA_H
 
+#include <cassert>
+#include <cstdlib>
+#include <cstddef>
 #include <string>
 #include <vector>
 #include <sstream>
 #include "log.hpp"
 
 #if defined(__linux__)
+    #include <sys/mman.h>
+    #include <sys/syscall.h>
+    #include <unistd.h>
+    #include <linux/mempolicy.h>
     #include <sched.h>
     #include <fstream>
     #define HH_NUMA_LINUX
@@ -42,7 +49,17 @@
     #define HH_NUMA_WINDOWS
 #endif
 
+//
+// Numa layer used to pin threads and allocate memory on specific numa nodes
+// (falls back to no pinning / standard allocation when numa configuration is
+// not available).
+//
+
 namespace hh::numa {
+
+/******************************************************************************/
+/*                               Thread Pinning                               */
+/******************************************************************************/
 
 inline std::vector<int> parse_cpulist(std::string const &cpulist) {
     std::vector<int> cpus;
@@ -155,6 +172,97 @@ inline void pin_current_thread(int numa_id) {
 #else
 
 inline void pin_current_thread(int) {}
+
+#endif
+
+/******************************************************************************/
+/*                             Memory Allocation.                             */
+/******************************************************************************/
+
+// Linux: mmap + mbind ////////////////////////////////////////////////////////
+
+#if defined(__linux__)
+
+inline void *alloc_on_node(size_t len_bytes, int numa_id, size_t &alloc_size_out) {
+    assert(numa_id >= 0 && numa_id < 64);
+
+    long page_size = sysconf(_SC_PAGESIZE);
+    size_t rounded = (len_bytes + page_size - 1) & ~(static_cast<size_t>(page_size) - 1);
+    alloc_size_out = rounded;
+
+    void *ptr = mmap(nullptr, rounded, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (ptr == MAP_FAILED) {
+        log::warning(std::source_location::current(),
+                     "mmap failed for NUMA allocation (", len_bytes, " bytes)");
+        return nullptr;
+    }
+
+    unsigned long nodemask = 1UL << numa_id;
+    unsigned long maxnode = sizeof(unsigned long) * 8 + 1;
+    long ret = syscall(__NR_mbind, ptr, rounded, MPOL_BIND, &nodemask, maxnode, 0);
+    if (ret != 0) {
+        log::warning(std::source_location::current(),
+                     "mbind failed for NUMA node ", numa_id);
+        munmap(ptr, rounded);
+        return nullptr;
+    }
+
+    return ptr;
+}
+
+inline void free_on_node(void *ptr, size_t alloc_size) {
+    if (ptr) munmap(ptr, alloc_size);
+}
+
+inline int query_node(void *ptr) {
+    int status = -1;
+    void *pages[] = { ptr };
+    long ret = syscall(__NR_move_pages, 0, 1, pages, nullptr, &status, 0);
+    if (ret != 0) return -1;
+    return status;
+}
+
+// Windows: VirtualAllocExNuma ////////////////////////////////////////////////
+
+#elif defined(_WIN32)
+
+inline void *alloc_on_node(size_t len_bytes, int numa_id, size_t &alloc_size_out) {
+    assert(numa_id >= 0);
+    alloc_size_out = len_bytes;
+    void *ptr = VirtualAllocExNuma(
+        GetCurrentProcess(), NULL, len_bytes,
+        MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE,
+        static_cast<DWORD>(numa_id));
+    if (!ptr) {
+        log::warning(std::source_location::current(),
+                     "VirtualAllocExNuma failed for NUMA node ", numa_id);
+    }
+    return ptr;
+}
+
+inline void free_on_node(void *ptr, [[maybe_unused]] size_t alloc_size) {
+    if (ptr) VirtualFree(ptr, 0, MEM_RELEASE);
+}
+
+inline int query_node(void *) { return -1; }
+
+// Unsupported platform: fallback /////////////////////////////////////////////
+
+#else
+
+inline void *alloc_on_node(size_t len_bytes, int numa_id, size_t &alloc_size_out) {
+    log::warning(std::source_location::current(),
+                 "NUMA allocation not supported on this platform, falling back to aligned_alloc");
+    alloc_size_out = len_bytes;
+    return std::aligned_alloc(alignof(std::max_align_t), len_bytes);
+}
+
+inline void free_on_node(void *ptr, [[maybe_unused]] size_t alloc_size) {
+    std::free(ptr);
+}
+
+inline int query_node(void *) { return -1; }
 
 #endif
 

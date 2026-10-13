@@ -30,6 +30,9 @@
 
 namespace hh {
 
+//
+// Non blocking sink used with the serial graph.
+//
 template <typename ...Outputs>
 struct SerialSink {
     using VariantType = std::variant<std::shared_ptr<Outputs>...>;

@@ -25,7 +25,7 @@
 //
 // The new version of Hedgehog doesn't force users to use shared pointers. One
 // can use standard pointers (and use allocators from the library), or raw
-// values (we assume that users who want to use falues know what should be
+// values (we assume that users who want to use values know what should be
 // copied and allocated).
 //
 
@@ -97,8 +97,6 @@ using data_type = typename data_type_impl<T>::type;
 
 template <typename T>
 using data_t = T*;
-
-// TODO: we should have an allocator version when the arena will be implemented
 
 template <typename T>
 data_t<T> make_data(auto &&...args) {

@@ -19,8 +19,6 @@
 #ifndef HEDGEHOG_IMPL_GRAPH_GRAPH_SINK_H
 #define HEDGEHOG_IMPL_GRAPH_GRAPH_SINK_H
 
-namespace hh {
-
 #include <queue>
 #include <variant>
 #include <mutex>
@@ -28,14 +26,19 @@ namespace hh {
 #include <cassert>
 #include <cstdio>
 
+namespace hh {
+
+//
+// Thread safe graph sink (used to collect graph results).
+//
 template <typename ...Outputs>
 struct GraphSink {
     void initialize(InitializationInfo const &) {}
     void finalize(InitializationInfo const &) {}
 
     using VariantType = std::variant<data_t<Outputs>...>;
-    std::mutex mutex;
-    std::queue<VariantType> results;
+    std::mutex                mutex;
+    std::queue<VariantType>   results;
     std::counting_semaphore<> sem{0};
 
     template <typename T>

@@ -34,9 +34,12 @@
 #include "../tool/graph_view.hpp"
 #include "../tool/profiling_report.hpp"
 
-namespace hh {
+//
+// The graph allows to connect and run nodes (connection logic uses nodes
+// input/output types).
+//
 
-// Graph ///////////////////////////////////////////////////////////////////////
+namespace hh {
 
 template <typename Config>
 struct Graph : Node {
@@ -51,13 +54,8 @@ struct Graph : Node {
     using Output      = type_list_dispatch<OutputTypes, EdgeConnectors>;
 
     //
-    // Argument struct to pass to the edge builder. We use a struct because it
-    // makes things easier to change. Note that this struct stores standard
-    // pointers and not shared pointers. This is important because the edges are
-    // heavily used by multiple threads during the execution, and we don't want
-    // them to go through the shared_ptr api which could introduce extra atomic
-    // operations (the lifetime of all the arguments is at least the same as
-    // the graph, so the data will always be available to the edge).
+    // Argument struct passed to the edge builder. We use a struct because it
+    // makes things easier to maintain.
     //
     template <typename Sender, typename Receiver>
     struct MakeEdgeArgs {
@@ -70,16 +68,16 @@ struct Graph : Node {
 
     static inline int graph_id_gen_ = 0;
 
-    GraphInfo graph_info_ = {};
-    Input input_   = {};
-    Output output_ = {};
-    std::shared_ptr<Runner> runner_ = {};
-    Sink sink_ = {};
-    std::set<std::shared_ptr<Node>> nodes_ = {};
-    std::set<std::shared_ptr<Node>> input_nodes_ = {};
+    GraphInfo                       graph_info_   = {};
+    Input                           input_        = {};
+    Output                          output_       = {};
+    std::shared_ptr<Runner>         runner_       = {};
+    Sink                            sink_         = {};
+    std::set<std::shared_ptr<Node>> nodes_        = {};
+    std::set<std::shared_ptr<Node>> input_nodes_  = {};
     std::set<std::shared_ptr<Node>> output_nodes_ = {};
-    std::vector<Connection> connections_ = {};
-    bool built_ = false;
+    std::vector<Connection>         connections_  = {};
+    bool                            built_        = false;
 
     #ifdef HH_ENABLE_PROFILING
     Profile *exec_profile_ = nullptr;
@@ -104,7 +102,11 @@ struct Graph : Node {
 
     // user functions //////////////////////////////////////////////////////////
 
-    void build() {
+    //
+    // Setup input connections and output edges once (do not rebuild when the
+    // same graph is executed multiple tiles).
+    //
+    void build_once() {
         if (built_) return;
 
         // connect the sink
@@ -129,6 +131,9 @@ struct Graph : Node {
         built_ = true;
     }
 
+    //
+    // Start the graph (launch the runner on every node)
+    //
     void start(int rank = 0, HH_LOC) {
         if (this->parent() != nullptr) {
             log::fatal(loc, "a sub-graph cannot be started");
@@ -138,7 +143,7 @@ struct Graph : Node {
             log::fatal(loc, "graph start aborted due to errors.");
         }
 
-        build();
+        build_once();
 
         if (input_.edge_count() == 0) {
             log::fatal(loc, "graph has no input connections");
@@ -160,6 +165,11 @@ struct Graph : Node {
         run(run_info);
     }
 
+    //
+    // Stop the graph (stop the runner). Note that this is a force stop: the
+    // graph doesn't wait for termination. To wait, one must use the
+    // get_result/eat_results functions.
+    //
     void stop() {
         HH_PROFILE_REGION(Node::profiler(), "finalization") {
             finalize(GraphInfo{Node::info().name, 0});
@@ -169,21 +179,35 @@ struct Graph : Node {
         #endif
     }
 
+    //
+    // Connection function used with sub-graphs.
+    //
     template <typename T>
     void connect_output_edge(Edge<T> edge) {
         output_.connect(std::move(edge));
     }
 
+    //
+    // Push data to the inputs of the graph (used internally with sub-graphs).
+    //
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
         input_.push_data(std::move(data), info);
     }
 
+    //
+    // Push data to the inputs of the graph and construct the runtime info
+    // (user API; called when pushing data to the root graph).
+    //
     template <typename T>
     void push_data(data_t<T> data) {
         push_data<T>(std::move(data), RuntimeInfo{&Node::info(), &graph_info_, {}, 0, &Node::profiler()});
     }
 
+    //
+    // Blocks until the sink receives data and returns the data (deadlocks if no
+    // data arrives).
+    //
     auto get_result() {
         if constexpr (HasOnResult<Runner>) {
             runner_->on_result();
@@ -191,6 +215,11 @@ struct Graph : Node {
         return sink_.get_result();
     }
 
+    //
+    // Blocks until the sink receives data and discard the result (deadlocks if
+    // no data arrives). This function can eat the specified amount of result
+    // data.
+    //
     void eat_results(size_t count = 1) {
         for (size_t i = 0; i < count; ++i) {
             auto _ = get_result();
@@ -198,6 +227,10 @@ struct Graph : Node {
     }
 
     // node api ////////////////////////////////////////////////////////////////
+
+    //
+    // Implementation of the functions from the Node interface.
+    //
 
     void initialize_components() {
         auto init_info = InitializationInfo{&Node::info(), &graph_info_, &Node::profiler()};
@@ -247,7 +280,7 @@ struct Graph : Node {
         auto &arena = gv->arena;
         auto &map = gv->node_map;
 
-        auto *view = GraphViewNode::make_graph(arena, this);
+        auto *view = GraphView::make_graph(arena, this);
         map[this] = view;
         gv->all_graphs.push_back(view);
 
@@ -322,11 +355,9 @@ struct Graph : Node {
     // Edge creation for a type: create an edge between 2 nodes_ for a specific
     // type.
     //
-    // - We do not verify if nodes_ belong to another graph.
     // - We do not verify if the edge already exists, creating multiple edges
     //   for the same sender/receiver/type is allowed.
     // - Sub-graphs input edges are not flattened when a custom edge is used.
-    // - Sub-graphs output edges are not flattened.
     //
 
     template <typename T>
@@ -365,11 +396,9 @@ struct Graph : Node {
     // Edge creation for common types: create an edge between 2 nodes_ for every
     // types common between the sender outputs and receiver inputs.
     //
-    // - We do not verify if nodes_ belong to another graph.
     // - We do not verify if the edges already exist, creating multiple edges
     //   for the same sender/receiver/type is allowed.
     // - Sub-graphs input edges are not flattened when a custom edge is used.
-    // - Sub-graphs output edges are not flattened.
     //
 
     template <typename Sender, typename Receiver>
@@ -420,10 +449,11 @@ struct Graph : Node {
     // Set graph inputs.
     //
     // When the connected node is a task, the edge transfering data to this
-    // task is added to the edge slot list. When it is a sub-graph and no edge
-    // is specified, the input edges of the sub-graph are added to the input
-    // edge list of the current graph to guaranty direct data transfer to the
-    // sub-graph's input nodes.
+    // task is added to the edge slot list. When it is a sub-graph and no
+    // custom edge is specified, the input edges of the sub-graph are added to
+    // the input edge list of the current graph to guaranty direct data
+    // transfer to the sub-graph's input nodes (works recursively when there
+    // are multiple layers of sub-graphs).
     //
 
     template <typename T>

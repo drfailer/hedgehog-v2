@@ -25,12 +25,19 @@
 #include <cstdint>
 #include <source_location>
 
+//
+// Basic thread safe logging system.
+//
+
+// caller location macro
 #define HH_LOC std::source_location loc = std::source_location::current()
 
 namespace hh::log {
 
+// globals /////////////////////////////////////////////////////////////////////
+
 std::mutex LOG_MUTEX;
-size_t ERROR_COUNT = 0;
+size_t     ERROR_COUNT = 0;
 
 // log level ///////////////////////////////////////////////////////////////////
 
@@ -64,6 +71,10 @@ struct LocatedMessage {
 
 // info ////////////////////////////////////////////////////////////////////////
 
+//
+// Info log level (inactive by default).
+//
+
 void info(std::source_location loc, auto &&...args) {
     std::lock_guard<std::mutex> lock(LOG_MUTEX);
     if (LOG_LEVEL > LogLevel::Info) return;
@@ -78,6 +89,10 @@ void info(LocatedMessage lm, auto &&...args) {
 
 // warning /////////////////////////////////////////////////////////////////////
 
+//
+// Warning log level.
+//
+
 void warning(std::source_location loc, auto &&...args) {
     std::lock_guard<std::mutex> lock(LOG_MUTEX);
     if (LOG_LEVEL > LogLevel::Warning) return;
@@ -91,6 +106,11 @@ void warning(LocatedMessage lm, auto &&...args) {
 }
 
 // error ///////////////////////////////////////////////////////////////////////
+
+//
+// The error level prints messages and increment the error count but doesn't
+// crash the program.
+//
 
 void error(std::source_location loc, auto &&...args) {
     std::lock_guard<std::mutex> lock(LOG_MUTEX);
@@ -111,6 +131,10 @@ size_t error_count() {
 }
 
 // fatal ///////////////////////////////////////////////////////////////////////
+
+//
+// The fatal function will log the given message and panic (std::abort).
+//
 
 [[noreturn]] void fatal(std::source_location loc, auto &&...args) {
     {

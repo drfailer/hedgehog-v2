@@ -19,14 +19,19 @@
 #ifndef HEDGEHOG_API_EXECUTION_CONTEXT_H
 #define HEDGEHOG_API_EXECUTION_CONTEXT_H
 
+//
+// The execution context is used to exposes the graph node API inside the user
+// tasks (a task is not directly a node, it is an execution core bound to a
+// node).
+//
+
 namespace hh {
 
 // rumtime context /////////////////////////////////////////////////////////////
 
 //
-// used as an interface that querries the runtime info.
+// Used as an interface that querries the runtime info.
 //
-
 struct RuntimeContext {
     RuntimeInfo info_;
 
@@ -44,6 +49,11 @@ struct RuntimeContext {
 
 // node execution context //////////////////////////////////////////////////////
 
+//
+// The NodeExecutionContext is passed to the user execution kernels (tasks) and
+// allow accessing node functionalities (like pushing data, retrieving info,
+// ...).
+//
 template <typename NodeType>
 struct NodeExecutionContext : RuntimeContext {
     NodeType *node_;
@@ -71,11 +81,10 @@ struct NodeExecutionContext : RuntimeContext {
 
 //
 // The node execution context gives access directly to the node, but we cannot
-// do that for the lambda task (recursive type dependencies). This is a less
-// powerful version that allows to build the lambda task (less powerful in the
-// sens that it doesn't give full access to the node).
+// do that for the lambda task (recursive type dependencies). This is a
+// minimized context that doesn't depend on the node so that it can be used
+// within lambda tasks.
 //
-
 template <typename T>
 struct LambdaExecutionContext : RuntimeContext {
     using PushDataFun = void (*)(void *, data_t<T>);

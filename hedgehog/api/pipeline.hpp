@@ -28,6 +28,9 @@ namespace hh {
 
 // pipeline ////////////////////////////////////////////////////////////////////
 
+//
+// Creates a pipeline node based on the given user pipeline.
+//
 template <typename P>
 auto make_pipeline(std::shared_ptr<P> pipeline, std::vector<PipelineInfo> const &configs, std::string const &name = "Pipeline") {
     using G = std::invoke_result_t<decltype(&P::make_graph), P, size_t>::element_type;
@@ -40,6 +43,10 @@ auto make_pipeline(std::shared_ptr<P> pipeline, std::vector<PipelineInfo> const 
     return std::make_shared<PipelineNode<Config>>(pipeline, NodeInfo{name, 0}, configs);
 }
 
+//
+// Creates a pipeline node based on the given user pipeline type (uses the user
+// pipeline default constructor).
+//
 template <typename P>
 auto make_pipeline(std::vector<PipelineInfo> const &configs, std::string const &name = "Pipeline") {
     return make_pipeline(std::make_shared<P>(), configs, name);

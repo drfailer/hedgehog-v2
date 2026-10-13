@@ -27,9 +27,23 @@
 #include "helpers.hpp"
 #include "../impl/memory/allocators.hpp"
 
+//
+// The graph view is a data structure that represents the topology of the
+// graph. We use this structure because all the graph components are templates
+// (difficult to operate on).
+//
+
 namespace hh {
 
 class Node;
+
+// GraphViewNode ///////////////////////////////////////////////////////////////
+
+//
+// Fat struct representing a graph node. The kind field is used to determin the
+// type of the node and which fields are available. We can't use a union here
+// because we use RAII types. No std::variant.
+//
 
 struct GraphViewNode;
 
@@ -38,17 +52,17 @@ using NodeViewMap = std::unordered_map<Node *, GraphViewNode *>;
 struct ViewEdge {
     GraphViewNode *sender;
     GraphViewNode *receiver;
-    std::string type_name;
+    std::string    type_name;
 };
 
 struct ViewIOEdge {
     GraphViewNode *node;
-    std::string type_name;
+    std::string    type_name;
 };
 
 struct ViewGraph {
-    std::vector<ViewIOEdge> input_edges;
-    std::vector<ViewIOEdge> output_edges;
+    std::vector<ViewIOEdge>      input_edges;
+    std::vector<ViewIOEdge>      output_edges;
     std::vector<GraphViewNode *> nodes;
     std::vector<GraphViewNode *> edges;
 };
@@ -67,6 +81,36 @@ struct GraphViewNode {
     ViewEdge         edge     = {};
     ViewGraph        graph    = {};
     ViewPipeline     pipeline = {};
+};
+
+// GraphView ///////////////////////////////////////////////////////////////////
+
+//
+// Used to create sub-graph connection.
+//
+struct PendingConnection {
+    Node          *sender;
+    Node          *receiver;
+    std::string    type_name;
+    GraphViewNode *parent_view;
+};
+
+//
+// The main GraphView type (holds the root node, the node map and the nodes
+// lists).
+//
+struct GraphView {
+    GraphViewNode               *root = nullptr;
+    NodeViewMap                  node_map;
+    std::vector<GraphViewNode *> all_nodes;
+    std::vector<GraphViewNode *> all_edges;
+    std::vector<GraphViewNode *> all_graphs;
+    std::vector<GraphViewNode *> all_pipelines;
+
+    DynamicArena                   arena;
+    std::vector<PendingConnection> pending_connections;
+
+    GraphView(size_t block_size = 4096) : arena(block_size) {}
 
     // factory methods /////////////////////////////////////////////////////////
 
@@ -98,41 +142,15 @@ struct GraphViewNode {
         view->node = n;
         return view;
     }
-};
 
-// GraphView ///////////////////////////////////////////////////////////////////
-
-//
-// Owns the arena and root pointer. All GraphViewNode* in the tree point into
-// this arena's memory.
-//
-
-struct PendingConnection {
-    Node *sender;
-    Node *receiver;
-    std::string type_name;
-    GraphViewNode *parent_view;
-};
-
-struct GraphView {
-    DynamicArena arena;
-    GraphViewNode *root = nullptr;
-    NodeViewMap node_map;
-
-    std::vector<GraphViewNode *> all_nodes;
-    std::vector<GraphViewNode *> all_edges;
-    std::vector<GraphViewNode *> all_graphs;
-    std::vector<GraphViewNode *> all_pipelines;
-    std::vector<PendingConnection> pending_connections;
-
-    GraphView(size_t block_size = 4096) : arena(block_size) {}
+    // pending connections /////////////////////////////////////////////////////
 
     void resolve_pending_connections() {
         for (auto &pc : pending_connections) {
             auto sender_it = node_map.find(pc.sender);
             auto receiver_it = node_map.find(pc.receiver);
             if (sender_it != node_map.end() && receiver_it != node_map.end()) {
-                auto *e = GraphViewNode::make_edge(arena, sender_it->second, receiver_it->second, pc.type_name);
+                auto *e = make_edge(arena, sender_it->second, receiver_it->second, pc.type_name);
                 e->parent = pc.parent_view;
                 if (pc.parent_view->kind == ViewKind::Pipeline) {
                     pc.parent_view->pipeline.edges.push_back(e);

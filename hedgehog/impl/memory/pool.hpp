@@ -27,23 +27,36 @@
 
 #include "index_allocator.hpp"
 #include "../../tool/concepts.hpp"
-#include "../../tool/numa_alloc.hpp"
+#include "../../tool/numa.hpp"
 
 #ifdef HH_USE_CUDA
 #include <cuda_runtime.h>
 #endif
+
+//
+// Concurrent memory pool which supports numa allocation. It cannot allocate
+// elements on the GPU, but it has a configurable device id: most of the time,
+// the data is not directly allocated on the GPU, but the data constructor &
+// destructor need to handle GPU allocation. The cudaSetDevice function is
+// called before constructing / destructing the data elements so that the
+// allocated memory ends up on the right device.
+//
+// When used in a multi-threaded context, the allocate function can be called
+// in blocking mode to wait for other threads to release memory when the pool
+// is empty.
+//
 
 namespace hh {
 
 template <typename T>
 struct Pool {
     std::counting_semaphore<> sem_{0};
-    IndexAllocator index_allocator_;
-    std::byte *mem_ = nullptr;
-    size_t capacity_ = 0;
-    int numa_id_ = -1;
-    int device_id_ = -1;
-    size_t alloc_size_ = 0;
+    IndexAllocator            index_allocator_;
+    std::byte                *mem_        = nullptr;
+    size_t                    capacity_   = 0;
+    int                       numa_id_    = -1;
+    int                       device_id_  = -1;
+    size_t                    alloc_size_ = 0;
 
     Pool() = default;
     explicit Pool(int numa_id, int device_id = -1)
@@ -79,9 +92,9 @@ struct Pool {
         }
         assert(mem_ && "failed to fill pool");
 
-#ifdef HH_USE_CUDA
+        #ifdef HH_USE_CUDA
         if (device_id_ >= 0) { cudaSetDevice(device_id_); }
-#endif
+        #endif
         for (size_t i = 0; i < count; ++i) {
             new (&mem_[i * sizeof(T)]) T(std::forward<decltype(args)>(args)...);
         }

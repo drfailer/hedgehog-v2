@@ -25,6 +25,10 @@
 #include "../../../3rdparty/daking_mpsc_queue/MPSC_queue.hpp"
 #include "../../../3rdparty/moodycamel_concurrent_queue/concurrentqueue.h"
 
+//
+// Node input types that use different lock-free queue implementations.
+//
+
 namespace hh {
 
 // moodycamel mpmc input ///////////////////////////////////////////////////////

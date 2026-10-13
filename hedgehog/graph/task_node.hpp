@@ -30,6 +30,23 @@
 #include "../tool/helpers.hpp"
 #include "../tool/log.hpp"
 
+//
+// Task nodes are graph nodes that hold a user execution core (actual task)
+// that will consume and process input data. The task node can be ran by
+// multiple threads; in this case, the user task will be copied so that each
+// thread owns its own copy of the task.
+//
+// User tasks need to have the following properties:
+// - inputs: type list of input types.
+// - outputs: type list of output types.
+// - node_input (optional): node input type (input queue customization).
+// - intialize(optional ctx) (optional): initialize the task.
+// - finalize(optional ctx) (optional): finalize the task.
+// - execute(optional ctx, data): execution function for each data type (can be
+//                                template).
+// - copy() (optional): copy the task when it is not default constructible.
+//
+
 namespace hh {
 
 // TaskNode ////////////////////////////////////////////////////////////////////
@@ -44,6 +61,7 @@ struct TaskNode : Node, Runnable {
     using Runnable::initialize;
     using Node::finalize;
     using Runnable::finalize;
+
     // config //////////////////////////////////////////////////////////////////
 
     using InputTypes  = Config::InputTypes;
@@ -54,10 +72,13 @@ struct TaskNode : Node, Runnable {
 
     // thread state ////////////////////////////////////////////////////////////
 
+    //
+    // Thread state that owns thread local data.
+    //
     struct ThreadState {
-        std::shared_ptr<Task> task;
+        std::shared_ptr<Task>                  task;
         NodeExecutionContext<TaskNode<Config>> context;
-        Profiler profiler;
+        Profiler                               profiler;
 
         void initialize(TaskNode<Config> *node, RuntimeInfo const &info) {
             profiler.initialize(node->info().name);
@@ -98,10 +119,10 @@ struct TaskNode : Node, Runnable {
 
     // attributes & constructors ///////////////////////////////////////////////
 
-    Input                    input_        = {};
-    Output                   output_       = {};
-    GraphInfo                graph_info_   = {};
-    std::vector<ThreadState> states_       = {};
+    Input                    input_      = {};
+    Output                   output_     = {};
+    GraphInfo                graph_info_ = {};
+    std::vector<ThreadState> states_     = {};
 
     TaskNode(std::shared_ptr<Task> task, NodeInfo const &info): Node(info), states_(info.number_threads) {
         states_[0].task = std::move(task);
@@ -112,6 +133,10 @@ struct TaskNode : Node, Runnable {
     std::vector<ThreadState> const &states() const { return states_; }
     std::shared_ptr<Task> task() { return states_[0].task; }
 
+    //
+    // This function is may be used by graph runners that override the task
+    // number of threads (thread pool like runners like the TBBRunner).
+    //
     void resize_threads(size_t n) {
         states_.resize(n);
         Node::number_threads(n);
@@ -150,7 +175,7 @@ struct TaskNode : Node, Runnable {
     }
 
     GraphViewNode *graph_view(GraphView *gv) override {
-        auto *view = GraphViewNode::make_node(gv->arena, this);
+        auto *view = GraphView::make_node(gv->arena, this);
         gv->node_map[this] = view;
         gv->all_nodes.push_back(view);
         return view;

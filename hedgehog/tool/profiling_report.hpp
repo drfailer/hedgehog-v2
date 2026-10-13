@@ -27,6 +27,10 @@
 #include "graph_view.hpp"
 #include "../graph/node.hpp"
 
+//
+// Report profiling information using various format (text, graphviz/dot, ...).
+//
+
 namespace hh {
 
 using ProfileMap = std::map<uintptr_t, ProfileReport>;

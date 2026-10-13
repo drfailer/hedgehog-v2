@@ -28,32 +28,35 @@
 #include "info.hpp"
 #include "node.hpp"
 
-namespace hh {
-
 //
 // Edges are used to connect nodes. Here, we use type erasure to be able to
 // connect any node type to any other node type. It also makes things more
 // manageable because it avoids adding too many interfaces everywhere (reduces
 // interdependencies).
 //
-// Nodes inputs/outputs store a raw edge struct instead of a pointer because
-// benchmarks have shown that dereferencing the pointer had a non negligible
-// impact on performance (this way, all the data required by an edge is loaded
-// with the edge).
+//
+// NOTE: Nodes inputs/outputs store raw edges structs instead of pointers
+// because benchmarks have shown that dereferencing the pointer had a non
+// negligible impact on performance (this way, all the data required by an edge
+// is loaded with the edge).
 //
 
+namespace hh {
+
 //
-// For user customization purpose, we use an std::function which allow users to
+// Edges are used to transfer data between nodes, it acts as a basic
+// directional transfer function. We use an std::function which allow users to
 // capture content when defining custom edges. If the captured content fits in
 // the std::function small buffer, it should not impact the performance (cf
 // SBO).
 //
-// Note that using a function pointer here would be more efficient but less
-// practical API wise.
-//
 template <typename T>
 using EdgeTransfer = std::function<void(Edge<T> *, data_t<T>, RuntimeInfo const &)>;
 
+//
+// The Edge struct holds a transfer function as well as relevant data (so we
+// don't pollute the std::function small buffer).
+//
 template <typename T>
 struct Edge {
     void *receiver = nullptr;
@@ -84,18 +87,14 @@ static_assert(sizeof(Edge<int>) <= 64, "Edge should fit on a cache line.");
 // Edge Impl ///////////////////////////////////////////////////////////////////
 
 //
-// The Edge struct holds an std::function which handles the transfer as well
-// as some required information (help with SBO). It is an opaque interface that
-// can be stored inside the graph components. The EdgeImpl is the actual edge
-// implementation that knows the type of all the elements.
+// EdgeImpl is a helper struct that is used to provide a nicer API to custom
+// edges. Directly constructing an Edge<T> is feasible, but it requires manual
+// type casting, graph executor management and enforces the type of the user
+// lambda. EdgeImpl creates an Edge transfer function used as a proxy that
+// handles the type casting and executor, and forwards arguments to the user
+// lambda. It also allows using different lambda signatures depending on which
+// iformation is required to handle the transfer.
 //
-// Using this is not required, but it makes creating custom edges simpler,
-// allowing to pass a lambda with a more flexible interface instead of an edge.
-// EdgeImpl also execute Executor::on_transfer automatically (required for some
-// executor implementations). Users still have the possiblity to directly
-// provide an Edge when full control over the implementaion is required.
-//
-
 template <typename Config>
 struct EdgeImpl {
     using Type = Config::Type;
@@ -130,6 +129,9 @@ struct EdgeImpl {
     }
 };
 
+//
+// Creates an edge using the given graph, receiver node and user lambda.
+//
 template <typename T>
 Edge<T> make_edge(auto graph, auto receiver, auto impl) {
     struct Config {
@@ -144,13 +146,9 @@ Edge<T> make_edge(auto graph, auto receiver, auto impl) {
 // Connections /////////////////////////////////////////////////////////////////
 
 //
-// Connections stored by the graph (used for building dot file, or other
-// operations on the graph).
+// Non-template connection descriptor used by the graph (used for building the
+// graph view).
 //
-// We don't store the edge directly because edges need to be taken by copy in
-// inputs/outputs.
-//
-
 struct Connection {
     Node *sender;
     Node *receiver;
@@ -161,7 +159,8 @@ struct Connection {
 
 //
 // An edge slot is just a collection of edges. This type can be used as graph
-// input or task node output.
+// input or task node output. EdgesSlots allows having different slot lists for
+// different types.
 //
 
 template <typename T>
@@ -201,12 +200,12 @@ struct EdgeSlots : EdgeSlot<Types>... {
 
 //
 // The edge connector is used to defer edge connection. This is mainly used to
-// connect graph output nodes as it allows making straight connections accross
-// sub-graph boundaries.
+// connect graph output nodes as it allows making straight connections across
+// sub-graph boundaries (edge flattening).
 //
 // Note that we could use interfaces instead of this (we don't need optimal
 // performance for the graph initialization machinery), but std::function
-// allows to do this witout adding extra inheritance layer in every node
+// allows to do this without adding extra inheritance layers in every node
 // implementation.
 //
 

@@ -30,8 +30,7 @@
 namespace hh {
 
 //
-// Node interface used in the graph: things that the graph/executor needs the
-// node to do.
+// Node interface used in the graph.
 //
 
 class Node {
@@ -70,16 +69,25 @@ class Node {
 
 // Task Handle /////////////////////////////////////////////////////////////////
 
+//
+// Argument of node input signal function (thread wake-up)
+//
 struct SignalOpts {
     size_t count;        // number of threads to signal
     size_t thread_index; // signal a particular thread
 };
 
+//
+// Result of node input wait function (returned when threads exit sleep).
+//
 struct WaitResult {
     bool terminate; // used to leave the thread loop
     bool skip;      // used to skip execution in the thread loop (no data, or defered)
 };
 
+//
+// Interface for runnable nodes (nodes that consume and process data).
+//
 struct Runnable {
     int runner_index_ = -1;
 

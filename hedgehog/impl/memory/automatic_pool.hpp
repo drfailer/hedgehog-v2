@@ -26,12 +26,12 @@
 #include "../../tool/helpers.hpp"
 #include "pool.hpp"
 
-namespace hh {
-
 //
 // Automatic memory pool that uses shared_ptr destructor to return memory
 // automatically.
 //
+
+namespace hh {
 
 template <typename T>
 struct AutomaticPool {

@@ -21,16 +21,19 @@
 
 namespace hh {
 
+//
+// Edge builder that creates a direct edge toward the receiver node.
+//
 struct DirectEdgeBuilder {
     template <typename T>
     static Edge<T> make_edge(auto args) {
         using Receiver = std::remove_pointer_t<decltype(args.receiver)>;
-        using Graph = std::remove_pointer_t<decltype(args.graph)>;
-        using Runner = Graph::Runner;
+        using Graph    = std::remove_pointer_t<decltype(args.graph)>;
+        using Runner   = Graph::Runner;
 
         return Edge<T>(args.receiver, args.graph, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
             auto receiver = static_cast<Receiver *>(e->receiver);
-            auto graph = static_cast<Graph *>(e->graph);
+            auto graph    = static_cast<Graph *>(e->graph);
             receiver->push_data(std::move(data), info);
             if constexpr (HasOnTransfer<Runner, Receiver, RuntimeInfo>) {
                 graph->runner()->on_transfer(receiver, info);

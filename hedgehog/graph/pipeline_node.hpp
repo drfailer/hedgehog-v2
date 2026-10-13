@@ -23,22 +23,34 @@
 
 #include "node.hpp"
 
+//
+// The pipeline node is a graph node that manages an execution pipeline. The
+// execution pipeline creates multiple graphs affected to different GPU devices
+// and/or NUMA nodes. When data arrives to the pipeline inputs, it uses the
+// pipeline send_to function to determine which graph should process the data.
+//
+// The pipeline needs to profide the following properties:
+// - make_graph(graph_index): function that creates and return a graph.
+// - send_to(data): returns the index of the graph responsible for process the
+//                  input data (will be called using different data types).
+//
+
 namespace hh {
 
 template <typename Config>
 struct PipelineNode : Node {
     // config //////////////////////////////////////////////////////////////////
 
-    using InputTypes = Config::InputTypes;
+    using InputTypes  = Config::InputTypes;
     using OutputTypes = Config::OutputTypes;
-    using Pipeline = Config::Pipeline;
-    using GraphType = Config::GraphType;
+    using Pipeline    = Config::Pipeline;
+    using GraphType   = Config::GraphType;
 
     // attributes & constructors ///////////////////////////////////////////////
 
-    std::shared_ptr<Pipeline> pipeline_ = nullptr;
-    std::vector<std::shared_ptr<GraphType>> graphs_ = {};
-    std::vector<PipelineInfo> configs_ = {};
+    std::shared_ptr<Pipeline>               pipeline_ = nullptr;
+    std::vector<std::shared_ptr<GraphType>> graphs_   = {};
+    std::vector<PipelineInfo>               configs_  = {};
 
     PipelineNode(std::shared_ptr<Pipeline> pipeline, NodeInfo const &info, std::vector<PipelineInfo> const &configs)
         : Node(info), pipeline_(std::move(pipeline)), graphs_(configs.size(), nullptr), configs_(configs) {
@@ -85,7 +97,7 @@ struct PipelineNode : Node {
         auto &arena = gv->arena;
         auto &map = gv->node_map;
 
-        auto *view = GraphViewNode::make_pipeline(arena, this);
+        auto *view = GraphView::make_pipeline(arena, this);
         map[this] = view;
         gv->all_pipelines.push_back(view);
 

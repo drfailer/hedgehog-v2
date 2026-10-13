@@ -24,10 +24,19 @@
 #include "../graph/graph.hpp"
 #include "../tool/config.hpp"
 
+//
+// Graphs are used to manage nodes and create edges between them. A graph has a
+// runner that will execute the node upon startup and untill graph shutdown.
+//
+
 namespace hh {
 
 // graph ///////////////////////////////////////////////////////////////////////
 
+//
+// Creates a graph using a given runner and io types with the default graph
+// configuration (thread safe sink, direct edge builder).
+//
 template <typename Impl, size_t Sep, typename ...Types>
 auto make_graph(std::shared_ptr<Impl> runner, std::string const &name = "Graph") {
     using io = io_types<Sep, Types...>;
@@ -41,6 +50,9 @@ auto make_graph(std::shared_ptr<Impl> runner, std::string const &name = "Graph")
     return std::make_shared<Graph<Config>>(runner, NodeInfo{name, 0});
 }
 
+//
+// Creates a graph using the default graph runner (binds threads to nodes).
+//
 template <size_t Sep, typename ...Types>
 auto make_graph(std::string const &name = "Graph") {
     return make_graph<DefaultGraphRunner, Sep, Types...>(std::make_shared<DefaultGraphRunner>(), name);
@@ -48,6 +60,9 @@ auto make_graph(std::string const &name = "Graph") {
 
 // serial graph ////////////////////////////////////////////////////////////////
 
+//
+// Creates a graph using the serial runner.
+//
 template <size_t Sep, typename ...Types>
 auto make_serial_graph(std::string const &name = "Graph") {
     using io = io_types<Sep, Types...>;

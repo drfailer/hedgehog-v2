@@ -19,6 +19,10 @@
 #ifndef HEDGEHOG_TOOL_CONCEPTS_H
 #define HEDGEHOG_TOOL_CONCEPTS_H
 
+//
+// Various helper concepts used within the library.
+//
+
 namespace hh {
 
 // Component lifecycle /////////////////////////////////////////////////////////

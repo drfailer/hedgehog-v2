@@ -50,7 +50,7 @@
 // information from different profiler types). Unlike the previous version, the
 // profiling API is thought to be more flexible and should not only be used
 // internally. User tasks can access the profiler to augment the profile
-// information.
+// information as needed.
 //
 
 // Region profiling macros: timing + NVTX when both are enabled ////////////////

@@ -30,6 +30,10 @@
 #include "../../tool/log.hpp"
 #include "trigger.hpp"
 
+//
+// Node input types that use a blocking queue implementation.
+//
+
 namespace hh {
 
 template <typename T>

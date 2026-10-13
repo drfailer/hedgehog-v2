@@ -25,19 +25,36 @@
 
 #include <tuple>
 
+//
+// Tasks are execution cores that consume and process data. A task needs to be
+// attached to a task node to be wired in a graph and ran when the graph is
+// started, allowing it to consume node input data.
+//
+
 namespace hh {
 
 // make_task ///////////////////////////////////////////////////////////////////
 
+//
+// Helper to define a task node type based on a task type (the node
+// configuration is determined from the task).
+//
 template <typename Impl>
 using task_t = TaskNode<make_task_config<Impl>>;
 
+//
+// Creates a new task node using the given task.
+//
 template <typename Impl>
 auto make_task(std::shared_ptr<Impl> task, size_t number_threads = 1, std::string const &name = "Task") {
     using Config = make_task_config<Impl>;
     return std::make_shared<TaskNode<Config>>(task, NodeInfo{name, number_threads});
 }
 
+//
+// Creates a new task node using the given task type (use the default task
+// constructor).
+//
 template <typename Impl>
 auto make_task(size_t number_threads = 1, std::string const &name = "Task") {
     return make_task(std::make_shared<Impl>(), number_threads, name);
@@ -81,7 +98,6 @@ struct LambdaTask {
 //
 // Lambda task node use to simplify the api (give direct access to set_execute).
 //
-
 template <typename Config>
 struct LambdaTaskNode : TaskNode<Config> {
     LambdaTaskNode(std::shared_ptr<typename Config::Task> task, NodeInfo const &info)
@@ -94,15 +110,18 @@ struct LambdaTaskNode : TaskNode<Config> {
 };
 
 //
-// Make functions.
+// Creates a lambda task using the given configuration.
 //
-
 template <typename Config>
 auto make_lambda_task(size_t number_threads = 1, std::string const &name = "LambdaTask") {
     auto lambda_task = std::make_shared<typename Config::Task>();
     return std::make_shared<LambdaTaskNode<Config>>(lambda_task, NodeInfo{name, number_threads});
 }
 
+//
+// Creates a lambda task with a default configuration (the user only has to
+// provide the inputs/outputs types).
+//
 template <size_t Sep, typename ...Types>
 auto make_lambda_task(size_t number_threads = 1, std::string const &name = "LambdaTask") {
     using io = io_types<Sep, Types...>;

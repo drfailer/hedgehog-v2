@@ -26,6 +26,10 @@
 
 #include "../../tool/log.hpp"
 
+//
+// Helper Cuda task that manages a cuda stream (user tasks can inherit from it).
+//
+
 #ifndef hh_check_cuda_error
 inline void __check_cuda_error(cudaError_t err) {
     if (cudaSuccess != err) {
@@ -52,9 +56,9 @@ inline void __check_cuda_error(cublasStatus_t status) {
 namespace hh {
 
 class CudaTask {
-    bool enable_peer_access_ = false;
-    std::unordered_set<int> peer_device_ids_ = {};
-    cudaStream_t stream_ = {};
+    std::unordered_set<int> peer_device_ids_    = {};
+    cudaStream_t            stream_             = {};
+    bool                    enable_peer_access_ = false;
 
   public:
     CudaTask() = default;

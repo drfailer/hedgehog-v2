@@ -29,33 +29,37 @@
 
 namespace hh {
 
-template <typename ...Fs>
-struct overloaded : Fs... { using Fs::operator()...; };
-
 // helper functions ////////////////////////////////////////////////////////////
 
+//
+// Pretty print types.
+//
 template<typename T>
 constexpr auto type_to_string() {
-  std::string_view name, prefix, suffix;
-#ifdef __clang__
-  name = __PRETTY_FUNCTION__;
-  prefix = "auto hh::type_to_string() [T = ";
-  suffix = "]";
-#elif defined(__GNUC__)
-  name = __PRETTY_FUNCTION__;
-  prefix = "constexpr auto hh::type_to_string() [with T = ";
-  suffix = "]";
-#elif defined(_MSC_VER)
-  name = __FUNCSIG__;
+    std::string_view name, prefix, suffix;
+    #ifdef __clang__
+    name = __PRETTY_FUNCTION__;
+    prefix = "auto hh::type_to_string() [T = ";
+    suffix = "]";
+    #elif defined(__GNUC__)
+    name = __PRETTY_FUNCTION__;
+    prefix = "constexpr auto hh::type_to_string() [with T = ";
+    suffix = "]";
+    #elif defined(_MSC_VER)
+    name = __FUNCSIG__;
     prefix = "auto __cdecl type_to_string<";
     suffix = ">(void)";
-#endif
-  name.remove_prefix(prefix.size());
-  name.remove_suffix(suffix.size());
+    #endif
+    name.remove_prefix(prefix.size());
+    name.remove_suffix(suffix.size());
 
-  return std::string(name);
+    return std::string(name);
 }
 
+//
+// Calls component->copy() if implemented or falls back to the default
+// constructor (runtime error if the task is not copiable).
+//
 template <typename Component>
 std::shared_ptr<Component> copy_component(std::shared_ptr<Component> component) {
     if constexpr (Copyable<Component>) {

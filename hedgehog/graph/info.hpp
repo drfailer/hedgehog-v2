@@ -24,9 +24,10 @@
 #include "../tool/profiling.hpp"
 
 //
-// To avoid further maintenance issues, we use info structs that contains all
-// the information currently available at a state. This context information
-// is passed to components and can be used at will in their implementations.
+// To avoid maintenance issues, we use info structs that contains all the
+// information currently available at every stage of the graph execution. This
+// enables accessing any useful information from within graph components (node
+// input/output, execution core, ...).
 //
 
 namespace hh {
@@ -38,18 +39,18 @@ namespace hh {
 // GraphInfo //////////////////////////////////////////////////////////////////
 
 //
-// Information about the pipeline.
+// Information about the pipeline (known through the pipeline configuration
+// specified when creating the pipeline).
 //
-
 struct PipelineInfo {
     int numa_id = -1;
     int device_id = 0;
 };
 
 //
-// Information about the graph.
+// Information about the graph (known when creating the graph; distributed
+// during node intialization).
 //
-
 struct GraphInfo {
     std::string name;
     int id;
@@ -58,9 +59,8 @@ struct GraphInfo {
 // NodeInfo ///////////////////////////////////////////////////////////////////
 
 //
-// Information about the node.
+// Information about the node (known when creating the node).
 //
-
 struct NodeInfo {
     std::string name;
     size_t number_threads;
@@ -69,9 +69,9 @@ struct NodeInfo {
 // RunInfo /////////////////////////////////////////////////////////////////////
 
 //
-// Information from the runner.
+// Information from the runner (knwon when starting a graph; propagated to the
+// runners).
 //
-
 struct RunInfo {
     int rank;
     PipelineInfo pipeline;
@@ -84,9 +84,9 @@ struct RunInfo {
 // InitializationInfo //////////////////////////////////////////////////////////
 
 //
-// Data available to node components during the initialization phase.
+// Data available to node components during the initialization phase (knwon at
+// graph startup; given to nodes intialize/finalize functions).
 //
-
 struct InitializationInfo {
     NodeInfo const *node;
     GraphInfo const *graph;
@@ -96,9 +96,9 @@ struct InitializationInfo {
 // RuntimeInfo /////////////////////////////////////////////////////////////////
 
 //
-// Data available to node components during the runtime phase.
+// Data available to node components during the runtime phase (known when
+// spawning threads inside a runner; passed to all node runtime functions).
 //
-
 struct RuntimeInfo {
     NodeInfo const *node;
     GraphInfo const *graph;

@@ -22,8 +22,6 @@
 #include <cstdint>
 #include "../../tool/macros.hpp"
 
-namespace hh {
-
 //
 // Concurrent index allocator/distributor implemented using Treiber's stack
 // algorithm. It only supports `u32` indices to avoid using atomic16
@@ -34,6 +32,8 @@ namespace hh {
 // auto new_index = ia.allocate(); // return IndexAllocator::NIL if empty
 // ia.release(new_index);
 //
+
+namespace hh {
 
 struct IndexAllocator {
     static constexpr uint32_t NIL = 0xFFFFFFFF;

@@ -23,15 +23,23 @@
 
 #include "../graph/node.hpp"
 
+//
+// States are thread safe execution core that might be shared across threads.
+// The state manager is a proxy that locks the state before executing it on a
+// new piece of data.
+//
+
 namespace hh {
 
 // state manager ///////////////////////////////////////////////////////////////
 
 //
-// The default state manager doesn't lock the state to allow users to define
-// optimized state management.
+// State manager task node execution core. The state manager manages a users
+// state that can be shared across multiple threads (mainly used with
+// pipelines). Before executing the state, the state manager calls
+// state->lock() that locks the state (if it is lockable, one might prefer
+// using atomics rather than locks in a state).
 //
-
 template <typename State>
 struct StateManager {
     using inputs = State::inputs;
@@ -56,6 +64,9 @@ struct StateManager {
     }
 };
 
+//
+// Createa state manager task node using the given state.
+//
 template <typename Impl>
 auto make_state_manager(std::shared_ptr<Impl> state, std::string const &name = "StateManager") {
     using BaseConfig = make_task_config<Impl>;
@@ -66,6 +77,9 @@ auto make_state_manager(std::shared_ptr<Impl> state, std::string const &name = "
 
 // states //////////////////////////////////////////////////////////////////////
 
+//
+// Mutex based state (states requiring a lock can inherit from it).
+//
 class MutexState {
     std::mutex mutex_;
 

@@ -26,15 +26,22 @@
 
 namespace hh {
 
+//
+// Thread runner that binds threads to nodes (a single threaded node will spawn
+// 1 thread, a parallel node with N threads will spawn N threads). When using
+// this runner, the thread execution loop is very simple and we rely on the
+// OS scheduler when over-subscribing. This runner is also numa aware and will
+// pin the threads to Numa node when asked to do so (using execution pipelines).
+//
 struct ThreadRunner {
     struct RunEntry {
         Runnable *runnable;
-        size_t number_threads;
+        size_t    number_threads;
     };
 
-    std::vector<std::thread> threads = {};
-    std::vector<RunEntry> runnables_ = {};
-    std::vector<Node *> graph_nodes_ = {};
+    std::vector<std::thread> threads      = {};
+    std::vector<RunEntry>    runnables_   = {};
+    std::vector<Node *>      graph_nodes_ = {};
 
     void initialize(InitializationInfo const &) {}
 
@@ -53,13 +60,13 @@ struct ThreadRunner {
 
         for (auto &entry : runnables_) {
             for (size_t i = 0; i < entry.number_threads; ++i) {
-                auto pipeline = info.pipeline;
+                auto  pipeline = info.pipeline;
                 auto *runnable = entry.runnable;
                 threads.push_back(
                     std::thread([runnable, i, info, pipeline]() {
                         numa::pin_current_thread(pipeline.numa_id);
                         RuntimeInfo ri{};
-                        ri.run = info;
+                        ri.run          = info;
                         ri.thread_index = i;
                         runnable->initialize(ri);
                         for (;;) {

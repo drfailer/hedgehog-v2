@@ -28,8 +28,15 @@
 #include <new>
 #include <cassert>
 
-#include "../../tool/numa_alloc.hpp"
+#include "../../tool/numa.hpp"
 #include "../../tool/data.hpp"
+
+//
+// Collection of memory allocators:
+// - static arena (fixed size, do no reallocated memory; supports numa
+//   allocations and can accept a device buffer).
+// - dynamic arena (arena that can reallocate new blocks at will).
+//
 
 namespace hh {
 
@@ -58,12 +65,12 @@ struct ArenaDeleter {
 //
 
 struct Arena {
-    std::byte *buffer_ = nullptr;
-    size_t capacity_bytes_ = 0;
-    size_t offset_ = 0;
-    bool owns_memory_ = false;
-    int numa_id_ = -1;
-    size_t alloc_size_ = 0;  // Actual allocated size for NUMA free
+    std::byte *buffer_         = nullptr;
+    size_t     capacity_bytes_ = 0;
+    size_t     offset_         = 0;
+    bool       owns_memory_    = false;
+    int        numa_id_        = -1;
+    size_t     alloc_size_     = 0;  // Actual allocated size for NUMA free
 
     // Constructors ////////////////////////////////////////////////////////////
 
@@ -115,11 +122,11 @@ struct Arena {
         , owns_memory_(other.owns_memory_)
         , numa_id_(other.numa_id_)
         , alloc_size_(other.alloc_size_) {
-        other.buffer_ = nullptr;
+        other.buffer_         = nullptr;
         other.capacity_bytes_ = 0;
-        other.offset_ = 0;
-        other.owns_memory_ = false;
-        other.alloc_size_ = 0;
+        other.offset_         = 0;
+        other.owns_memory_    = false;
+        other.alloc_size_     = 0;
     }
 
     Arena& operator=(Arena &&other) noexcept {
@@ -135,18 +142,18 @@ struct Arena {
         }
 
         // Transfer from other
-        buffer_ = other.buffer_;
+        buffer_         = other.buffer_;
         capacity_bytes_ = other.capacity_bytes_;
-        offset_ = other.offset_;
-        owns_memory_ = other.owns_memory_;
-        numa_id_ = other.numa_id_;
-        alloc_size_ = other.alloc_size_;
+        offset_         = other.offset_;
+        owns_memory_    = other.owns_memory_;
+        numa_id_        = other.numa_id_;
+        alloc_size_     = other.alloc_size_;
 
-        other.buffer_ = nullptr;
+        other.buffer_         = nullptr;
         other.capacity_bytes_ = 0;
-        other.offset_ = 0;
-        other.owns_memory_ = false;
-        other.alloc_size_ = 0;
+        other.offset_         = 0;
+        other.owns_memory_    = false;
+        other.alloc_size_     = 0;
 
         return *this;
     }
@@ -155,7 +162,7 @@ struct Arena {
 
     [[nodiscard]] std::byte* allocate(size_t bytes, size_t alignment) {
         // Use std::align to compute aligned pointer
-        void* ptr = &buffer_[offset_];
+        void*  ptr   = &buffer_[offset_];
         size_t space = capacity_bytes_ - offset_;
 
         void* aligned = std::align(alignment, bytes, ptr, space);
@@ -199,7 +206,7 @@ struct Arena {
     }
 
     bool contains(void const* ptr) const noexcept {
-        auto addr = reinterpret_cast<uintptr_t>(ptr);
+        auto addr  = reinterpret_cast<uintptr_t>(ptr);
         auto start = reinterpret_cast<uintptr_t>(buffer_);
         return addr >= start && addr < start + capacity_bytes_;
     }
@@ -230,9 +237,9 @@ struct DynamicArenaDeleter {
 
 struct DynamicArena {
     struct Block {
-        std::byte *data = nullptr;
-        size_t capacity_bytes = 0;
-        size_t alloc_size = 0;  // For NUMA free
+        std::byte *data           = nullptr;
+        size_t     capacity_bytes = 0;
+        size_t     alloc_size     = 0;  // For NUMA free
 
         Block() = default;
         Block(std::byte *d, size_t cap, size_t alloc_sz = 0)
@@ -242,19 +249,19 @@ struct DynamicArena {
             : data(other.data)
             , capacity_bytes(other.capacity_bytes)
             , alloc_size(other.alloc_size) {
-            other.data = nullptr;
+            other.data           = nullptr;
             other.capacity_bytes = 0;
-            other.alloc_size = 0;
+            other.alloc_size     = 0;
         }
 
         Block& operator=(Block &&other) noexcept {
             if (this == &other) return *this;
-            data = other.data;
-            capacity_bytes = other.capacity_bytes;
-            alloc_size = other.alloc_size;
-            other.data = nullptr;
+            data                 = other.data;
+            capacity_bytes       = other.capacity_bytes;
+            alloc_size           = other.alloc_size;
+            other.data           = nullptr;
             other.capacity_bytes = 0;
-            other.alloc_size = 0;
+            other.alloc_size     = 0;
             return *this;
         }
     };
@@ -267,9 +274,9 @@ struct DynamicArena {
     std::vector<Block> used_blocks_;
     std::vector<Block> out_band_allocations_;
 
-    Block *current_block_ = nullptr;
-    std::byte *current_pos_ = nullptr;
-    size_t bytes_left_ = 0;
+    Block     *current_block_ = nullptr;
+    std::byte *current_pos_   = nullptr;
+    size_t     bytes_left_    = 0;
 
     // Constructors ////////////////////////////////////////////////////////////
 
@@ -308,8 +315,8 @@ struct DynamicArena {
         , current_pos_(other.current_pos_)
         , bytes_left_(other.bytes_left_) {
         other.current_block_ = nullptr;
-        other.current_pos_ = nullptr;
-        other.bytes_left_ = 0;
+        other.current_pos_   = nullptr;
+        other.bytes_left_    = 0;
     }
 
     DynamicArena& operator=(DynamicArena &&other) noexcept {
@@ -324,19 +331,19 @@ struct DynamicArena {
         }
 
         // Transfer from other
-        block_size_ = other.block_size_;
-        out_band_size_ = other.out_band_size_;
-        numa_id_ = other.numa_id_;
-        unused_blocks_ = std::move(other.unused_blocks_);
-        used_blocks_ = std::move(other.used_blocks_);
+        block_size_           = other.block_size_;
+        out_band_size_        = other.out_band_size_;
+        numa_id_              = other.numa_id_;
+        unused_blocks_        = std::move(other.unused_blocks_);
+        used_blocks_          = std::move(other.used_blocks_);
         out_band_allocations_ = std::move(other.out_band_allocations_);
-        current_block_ = other.current_block_;
-        current_pos_ = other.current_pos_;
-        bytes_left_ = other.bytes_left_;
+        current_block_        = other.current_block_;
+        current_pos_          = other.current_pos_;
+        bytes_left_           = other.bytes_left_;
 
         other.current_block_ = nullptr;
-        other.current_pos_ = nullptr;
-        other.bytes_left_ = 0;
+        other.current_pos_   = nullptr;
+        other.bytes_left_    = 0;
 
         return *this;
     }
@@ -351,13 +358,13 @@ struct DynamicArena {
 
         // Try current block
         if (current_block_ && bytes_left_ > 0) {
-            void* ptr = current_pos_;
+            void*  ptr   = current_pos_;
             size_t space = bytes_left_;
 
             void* aligned = std::align(alignment, bytes, ptr, space);
             if (aligned) {
                 current_pos_ = static_cast<std::byte*>(aligned) + bytes;
-                bytes_left_ = space - bytes;
+                bytes_left_  = space - bytes;
                 return static_cast<std::byte*>(aligned);
             }
         }
@@ -366,7 +373,7 @@ struct DynamicArena {
         get_or_create_block();
 
         // Allocate from new block
-        void* ptr = current_pos_;
+        void*  ptr   = current_pos_;
         size_t space = bytes_left_;
 
         void* aligned = std::align(alignment, bytes, ptr, space);
@@ -375,7 +382,7 @@ struct DynamicArena {
         }
 
         current_pos_ = static_cast<std::byte*>(aligned) + bytes;
-        bytes_left_ = space - bytes;
+        bytes_left_  = space - bytes;
         return static_cast<std::byte*>(aligned);
     }
 
@@ -414,7 +421,7 @@ struct DynamicArena {
         size_t additional = new_size - old_size;
         if (additional <= bytes_left_) {
             current_pos_ += additional;
-            bytes_left_ -= additional;
+            bytes_left_  -= additional;
             return true;
         }
 
@@ -433,8 +440,8 @@ struct DynamicArena {
             unused_blocks_.push_back(std::move(*current_block_));
             delete current_block_;
             current_block_ = nullptr;
-            current_pos_ = nullptr;
-            bytes_left_ = 0;
+            current_pos_   = nullptr;
+            bytes_left_    = 0;
         }
 
         // Move all used blocks to unused
@@ -487,24 +494,24 @@ private:
             current_block_ = new Block(std::move(unused_blocks_.back()));
             unused_blocks_.pop_back();
             current_pos_ = current_block_->data;
-            bytes_left_ = current_block_->capacity_bytes;
+            bytes_left_  = current_block_->capacity_bytes;
             return;
         }
 
         // Allocate new block
         Block new_block = allocate_block(block_size_);
         current_block_ = new Block(std::move(new_block));
-        current_pos_ = current_block_->data;
-        bytes_left_ = current_block_->capacity_bytes;
+        current_pos_   = current_block_->data;
+        bytes_left_    = current_block_->capacity_bytes;
     }
 
     std::byte* allocate_out_band(size_t bytes, size_t alignment) {
         // Allocate block with extra space for alignment
         size_t block_size = bytes + alignment - 1;
-        Block new_block = allocate_block(block_size);
+        Block  new_block  = allocate_block(block_size);
 
         // Align pointer using std::align
-        void* ptr = new_block.data;
+        void*  ptr   = new_block.data;
         size_t space = new_block.capacity_bytes;
 
         void* aligned = std::align(alignment, bytes, ptr, space);

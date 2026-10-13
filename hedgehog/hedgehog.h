@@ -19,7 +19,9 @@
 #ifndef HEDGEHOG_H
 #define HEDGEHOG_H
 
-
+//
+// Files related to graph nodes.
+//
 #include "graph/graph.hpp"
 #include "graph/node.hpp"
 #include "graph/info.hpp"
@@ -27,12 +29,18 @@
 #include "graph/task_node.hpp"
 #include "graph/pipeline_node.hpp"
 
+//
+// Files related to the API (make function, execution context, lambda interfaces).
+//
 #include "api/graph.hpp"
 #include "api/task.hpp"
 #include "api/state.hpp"
 #include "api/pipeline.hpp"
 #include "api/execution_context.hpp"
 
+//
+// Files related to components implementations.
+//
 #include "impl/graph/thread_runner.hpp"
 #include "impl/graph/serial_runner.hpp"
 #include "impl/graph/tbb/tbb_runner.hpp"
@@ -44,6 +52,9 @@
 #include "impl/memory/pool.hpp"
 #include "impl/task/cuda_task.hpp"
 
+//
+// Files related to tools (config, concepts, profiling, ...).
+//
 #include "tool/concepts.hpp"
 #include "tool/config.hpp"
 #include "tool/graph_view.hpp"
@@ -51,6 +62,5 @@
 #include "tool/type_list.hpp"
 #include "tool/helpers.hpp"
 #include "tool/numa.hpp"
-#include "tool/numa_alloc.hpp"
 
 #endif

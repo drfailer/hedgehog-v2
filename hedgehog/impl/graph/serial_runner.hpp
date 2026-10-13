@@ -25,12 +25,15 @@
 
 namespace hh {
 
+//
+// Serial graph runner which runs the graph using solely the caller thread.
+//
 struct SerialRunner {
-    std::vector<Runnable *> runnables_ = {};
-    std::vector<Node *> graph_nodes_ = {};
-    std::queue<int> ready_queue_;
-    bool executing_ = false;
-    RuntimeInfo runtime_info_ = {};
+    std::vector<Runnable *> runnables_    = {};
+    std::vector<Node *>     graph_nodes_  = {};
+    std::queue<int>         ready_queue_  = {};
+    bool                    executing_    = false;
+    RuntimeInfo             runtime_info_ = {};
 
     void initialize(InitializationInfo const &) {
         executing_ = false;
@@ -47,7 +50,7 @@ struct SerialRunner {
     }
 
     void run(RunInfo const &info) {
-        runtime_info_.run = info;
+        runtime_info_.run          = info;
         runtime_info_.thread_index = 0;
 
         for (auto *node : graph_nodes_) {
@@ -77,6 +80,7 @@ struct SerialRunner {
     }
 
     void on_result() {
+        // we run all the ready nodes when graph result is requested.
         execute_ready();
     }
 

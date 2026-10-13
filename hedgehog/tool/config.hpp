@@ -77,6 +77,9 @@ struct deduce_task_io : Impl {};
 template <HasIO Impl>
 struct deduce_task_io<Impl> : Impl::io {};
 
+//
+// The task configuration is deduced based on the user tasks type.
+//
 template <typename Impl>
 struct make_task_config {
     using io = deduce_task_io<Impl>;

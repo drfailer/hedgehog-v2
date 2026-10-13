@@ -22,6 +22,11 @@
 #include <cstddef>
 #include <utility>
 
+//
+// Type list used for describing nodes input/output types. This module also
+// provides helper meta-functions used to operate on the type lists.
+//
+
 // TODO: type lists operations should be rewritten using std::meta::info from C++26 to improve compile time.
 
 namespace hh {
