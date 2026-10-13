@@ -19,6 +19,7 @@ option(HH_ENABLE_PROFILING "Enable profiling." OFF)
 option(HH_ENABLE_CONCEPTS "Enable concept constraints on template parameters (slower compile)" OFF)
 option(HH_ENABLE_TBB "Enable TBB-based executor (fetched via FetchContent if not found)" OFF)
 option(ENABLE_NVTX "Enable NVTX if CUDA is found" OFF)
+option(HH_USE_NVTX_CUSTOM "Use custom NVTX backend (no CUDA runtime dependency)" OFF)
 
 set(CACHE_LINE_SIZE 64)
 
@@ -74,11 +75,19 @@ if (HH_ENABLE_CONCEPTS)
     target_compile_definitions(hedgehog INTERFACE HH_ENABLE_CONCEPTS)
 endif()
 
+if (HH_USE_NVTX_CUSTOM)
+    target_compile_definitions(hedgehog INTERFACE HH_USE_NVTX HH_USE_NVTX_CUSTOM)
+    target_include_directories(hedgehog INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/3rdparty>
+        $<INSTALL_INTERFACE:include/3rdparty>
+    )
+endif ()
+
 if (CUDAToolkit_FOUND)
     message("CUDA found: ${CUDAToolkit_INCLUDE_DIRS}")
     target_link_libraries(hedgehog INTERFACE CUDA::cudart CUDA::cuda_driver CUDA::cupti)
     target_compile_definitions(hedgehog INTERFACE HH_USE_CUDA)
-    if (ENABLE_NVTX)
+    if (ENABLE_NVTX AND NOT HH_USE_NVTX_CUSTOM)
         if (TARGET CUDA::nvtx3)
             target_link_libraries(hedgehog INTERFACE CUDA::nvtx3)
         elseif (TARGET CUDA::nvToolsExt)
@@ -88,7 +97,7 @@ if (CUDAToolkit_FOUND)
             target_link_libraries(hedgehog INTERFACE dl)
         endif ()
         target_compile_definitions(hedgehog INTERFACE HH_USE_NVTX)
-    endif (ENABLE_NVTX)
+    endif ()
 else (CUDAToolkit_FOUND)
     message("CUDA not found, all features will not be available.")
 endif (CUDAToolkit_FOUND)

@@ -37,7 +37,9 @@
 #include <memory>
 #endif
 
-#ifdef HH_USE_NVTX
+#ifdef HH_USE_NVTX_CUSTOM
+#include "../impl/profling/nvtx.hpp"
+#elif defined(HH_USE_NVTX)
 #include <nvtx3/nvToolsExt.h>
 #endif
 
