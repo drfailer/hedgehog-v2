@@ -93,6 +93,24 @@
 #define HH_NVTX_REGION(profiler, name)
 #endif
 
+// NVTX marker macros: instant events, no timing //////////////////////////////
+
+#if defined(HH_USE_NVTX) && defined(HH_ENABLE_PROFILING)
+#define HH_THREAD_NVTX_MARKER(profiler, name) \
+    do { \
+        thread_local static auto *HH_CONCAT(_nvtx_marker_, __LINE__) = (profiler).profile_marker((name)); \
+        HH_CONCAT(_nvtx_marker_, __LINE__)->mark(); \
+    } while(0)
+#define HH_NVTX_MARKER(profiler, name) \
+    do { \
+        static auto *HH_CONCAT(_nvtx_marker_, __LINE__) = (profiler).profile_marker((name)); \
+        HH_CONCAT(_nvtx_marker_, __LINE__)->mark(); \
+    } while(0)
+#else
+#define HH_THREAD_NVTX_MARKER(profiler, name) do {} while(0)
+#define HH_NVTX_MARKER(profiler, name) do {} while(0)
+#endif
+
 namespace hh {
 
 using Clock = std::chrono::steady_clock;
@@ -170,16 +188,21 @@ struct NvtxProfiler {
         nvtxDomainDestroy(domain);
     }
 
+    nvtxEventAttributes_t make_attributes(std::string const &name) {
+        nvtxEventAttributes_t attr = {};
+        attr.version = NVTX_VERSION;
+        attr.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+        attr.colorType = NVTX_COLOR_ARGB;
+        attr.color = 0xFFF0FF50;
+        attr.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
+        attr.message.registered = nvtxDomainRegisterStringA(domain, name.c_str());
+        return attr;
+    }
+
     NvtxRegion make_region(std::string const &name) {
         NvtxRegion region;
         region.domain = &domain;
-        region.attr = {};
-        region.attr.version = NVTX_VERSION;
-        region.attr.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
-        region.attr.colorType = NVTX_COLOR_ARGB;
-        region.attr.color = 0xFF72ff68;
-        region.attr.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
-        region.attr.message.registered = nvtxDomainRegisterStringA(domain, name.c_str());
+        region.attr = make_attributes(name);
         return region;
     }
 };
@@ -191,6 +214,7 @@ struct NvtxProfiler {
 enum class ProfileKind {
     Region,
     String,
+    Marker,
 };
 
 struct ProfileRegion {
@@ -208,8 +232,9 @@ struct Profile {
     ProfileRegion region;
     ProfileString string;
     #ifdef HH_USE_NVTX
-    NvtxRegion nvtx_region;
-    bool has_nvtx = false;
+    nvtxDomainHandle_t *nvtx_domain = nullptr;
+    nvtxEventAttributes_t nvtx_attr = {};
+    nvtxRangeId_t nvtx_range_id = 0;
     #endif
 
     Profile(std::string label, ProfileKind kind): label(std::move(label)), kind(kind) {}
@@ -220,14 +245,14 @@ struct Profile {
         region.t0 = Clock::now();
         #endif
         #ifdef HH_USE_NVTX
-        if (has_nvtx) nvtx_region.begin();
+        if (nvtx_domain) nvtx_range_id = nvtxDomainRangeStartEx(*nvtx_domain, &nvtx_attr);
         #endif
         return true;
     }
 
     bool end_region() {
         #ifdef HH_USE_NVTX
-        if (has_nvtx) nvtx_region.end();
+        if (nvtx_domain) nvtxDomainRangeEnd(*nvtx_domain, nvtx_range_id);
         #endif
         #ifdef HH_ENABLE_PROFILING
         TimePoint t1 = Clock::now();
@@ -235,6 +260,12 @@ struct Profile {
         region.measure.add_value(duration.count());
         #endif
         return false;
+    }
+
+    void mark() {
+        #ifdef HH_USE_NVTX
+        if (nvtx_domain) nvtxDomainMarkEx(*nvtx_domain, &nvtx_attr);
+        #endif
     }
 
     void set_string(auto ...args) {
@@ -294,12 +325,28 @@ struct Profiler {
         profiles.push_back(std::make_unique<Profile>(std::move(label), ProfileKind::Region));
         auto *p = profiles.back().get();
         #ifdef HH_USE_NVTX
-        p->nvtx_region = nvtx_.make_region(p->label);
-        p->has_nvtx = true;
+        p->nvtx_domain = &nvtx_.domain;
+        p->nvtx_attr = nvtx_.make_attributes(p->label);
         #endif
         return p;
         #else
         static Profile dummy("dummy", ProfileKind::Region);
+        return &dummy;
+        #endif
+    }
+
+    Profile *profile_marker([[maybe_unused]] std::string label) {
+        #ifdef HH_ENABLE_PROFILING
+        std::lock_guard<std::mutex> lock(mutex);
+        profiles.push_back(std::make_unique<Profile>(std::move(label), ProfileKind::Marker));
+        auto *p = profiles.back().get();
+        #ifdef HH_USE_NVTX
+        p->nvtx_domain = &nvtx_.domain;
+        p->nvtx_attr = nvtx_.make_attributes(p->label);
+        #endif
+        return p;
+        #else
+        static Profile dummy("dummy", ProfileKind::Marker);
         return &dummy;
         #endif
     }
@@ -379,6 +426,7 @@ struct ProfileReport {
             case ProfileKind::String:
                 entries.push_back(ProfileEntry::make_string(profile->label, profile->string.value));
                 break;
+            case ProfileKind::Marker: break;
             }
         }
         #endif
@@ -398,6 +446,8 @@ std::map<std::string, ProfileEntry> merge_profiles([[maybe_unused]] std::vector<
         auto profiler = &component.profiler;
 
         for (auto &profile : profiler->profiles) {
+            if (profile->kind == ProfileKind::Marker) continue;
+
             ProfileEntry entry = (profile->kind == ProfileKind::Region)
                 ? ProfileEntry::make_region(profile->label, profile->region.measure)
                 : ProfileEntry::make_string(profile->label, profile->string.value);
