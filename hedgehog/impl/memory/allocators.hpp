@@ -205,6 +205,10 @@ struct Arena {
         return capacity_bytes_ > offset_ ? capacity_bytes_ - offset_ : 0;
     }
 
+    size_t capacity() const noexcept {
+        return capacity_bytes_;
+    }
+
     bool contains(void const* ptr) const noexcept {
         auto addr  = reinterpret_cast<uintptr_t>(ptr);
         auto start = reinterpret_cast<uintptr_t>(buffer_);
