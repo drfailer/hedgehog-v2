@@ -90,9 +90,6 @@ struct ThreadRunner {
         runnables_.clear();
         graph_nodes_.clear();
     }
-
-    void on_transfer(auto, RuntimeInfo const &) {}
-    void on_result() {}
 };
 
 } // end namespace hh
