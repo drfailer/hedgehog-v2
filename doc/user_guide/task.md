@@ -43,7 +43,7 @@ function from the context.
 The execution context is passed to the task execute functions and allow to
 interact with the node.
 
-```
+```cpp
 struct Task {
     using inputs  = hh::type_list<int, float>;
     using outputs = hh::type_list<Result>;
@@ -115,5 +115,12 @@ logic remains isolated from the C++ part (it makes Hedgehog copy logic more
 explicit).
 
 
-# TODO make task
-# TODO task configuration
+# Create a task node
+
+```cpp
+// Use the default constructor of `Task`
+auto node = hh::make_task<Task>(number_threads /* default: 1 */, "Task Name" /* default: "Task" */);
+
+// Manual construction for non default constructible types
+auto node = hh::make_task(std::make_shared<Task>(args...), number_threads, "Task Name");
+```

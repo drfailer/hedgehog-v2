@@ -5,6 +5,8 @@ part of the C++ language (treat them as empty macros).
 
 # Task
 
+## Task definition
+
 ```cpp
 struct Task {
     required using inputs = hh::type_list<...>;
@@ -12,8 +14,8 @@ struct Task {
     optional using node_input = ...;
     optional using node_output = ...;
 
-    optinal initialize(optional auto ctx) {...}
-    optinal finalize(optional auto ctx) {...}
+    optinal void initialize(optional auto ctx) {...}
+    optinal void finalize(optional auto ctx) {...}
 
     // execute for each input type (can be member or static)
     required void execute(optinal auto ctx, data_t<...> data) {...}
@@ -38,3 +40,25 @@ struct Task {
   - `execute`: process input data.
   - `copy`: copy the task (use default constructor if not specified; only used
     if the task has more than 1 thread).
+
+## `TaskNode` configuration
+
+```cpp
+struct Config {
+    using InputTypes  = hh::type_list<...>;
+    using OutputTypes = hh::type_list<...>;
+    using Input       = ...; // default: hh::type_list_dispatch<InputTypes, hh::LockQueueNodeInput>
+    using Output      = ...; // default: hh::type_list_dispatch<OutputTypes, hh::EdgeSlot>
+    using Task        = ...;
+  };
+```
+
+## Task creation
+
+```cpp
+// Use the default constructor of `Task`
+auto node = hh::make_task<Task>(number_threads /* default: 1 */, "Task Name" /* default: "Task" */);
+
+// Manual construction for non default constructible types
+auto node = hh::make_task(std::make_shared<Task>(args...), number_threads, "Task Name");
+```

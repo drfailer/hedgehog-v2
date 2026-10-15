@@ -167,3 +167,67 @@ Edge<T> edge(receiver, graph, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &
     graph->runner()->on_transfer(receiver, info);
 });
 ```
+
+### Edge builder
+
+The edge builder is part of the graph configuration and allows customizing how
+default edges are created (when no custom edge is specified). The default
+builder is called `DirectEdgeBuilder` and creates a direct connection between
+two nodes:
+
+```cpp
+struct DirectEdgeBuilder {
+    template <typename T>
+    static Edge<T> make_edge(auto graph, auto sender, auto receiver) {
+        using Receiver = std::remove_pointer_t<decltype(receiver)>;
+        using Graph    = std::remove_pointer_t<decltype(graph)>;
+
+        // we create a raw edge
+        return Edge<T>(graph, receiver, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
+            auto receiver = static_cast<Receiver *>(e->receiver);
+            auto graph    = static_cast<Graph *>(e->graph);
+            receiver->push_data(std::move(data), info);
+            graph->runner()->on_transfer(receiver, info);
+        });
+    }
+};
+```
+
+## Runner
+
+The graph runner is responsible for executing the graph and implement the
+following functions:
+
+```cpp
+struct Runner {
+    void register_node(auto *node);                    // called when nodes are registered in the graph
+    void initialize(InitializationInfo const &);       // called when the graph is initialized (start)
+    void finalize(InitializationInfo const &);         // called when the graph is finalized (stop)
+    void run(RunInfo const &info);                     // called after the initialization (ThreadRunner spawns threads here)
+    void on_transfer(auto *node, RuntimeInfo const &); // called on successful transfer within an edge
+    void on_result();                                  // called in graph->get_result/graph->eat_results
+};
+```
+
+Hedgehog includes the following runners:
+- `SerialRunner`: do not spawn any thread, runs the graph serially.
+- `ThreadRunner`: bind threads to nodes (spawns node->number_threads for each node).
+- `TBBRunner`: runs the whole graph using a One-TBB task arena.
+
+## Graph configuration
+
+Most node types like `TaskNode`, the graph only has one template parameter
+which is a configuration type. Here is how to build a custom configuration:
+
+```cpp
+struct Config {
+    // input outputs are usually deduced from the list given to `make_graph`
+    using InputTypes  = hh::type_list<int, float>;
+    using OutputTypes = hh::type_list<int, float>;
+    // the configuration also allows to customize some of the graph components
+    using Sink        = hh::GraphSink<int, float>;
+    using Runner      = hh::ThreadRunner;
+    using EdgeBuilder = DirectEdgeBuilder;
+};
+auto graph = std::make_shared<Graph<Config>>(runner, NodeInfo{name, 0});
+```
