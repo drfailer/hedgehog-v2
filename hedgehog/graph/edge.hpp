@@ -84,19 +84,19 @@ struct Edge {
 
 static_assert(sizeof(Edge<int>) <= 64, "Edge should fit on a cache line.");
 
-// Edge Impl ///////////////////////////////////////////////////////////////////
+// Edge Transfer Proxy /////////////////////////////////////////////////////////
 
 //
-// EdgeImpl is a helper struct that is used to provide a nicer API to custom
-// edges. Directly constructing an Edge<T> is feasible, but it requires manual
-// type casting, graph executor management and enforces the type of the user
-// lambda. EdgeImpl creates an Edge transfer function used as a proxy that
-// handles the type casting and executor, and forwards arguments to the user
-// lambda. It also allows using different lambda signatures depending on which
-// iformation is required to handle the transfer.
+// EdgeTransferProxy is a helper struct that is used to provide a nicer API to
+// custom edges. Directly constructing an Edge<T> is feasible, but it requires
+// manual type casting, graph executor management and enforces the type of the
+// user lambda. EdgeTransferProxy creates an Edge transfer function used as a
+// proxy that handles the type casting, the graph executor, and forwards
+// arguments to the user lambda. It also allows using different lambda
+// signatures depending on which iformation is required to handle the transfer.
 //
 template <typename Config>
-struct EdgeImpl {
+struct EdgeTransferProxy {
     using Type = Config::Type;
     using Impl = Config::Impl;
     using Graph = Config::Graph;
@@ -104,7 +104,7 @@ struct EdgeImpl {
 
     Impl impl;
 
-    EdgeImpl(Impl impl): impl(std::move(impl)) {}
+    EdgeTransferProxy(Impl impl): impl(std::move(impl)) {}
 
     void operator()(Edge<Type> *edge, data_t<Type> data, RuntimeInfo const &info) {
         using Runner = Graph::Runner;
@@ -140,7 +140,15 @@ Edge<T> make_edge(auto graph, auto receiver, auto impl) {
         using Graph = std::remove_pointer_t<decltype(graph)>;
         using Receiver = std::remove_pointer_t<decltype(receiver)>;
     };
-    return Edge<T>(graph, receiver, EdgeImpl<Config>(impl));
+    return Edge<T>(graph, receiver, EdgeTransferProxy<Config>(impl));
+}
+
+//
+// Creates an edge using the MakeEdgeArgs from the graph.
+//
+template <typename T>
+Edge<T> make_edge(auto args, auto impl) {
+    return make_edge<T>(args.graph, args.receiver, impl);
 }
 
 // Connections /////////////////////////////////////////////////////////////////

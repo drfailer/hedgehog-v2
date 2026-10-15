@@ -561,16 +561,20 @@ TEST(edge, custom_edges) {
         ++edge_node1_float_count;
         return false;
     });
-    graph->connect_input<int>(node2, [&](auto, hh::RuntimeInfo const &) {
-        printf("edge<int>(%s)\n", node2->info().name.c_str());
-        ++edge_node2_int_count;
-        return false;
-    });
-    graph->connect_input<float>(node2, [&](auto data, hh::RuntimeInfo const &info) {
-        printf("edge<float>(%s)\n", node2->info().name.c_str());
-        node2->push_data(std::move(data), info);
-        ++edge_node2_float_count;
-        return true;
+    graph->connect_inputs(node2, [&]<typename T>(auto args) {
+        return hh::make_edge<T>(args, [&](auto data, hh::RuntimeInfo const &info) {
+            printf("multi-type edge\n");
+            if constexpr (std::is_same_v<T, int>) {
+                printf("edge<int>(%s)\n", node2->info().name.c_str());
+                ++edge_node2_int_count;
+                return false;
+            } else {
+                printf("edge<float>(%s)\n", node2->info().name.c_str());
+                node2->push_data(std::move(data), info);
+                ++edge_node2_float_count;
+                return true;
+            }
+        });
     });
     graph->connect_outputs(node1);
     graph->connect_outputs(node2);
