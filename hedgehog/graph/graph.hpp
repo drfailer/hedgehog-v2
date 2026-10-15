@@ -209,9 +209,7 @@ struct Graph : Node {
     // data arrives).
     //
     auto get_result() {
-        if constexpr (HasOnResult<Runner>) {
-            runner_->on_result();
-        }
+        runner_->on_result();
         return sink_.get_result();
     }
 

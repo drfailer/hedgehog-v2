@@ -269,6 +269,8 @@ struct TBBRunner {
         node_data_.clear();
         graph_nodes_.clear();
     }
+
+    void on_result() {}
 };
 
 } // end namespace hh
