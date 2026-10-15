@@ -79,7 +79,38 @@ Here are the functions used to draw edges between nodes and graphs:
 - `graph->draw_edge<T>(sender_node, receiver_node)`: draw an edge for the type
   `T` between two nodes.
 
-**NOTE**: cycles are allowed.
+Example:
+
+Here is a slightly more complex graph with many nodes and edges. We use data
+types to control the routing (one task my output a different type depending on
+the stage of the computation). We also have cycles to models loops and reuse
+nodes.
+
+```mermaid
+flowchart
+    GraphInput -->|SimData| SimLoopState
+    SimLoopState -->|Mesh| DiffuseTask
+    DiffuseTask -->|DiffusedMesh| PressureSolverState
+    PressureSolverState -->|DiffusedMesh| ProjectTask
+    PressureSolverState -->|AdvectedMesh| ProjectTask
+    ProjectTask -->|ProjectedMesh| AdvectTask
+    AdvectTask -->|AdvectedMesh| PressureSolverState
+    ProjectTask -->|ResultMesh| DumpResultTask
+    DumpResultTask -->|ResultMesh| SimLoopState
+    SimLoopState -->|SimData| GraphOutput
+```
+
+```cpp
+graph->connect_inputs(sim_loop_state);
+graph->draw_edges(sim_loop_state, diffuse_task);
+graph->draw_edges(diffuse_task, pressure_solver_state);
+graph->draw_edges(pressure_solver_state, project_task);
+graph->draw_edges(project_task, advect_task);
+graph->draw_edges(advect_task, pressure_solver_state);
+graph->draw_edges(project_task, dump_result_task);
+graph->draw_edges(dump_result_task, sim_loop_state);
+graph->connect_outputs(sim_loop_state);
+```
 
 ### Custom edges
 
@@ -97,11 +128,42 @@ Examples:
 
 ```cpp
 // filter out zeros
-graph->draw_edge<int>(sender, receiver, [](auto receiver, data_t<int> data, hh::RuntimeInfo const &info) {
+graph->connect_input<int>(node, [](auto receiver, hh::data_t<int> data, hh::RuntimeInfo const &info) {
     if (*data == 0) {
         return false;
     }
     receiver->push_data(std::move(data), info); // we transfer the data to the node
     return true;
+});
+
+// we can also create custom edges for common types
+graph->draw_edges(sender, receiver, []<typename T>(auto args) {
+    return hh::make_edge<T>(args, [](auto receiver, auto data, hh::RuntimeInfo const &info) {
+        // filter ints
+        if constexpr (std::is_same_v<T, int>) {
+            return false;
+        } else {
+            node2->push_data(std::move(data), info);
+            return true;
+        }
+    });
+});
+```
+
+#### Raw edge
+
+It is also possible to create an `Edge<T>` directly, but this requires manual
+type casting.
+
+```cpp
+Edge<T> edge(receiver, graph, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
+    auto receiver = static_cast<ReceiverType *>(e->receiver);
+    auto graph    = static_cast<GraphType *>(e->graph);
+
+    // transfer the data
+    receiver->push_data(std::move(data), info);
+
+    // call runner->on_transfer (this will be explained in the runner section)
+    graph->runner()->on_transfer(receiver, info);
 });
 ```
