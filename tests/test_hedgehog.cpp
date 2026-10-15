@@ -561,8 +561,8 @@ TEST(edge, custom_edges) {
         ++edge_node1_float_count;
         return false;
     });
-    graph->connect_inputs(node2, [&]<typename T>(auto args) {
-        return hh::make_edge<T>(args, [&](auto data, hh::RuntimeInfo const &info) {
+    graph->connect_inputs(node2, [&]<typename T>(auto graph, auto, auto receiver) {
+        return hh::make_edge<T>(graph, receiver, [&](auto data, hh::RuntimeInfo const &info) {
             printf("multi-type edge\n");
             if constexpr (std::is_same_v<T, int>) {
                 printf("edge<int>(%s)\n", node2->info().name.c_str());

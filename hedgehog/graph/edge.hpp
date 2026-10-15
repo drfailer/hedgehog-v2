@@ -59,18 +59,12 @@ using EdgeTransfer = std::function<void(Edge<T> *, data_t<T>, RuntimeInfo const 
 //
 template <typename T>
 struct Edge {
-    void *receiver = nullptr;
     void *graph = nullptr;
+    void *receiver = nullptr;
     EdgeTransfer<T> fun;
 
-    Edge(void *receiver, void *graph, EdgeTransfer<T> fun)
-        : receiver(receiver), graph(graph), fun(std::move(fun)) {}
-
-    Edge(void *graph, EdgeTransfer<T> fun)
-        : graph(graph), fun(std::move(fun)) {}
-
-    Edge(EdgeTransfer<T> fun)
-        : fun(std::move(fun)) {}
+    Edge(void *graph, void *receiver, EdgeTransfer<T> fun)
+        : graph(graph), receiver(receiver), fun(std::move(fun)) {}
 
     Edge(Edge<T> const &edge) = default;
     Edge<T> &operator=(Edge<T> const &edge) = default;
@@ -139,14 +133,6 @@ Edge<T> make_edge(auto graph, auto receiver, auto impl) {
         using Receiver = std::remove_pointer_t<decltype(receiver)>;
     };
     return Edge<T>(graph, receiver, EdgeTransferProxy<Config>(impl));
-}
-
-//
-// Creates an edge using the MakeEdgeArgs from the graph.
-//
-template <typename T>
-Edge<T> make_edge(auto args, auto impl) {
-    return make_edge<T>(args.graph, args.receiver, impl);
 }
 
 // Connections /////////////////////////////////////////////////////////////////

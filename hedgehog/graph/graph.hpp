@@ -53,17 +53,6 @@ struct Graph : Node {
     using Input       = type_list_dispatch<InputTypes, EdgeSlots>;
     using Output      = type_list_dispatch<OutputTypes, EdgeConnectors>;
 
-    //
-    // Argument struct passed to the edge builder. We use a struct because it
-    // makes things easier to maintain.
-    //
-    template <typename Sender, typename Receiver>
-    struct MakeEdgeArgs {
-        Sender *sender;
-        Receiver *receiver;
-        Graph<Config> *graph;
-    };
-
     // attributes & constructors ///////////////////////////////////////////////
 
     static inline int graph_id_gen_ = 0;
@@ -111,7 +100,7 @@ struct Graph : Node {
 
         // connect the sink
         type_list_map<OutputTypes>([this]<typename T>() {
-            output_.connect(Edge<T>(&sink_, this, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
+            output_.connect(Edge<T>(this, &sink_, [](Edge<T> *e, data_t<T> data, RuntimeInfo const &info) {
                 static_cast<Sink *>(e->receiver)->push_data(std::move(data), info);
             }));
         });
@@ -338,7 +327,7 @@ struct Graph : Node {
 
     template <typename T>
     Edge<T> build_edge(auto sender, auto receiver) {
-        return EdgeBuilder::template make_edge<T>(MakeEdgeArgs{sender, receiver, this});
+        return EdgeBuilder::template make_edge<T>(this, sender, receiver);
     }
 
     template <typename ConcreteNode>
@@ -407,7 +396,7 @@ struct Graph : Node {
 
         type_list_map<sender_outputs>([&]<typename T>() {
             if constexpr (type_list_contains<receiver_inputs, T>) {
-                draw_edge(sender, receiver, make_edge_fun.template operator()<T>(MakeEdgeArgs{sender.get(), receiver.get(), this}));
+                draw_edge(sender, receiver, make_edge_fun.template operator()<T>(this, sender.get(), receiver.get()));
                 ++new_edge_count;
             }
         });
@@ -487,7 +476,7 @@ struct Graph : Node {
 
         type_list_map<InputTypes>([&]<typename T>() {
             if constexpr (type_list_contains<node_inputs, T>) {
-                connect_input(node, make_edge_fun.template operator()<T>(MakeEdgeArgs{(Node*)nullptr, node.get(), this}));
+                connect_input(node, make_edge_fun.template operator()<T>(this, (Node*)nullptr, node.get()));
                 ++new_connection_count;
             }
         });
