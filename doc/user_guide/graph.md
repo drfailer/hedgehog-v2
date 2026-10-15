@@ -1,6 +1,6 @@
 # Graph
 
-A graph is used to create edges between nodes and run the tasks. A graph is
+A *graph* is used to create edges between nodes and run the tasks. A graph is
 also a node which allows creating sub-graphs.
 
 ## Basic graph

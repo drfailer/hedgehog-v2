@@ -15,6 +15,7 @@ struct Task {
 };
 ```
 
+
 ## Inputs Outputs
 
 The inputs and outputs are types, and they are specified through the `inputs`
@@ -37,6 +38,7 @@ static void execute(data_t<T> data);
 The task `outputs` indicates the data types that your task produces. To send a
 result to the next task (we'll see wiring later), we use the `push_result`
 function from the context.
+
 
 ## Execution Context
 
@@ -77,7 +79,6 @@ What is the type of the context?
   - The configuration of a task is deduced from you `Task` type using the
     `make_task_config` function.
 
-TODO we need to add references to the developer guide with explanations about the config.
 
 ## Task's thread local data
 
@@ -115,7 +116,7 @@ logic remains isolated from the C++ part (it makes Hedgehog copy logic more
 explicit).
 
 
-# Create a task node
+## Create a task node
 
 ```cpp
 // Use the default constructor of `Task`
@@ -123,4 +124,58 @@ auto node = hh::make_task<Task>(number_threads /* default: 1 */, "Task Name" /* 
 
 // Manual construction for non default constructible types
 auto node = hh::make_task(std::make_shared<Task>(args...), number_threads, "Task Name");
+```
+
+
+## Task configuration
+
+It is also possible to override the task node input and output ports:
+
+- **Input port**: manages the input data of the node. It allows to change the
+  implementation of the queue and thread wake up strategy. The default input
+  port type is `LockQueueNodeInput` which uses a mutex based queue and a
+  condition variable.
+- **Output port**: manages the output edges of the node. The `push_result`,
+  function sends data to every output edge. Customizing the output may allow to
+  do some extra operation before transfering the data.
+
+```cpp
+struct Task {
+    using inputs  = hh::type_list<int, float>;
+    using outputs = hh::type_list<int, float>;
+
+    // add the following to change the types of the ports
+    using node_input  = CustomInputPort<int, float>;
+    using node_ouptut = CustomOutputPort<int, float>;
+
+    // execute ...
+};
+```
+
+Hedgehog provides the following types:
+
+- Inputs:
+  - `LockQueueNodeInput`: condition variable and mutex based queue.
+  - `MoodycamelMPMCInput`: moodycamel MPMC queue and condition variable.
+  - `DakingMPSCInput`: dakingffo MPSC queue and condition variable.
+- Outputs:
+  - `EdgeSlots`: basic collections of output edges.
+  - `EdgeConnectors`: deferred connection (used by the graph).
+
+
+## Lambda interface
+
+The lambda interface allows to create tasks using lambdas (which is convenient
+for creating small tasks on the fly when prototyping).
+
+```cpp
+// create a lambda task node (inputs outputs work like with the graph)
+auto node = hh::make_lambda_task<2, int, float, int, float>(2, "Lambda Task");
+
+node->set_execute<int>([](auto ctx, auto data) {
+    // process data...
+});
+node->set_execute<float>([captured_data](auto ctx, auto data) {
+    // process data...
+});
 ```

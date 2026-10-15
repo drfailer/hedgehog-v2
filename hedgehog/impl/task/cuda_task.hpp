@@ -55,6 +55,11 @@ inline void __check_cuda_error(cublasStatus_t status) {
 
 namespace hh {
 
+//
+// TODO: we need a way to access the context in initialize_cuda or
+// finalize_cuda (or at least get the device id).
+//
+
 class CudaTask {
     std::unordered_set<int> peer_device_ids_    = {};
     cudaStream_t            stream_             = {};
