@@ -121,9 +121,7 @@ struct EdgeTransferProxy {
             success = impl(std::move(data), info);
         }
 
-        if (!success) [[unlikely]] return;
-
-        if constexpr (HasOnTransfer<Runner, Receiver, RuntimeInfo>) {
+        if (success) [[likely]] {
             graph->runner()->on_transfer(receiver, info);
         }
     }

@@ -35,9 +35,7 @@ struct DirectEdgeBuilder {
             auto receiver = static_cast<Receiver *>(e->receiver);
             auto graph    = static_cast<Graph *>(e->graph);
             receiver->push_data(std::move(data), info);
-            if constexpr (HasOnTransfer<Runner, Receiver, RuntimeInfo>) {
-                graph->runner()->on_transfer(receiver, info);
-            }
+            graph->runner()->on_transfer(receiver, info);
         });
     }
 };
