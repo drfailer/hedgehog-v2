@@ -27,12 +27,12 @@ consuming an input type, the task will process it using an `execute` function
 different forms:
 
 ```cpp
-void execute(auto ctx, data_t<T> data);
-void execute(data_t<T> data); // the context is optional
+void execute(auto ctx, hh::data_t<T> data);
+void execute(hh::data_t<T> data); // the context is optional
 
 // those functions may also be static
-static void execute(auto ctx, data_t<T> data);
-static void execute(data_t<T> data);
+static void execute(auto ctx, hh::data_t<T> data);
+static void execute(hh::data_t<T> data);
 ```
 
 The task `outputs` indicates the data types that your task produces. To send a
@@ -50,7 +50,7 @@ struct Task {
     using inputs  = hh::type_list<int, float>;
     using outputs = hh::type_list<Result>;
 
-    void execute(auto ctx, data_t<int> data) {
+    void execute(auto ctx, hh::data_t<int> data) {
         // Pushing data (in and out)
         ctx->push_data(hh::make_data<float>(4));        // push data to the current task input
         ctx->push_result(hh::make_data<Result>(*data)); // produce a result
@@ -102,7 +102,7 @@ struct TaskWithAttributes {
 
     TaskWithAttributes(size_t arena_size): thread_local_arena(arena_size) {}
 
-    void execute(auto ctx, data_t<int> data) { /* doing efficient allocations... */ }
+    void execute(auto ctx, hh::data_t<int> data) { /* doing efficient allocations... */ }
 
     // Implement complex copy logic
     auto copy() {
