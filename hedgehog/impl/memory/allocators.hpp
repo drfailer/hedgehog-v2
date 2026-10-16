@@ -197,6 +197,10 @@ struct Arena {
         offset_ = 0;
     }
 
+    void free_all() noexcept {
+        reset();
+    }
+
     size_t bytes_allocated() const noexcept {
         return offset_;
     }
