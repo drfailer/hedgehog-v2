@@ -38,7 +38,9 @@ struct SerialSink {
     using VariantType = std::variant<std::shared_ptr<Outputs>...>;
     std::queue<VariantType> results;
 
-    void initialize(InitializationInfo const &) {}
+    void initialize(InitializationInfo const &) {
+        while (!results.empty()) results.pop();
+    }
     void finalize(InitializationInfo const &) {}
 
     template <typename T>

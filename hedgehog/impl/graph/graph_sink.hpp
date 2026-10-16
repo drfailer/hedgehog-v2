@@ -33,29 +33,32 @@ namespace hh {
 //
 template <typename ...Outputs>
 struct GraphSink {
-    void initialize(InitializationInfo const &) {}
-    void finalize(InitializationInfo const &) {}
-
     using VariantType = std::variant<data_t<Outputs>...>;
-    std::mutex                mutex;
-    std::queue<VariantType>   results;
-    std::counting_semaphore<> sem{0};
+    std::mutex              mutex;
+    std::condition_variable cond;
+    std::queue<VariantType> results;
+
+    void initialize(InitializationInfo const &) {
+        std::lock_guard<std::mutex> lock(mutex);
+        while (!results.empty()) results.pop();
+    }
+
+    void finalize(InitializationInfo const &) {}
 
     template <typename T>
     void push_data(data_t<T> data, [[maybe_unused]] RuntimeInfo const &info) {
-        mutex.lock();
-        results.push(std::move(data));
-        mutex.unlock();
-        sem.release();
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            results.push(std::move(data));
+        }
+        cond.notify_one();
     }
 
     VariantType get_result() {
-        sem.acquire();
-        mutex.lock();
-        assert(results.size() > 0);
+        std::unique_lock<std::mutex> lock(mutex);
+        cond.wait(lock, [this]{ return !results.empty(); });
         auto data = std::move(results.front());
         results.pop();
-        mutex.unlock();
         return data;
     }
 };

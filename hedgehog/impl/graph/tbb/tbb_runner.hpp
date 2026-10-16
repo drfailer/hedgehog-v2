@@ -90,6 +90,10 @@ struct TBBRunner {
         }
 
         for (auto &nd : node_data_) {
+            nd.busy.store(false, std::memory_order_relaxed);
+            nd.active.store(0, std::memory_order_relaxed);
+            nd.pending.store(0, std::memory_order_relaxed);
+            nd.ready.store(false, std::memory_order_relaxed);
             for (size_t i = 0; i < nd.max_threads; ++i) {
                 RuntimeInfo ri = runtime_info_;
                 ri.thread_index = i;
@@ -266,8 +270,6 @@ struct TBBRunner {
         }
 
         total_demand_.store(0, std::memory_order_relaxed);
-        node_data_.clear();
-        graph_nodes_.clear();
     }
 
     void on_result() {}

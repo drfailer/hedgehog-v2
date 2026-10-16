@@ -40,6 +40,8 @@ struct MoodycamelMPMCInputPort {
     size_t max_queue_size = 0;
 
     void initialize(InitializationInfo const &info) {
+        tokens.clear();
+        queue = moodycamel::ConcurrentQueue<data_t<T>>{};
         for (size_t i = 0; i < info.node->number_threads; ++i) {
             tokens.emplace_back(queue);
         }
@@ -183,6 +185,12 @@ template <typename T>
 struct DakingMPSCInputPort {
     daking::MPSC_queue<data_t<T>> queue;
 
+    void initialize(InitializationInfo const&) {
+        // reset the queue (useful when the graph is restarted)
+        data_t<T> tmp;
+        while (queue.pop(tmp)) {}
+    }
+
     void push_data(data_t<T> data, RuntimeInfo const &) {
         queue.enqueue(std::move(data));
     }
@@ -199,6 +207,7 @@ struct DakingMPSCInputPort {
 template <typename ...Inputs>
 struct DakingMPSCInput : CondTrigger, DakingMPSCInputPort<Inputs>... {
     void initialize(InitializationInfo const &info) {
+        (DakingMPSCInputPort<Inputs>::initialize(info), ...);
         CondTrigger::initialize();
     }
 

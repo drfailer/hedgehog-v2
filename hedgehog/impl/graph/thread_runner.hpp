@@ -87,8 +87,6 @@ struct ThreadRunner {
             thread.join();
         }
         threads.clear();
-        runnables_.clear();
-        graph_nodes_.clear();
     }
 
     void on_transfer(auto, RuntimeInfo const &) {}

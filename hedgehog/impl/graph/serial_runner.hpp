@@ -37,6 +37,7 @@ struct SerialRunner {
 
     void initialize(InitializationInfo const &) {
         executing_ = false;
+        while (!ready_queue_.empty()) ready_queue_.pop();
     }
 
     template <typename ConcreteNode>
@@ -88,8 +89,6 @@ struct SerialRunner {
         for (auto *runnable : runnables_) {
             runnable->finalize(runtime_info_);
         }
-        runnables_.clear();
-        graph_nodes_.clear();
     }
 };
 

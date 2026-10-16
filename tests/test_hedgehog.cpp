@@ -1229,3 +1229,115 @@ TEST(graph_analysis, cycle_detection_overlapping_cycles) {
 
     EXPECT_EQ(ga_cycle_detection(graph->build_graph_view()), 2);
 }
+
+
+// graph re-run ////////////////////////////////////////////////////////////////
+
+struct CountTask {
+    using inputs = hh::type_list<int>;
+    using outputs = hh::type_list<int>;
+
+    void execute(auto ctx, hh::data_t<int> data) {
+        *data += 1;
+        ctx->push_result(data);
+    }
+};
+
+TEST(graph, rerun_thread_runner) {
+    auto node = hh::make_task<CountTask>(2, "count");
+    auto graph = hh::make_graph<1, int, int>();
+
+    graph->connect_inputs(node);
+    graph->connect_outputs(node);
+
+    constexpr int ITERATIONS = 5;
+    constexpr int DATA_PER_ITER = 10;
+
+    for (int iter = 0; iter < ITERATIONS; ++iter) {
+        graph->start();
+
+        for (int i = 0; i < DATA_PER_ITER; ++i) {
+            graph->push_data(hh::make_data<int>(i));
+        }
+
+        int sum = 0;
+        for (int i = 0; i < DATA_PER_ITER; ++i) {
+            auto result = graph->get_result();
+            std::visit([&](auto val) { sum += *val; }, result);
+        }
+
+        graph->stop();
+
+        int expected = 0;
+        for (int i = 0; i < DATA_PER_ITER; ++i) expected += (i + 1);
+        ASSERT_EQ(sum, expected)
+            << "iteration " << iter << ": sum mismatch";
+    }
+}
+
+TEST(serial_executor, rerun) {
+    auto node = hh::make_task<CountTask>(1, "count");
+    auto graph = hh::make_serial_graph<1, int, int>();
+
+    graph->connect_inputs(node);
+    graph->connect_outputs(node);
+
+    constexpr int ITERATIONS = 5;
+    constexpr int DATA_PER_ITER = 10;
+
+    for (int iter = 0; iter < ITERATIONS; ++iter) {
+        graph->start();
+
+        for (int i = 0; i < DATA_PER_ITER; ++i) {
+            graph->push_data(hh::make_data<int>(i));
+        }
+
+        int sum = 0;
+        for (int i = 0; i < DATA_PER_ITER; ++i) {
+            auto result = graph->get_result();
+            std::visit([&](auto val) { sum += *val; }, result);
+        }
+
+        graph->stop();
+
+        int expected = 0;
+        for (int i = 0; i < DATA_PER_ITER; ++i) expected += (i + 1);
+        ASSERT_EQ(sum, expected)
+            << "iteration " << iter << ": sum mismatch";
+    }
+}
+
+#ifdef HH_ENABLE_TBB
+TEST(tbb_executor, rerun) {
+    auto node = hh::make_task<CountTask>(2, "count");
+    auto executor = std::make_shared<hh::TBBRunner>();
+    auto graph = hh::make_graph<hh::TBBRunner, 1, int, int>(executor);
+
+    graph->connect_inputs(node);
+    graph->connect_outputs(node);
+
+    constexpr int ITERATIONS = 5;
+    constexpr int DATA_PER_ITER = 10;
+
+    for (int iter = 0; iter < ITERATIONS; ++iter) {
+        graph->start();
+
+        for (int i = 0; i < DATA_PER_ITER; ++i) {
+            graph->push_data(hh::make_data<int>(i));
+        }
+
+        int sum = 0;
+        for (int i = 0; i < DATA_PER_ITER; ++i) {
+            auto result = graph->get_result();
+            std::visit([&](auto val) { sum += *val; }, result);
+        }
+
+        graph->stop();
+
+        int expected = 0;
+        for (int i = 0; i < DATA_PER_ITER; ++i) expected += (i + 1);
+        ASSERT_EQ(sum, expected)
+            << "iteration " << iter << ": sum mismatch";
+    }
+}
+#endif

@@ -47,6 +47,11 @@ struct alignas(64) LockQueueInputPort {
     std::queue<data_t<T>> queue;
     size_t max_queue_size = 0;
 
+    void initialize(InitializationInfo const &) {
+        while (!queue.empty()) queue.pop();
+        max_queue_size = 0;
+    }
+
     void push_data(data_t<T> data, RuntimeInfo const &) {
         std::lock_guard<std::mutex> lock(mutex);
         queue.push(std::move(data));
@@ -73,8 +78,8 @@ struct alignas(64) LockQueueInputPort {
 
 template <typename ...Inputs>
 struct LockQueueInputPorts : LockQueueInputPort<Inputs>... {
-    void initialize(InitializationInfo const &) {
-        ([this] () { LockQueueInputPort<Inputs>::max_queue_size = 0; }, ...);
+    void initialize(InitializationInfo const &info) {
+        (LockQueueInputPort<Inputs>::initialize(info), ...);
     }
 
     void finalize([[maybe_unused]] InitializationInfo const &info) {
