@@ -22,12 +22,15 @@
 #include <cstddef>
 #include <utility>
 
+#if __has_include(<meta>) && defined(__cpp_impl_reflection)
+#define HH_USE_STD_META 1
+#include <meta>
+#endif
+
 //
 // Type list used for describing nodes input/output types. This module also
 // provides helper meta-functions used to operate on the type lists.
 //
-
-// TODO: type lists operations should be rewritten using std::meta::info from C++26 to improve compile time.
 
 namespace hh {
 
@@ -203,20 +206,18 @@ constexpr void type_list_map(auto function) {
 
 #if __has_builtin(__type_pack_element)
 
-//
-// We use a compiler builtin (supported by Clang, GCC 9+, MSVC) to extract
-// types. It is supposed to be faster than using recursion and it doesn't
-// involve including massive headers like tuple (tuple_element).
-//
-// Clang also has __make_integer_seq that we could use.
-//
-
 template <size_t I, typename... Ts>
 using type_at = __type_pack_element<I, Ts...>;
 
+#elif defined(HH_USE_STD_META)
+
+// Reflection-based: direct vector indexing instead of O(n) recursion.
+template <size_t I, typename... Ts>
+using type_at = typename [:template_arguments_of(^^type_list<Ts...>)[I]:];
+
 #else
 
-// fallback to standard recusion approach
+// Fallback: standard recursion approach.
 
 template <size_t I, typename T>
 struct type_at_impl;
@@ -231,7 +232,6 @@ struct type_at_impl<0, type_list<T, Ts...>> {
     using type = T;
 };
 
-// Interface
 template <size_t I, typename... Ts>
 using type_at = typename type_at_impl<I, type_list<Ts...>>::type;
 
@@ -246,6 +246,32 @@ using type_at = typename type_at_impl<I, type_list<Ts...>>::type;
 // io::inputs    ->   hh::type_list<int>
 // io::outputs   ->   hh::type_list<float>
 //
+
+#ifdef HH_USE_STD_META
+
+// Reflection-based: direct vector slicing replaces index_sequence machinery.
+
+namespace type_list_detail {
+    consteval std::meta::info slice(
+        std::meta::info list, size_t begin, size_t end)
+    {
+        auto a = template_arguments_of(dealias(list));
+        std::vector<std::meta::info> s(a.begin() + begin, a.begin() + end);
+        return substitute(^^type_list, s);
+    }
+}
+
+template <size_t Separator, typename... Ts>
+struct io_types {
+    static_assert(Separator <= sizeof...(Ts), "Separator exceeds type pack size");
+
+    using inputs  = typename [:type_list_detail::slice(
+        ^^type_list<Ts...>, 0, Separator):];
+    using outputs = typename [:type_list_detail::slice(
+        ^^type_list<Ts...>, Separator, sizeof...(Ts)):];
+};
+
+#else
 
 namespace io_types_helpers {
     template <size_t Offset, typename Seq>
@@ -278,6 +304,8 @@ struct io_types {
     using inputs  = typename io_types_helpers::build_list<input_seq, Ts...>::type;
     using outputs = typename io_types_helpers::build_list<output_seq, Ts...>::type;
 };
+
+#endif // HH_USE_STD_META
 
 // MapType /////////////////////////////////////////////////////////////////////
 

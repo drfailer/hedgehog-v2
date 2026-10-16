@@ -78,6 +78,13 @@ data_t<T> make_data(auto &&...args) {
 
 // data type accessor //////////////////////////////////////////////////////////
 
+#ifdef HH_USE_STD_META
+
+template <typename T>
+using data_type = typename [:template_arguments_of(dealias(^^T))[0]:];
+
+#else
+
 template <typename T>
 struct data_type_impl;
 
@@ -88,6 +95,8 @@ struct data_type_impl<data_t<T>> {
 
 template <typename T>
 using data_type = typename data_type_impl<T>::type;
+
+#endif
 
 #elifdef HH_POINTER_MODE
 
