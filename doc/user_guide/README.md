@@ -36,7 +36,13 @@ overlap.
 
 - [cuda task](cuda-task.md)
 
-## TODO Memory
+## Memory
 
 - [memory pools](memory_pools.md)
 - [allocators](allocators.md)
+
+## Tools
+
+- [data_t](data_t.md)
+- [profiling](profiling.md)
+- [graph view](graph_view.md)
