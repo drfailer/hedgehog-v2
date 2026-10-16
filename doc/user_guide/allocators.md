@@ -20,13 +20,16 @@ node separately. This gives no control on where nodes are located in memory
 (causing potential cache disruption when iterating over the nodes) and makes
 the tree deletion non trivial (recurse on every sub-tree, call free multiple
 times which is very expensive). The cost of scattered allocations is much more
-armful than people think, so armful than some compiler optimizer literally
+harmful than people think, so harmful that some compilers literally
 remove some free calls when they know that the OS will free the memory anyway
 (the OS free will be more efficient; they only do so when they can prove that
 there will be no runtime leak which is difficult). A good example of this are
 graphical applications than don't close immediately: this is often due to
 inefficient widget deallocation. Arenas solve this problem by grouping the
 allocations (free a single memory block instead of hundreds of widgets).
+
+Both `Arena` and `DynamicArena` are move-only types (copy is deleted). This
+prevents accidental aliasing of the underlying memory.
 
 ## Static Arena
 
@@ -79,7 +82,7 @@ configured block size (often called out of band or oversized allocations which
 are freed upon reset).
 
 ```cpp
-hh::DynamicArena arena(/* block size = */ 1024); // we can also specify a numa id
+hh::DynamicArena arena(/* block size = */ 1024);
 
 // the API is the same as the static arena
 std::byte *bytes = arena.allocate(2048, 8); // oversized allocation !
@@ -87,21 +90,43 @@ std::byte *bytes = arena.allocate(2048, 8); // oversized allocation !
 int *int_ptr   = arena.allocate<int>();
 int *int_array = arena.allocate<int>(10);
 
-// resize the last allocation
-arena.resize(int_array, 10, 20);
+// resize the last allocation (returns true on success, false if not possible)
+bool ok = arena.resize(int_array, /* old_count = */ 10, /* new_count = */ 20);
+
+// helper functions
+arena.num_blocks();            // number of allocated blocks
+arena.num_out_band();          // number of oversized allocations
+arena.total_bytes_capacity();  // total capacity across all blocks
 
 // free all
 arena.reset();
 ```
 
-## Smart pointers
-
-Hedgehog provides smart pointer function to do arena allocations (you could
-also create an std allocator).
+The `DynamicArena` has multiple constructors:
 
 ```cpp
-std::shared_ptr<int> shared_ptr = hh::make_shared<int>(arena);
-std::shared_ptr<int> unique_ptr = hh::make_unique<int>(arena);
+hh::DynamicArena arena(block_size);                                // default out-of-band threshold (1MB)
+hh::DynamicArena arena(block_size, numa_id);                       // with NUMA node
+hh::DynamicArena arena(block_size, out_band_threshold, numa_id);   // custom out-of-band threshold
+```
+
+Allocations larger than the out-of-band threshold go to a separate list and
+are freed on `reset()`.
+
+## Smart pointers
+
+Hedgehog provides smart pointer functions to do arena allocations. The returned
+pointers use custom deleters (`ArenaDeleter` / `DynamicArenaDeleter`) that call
+the destructor but do not free memory (the arena owns it).
+
+```cpp
+// static arena
+std::shared_ptr<int>                     sp = hh::make_shared<int>(arena);
+std::unique_ptr<int, hh::ArenaDeleter>   up = hh::make_unique<int>(arena);
+
+// dynamic arena
+std::shared_ptr<int>                            sp = hh::make_shared<int>(dyn_arena);
+std::unique_ptr<int, hh::DynamicArenaDeleter>   up = hh::make_unique<int>(dyn_arena);
 ```
 
 There is also a `make_data` function which will allocate a `data_t`:
@@ -109,3 +134,7 @@ There is also a `make_data` function which will allocate a `data_t`:
 ```cpp
 data_t<int> data = hh::make_data<int>(arena);
 ```
+
+In the default shared pointer mode, `make_data` returns a `shared_ptr`. When
+`HH_POINTER_MODE` is defined, it releases the `unique_ptr` and returns a raw
+pointer (matching `data_t<T> = T*`).

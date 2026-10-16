@@ -14,10 +14,11 @@ graph->connect_outputs(task); // set task as graph output
 
 graph->start();                           // start the graph (initialize nodes and spawn threads)
 graph->push_data(hh::make_data<int>(42)); // push some data to process
-auto result = graph->get_result();        // block until resutls arrive
+auto result = graph->get_result();        // block until results arrive
 graph->stop();                            // stop the graph (join threads)
 
-int data = std::get<hh::data_t<int>>(result); // result is a variant
+// result is a std::variant<data_t<T>...> with one alternative per output type
+int data = std::get<hh::data_t<int>>(result);
 ```
 
 Break down graph creation:
@@ -59,6 +60,12 @@ Break down graph execution:
   multiple times with different data types).
 - `graph->get_result()` blocks until results arrive (can be called multiple
   times if there are multiple results).
+- `graph->get_result()` returns a `std::variant<data_t<T>...>` with one
+  alternative per output type. Use `std::get<hh::data_t<T>>(result)` to
+  extract the value for a specific type.
+- `graph->eat_results(count)` calls `get_result()` `count` times and
+  discards the results. Use it to drain the graph when you don't need the
+  output values (defaults to `count = 1`).
 - `graph->stop()` finalises the nodes and joins the threads. It kills the
   graph immediately **without waiting for all the data to be processed**. You
   have to use either `get_result` or `eat_results` to block before shutting
@@ -143,7 +150,7 @@ graph->draw_edges(sender, receiver, []<typename T>(auto args) {
         if constexpr (std::is_same_v<T, int>) {
             return false;
         } else {
-            node2->push_data(std::move(data), info);
+            receiver->push_data(std::move(data), info);
             return true;
         }
     });
@@ -213,6 +220,102 @@ Hedgehog includes the following runners:
 - `SerialRunner`: do not spawn any thread, runs the graph serially.
 - `ThreadRunner`: bind threads to nodes (spawns node->number_threads for each node).
 - `TBBRunner`: runs the whole graph using a One-TBB task arena.
+
+## Serial graph
+
+`make_serial_graph` creates a graph that runs entirely single-threaded using
+the `SerialRunner`. No threads are spawned; the graph processes data
+synchronously. This is useful for debugging and testing.
+
+```cpp
+auto graph = hh::make_serial_graph<1, int, int>("My Serial Graph");
+```
+
+The template arguments are the same as `make_graph`.
+
+## Custom runner graph
+
+`make_graph` can also take an explicit runner instance:
+
+```cpp
+auto runner = std::make_shared<hh::TBBRunner>();
+auto graph  = hh::make_graph<hh::TBBRunner, 1, int, int>(runner, "TBB Graph");
+```
+
+## Graph start options
+
+`start` accepts an optional `rank` parameter (defaults to 0). The rank is
+passed to the runner via `RunInfo` and can be used to identify the graph
+instance (e.g. when using execution pipelines):
+
+```cpp
+graph->start();    // rank = 0
+graph->start(2);   // rank = 2
+```
+
+A graph can be started, stopped, and restarted. The internal topology is only
+built once (`build_once()` guard), so restarting a graph does not rebuild
+edges.
+
+## Sub-graphs
+
+A graph is also a node. You can wire a graph as a node inside another graph to
+create hierarchical compositions:
+
+```cpp
+auto outer = hh::make_graph<1, int, int>("Outer");
+auto inner = hh::make_graph<1, int, int>("Inner");
+auto task   = hh::make_task<MyTask>(2);
+
+// build the inner graph
+inner->connect_inputs(task);
+inner->connect_outputs(task);
+
+// wire inner graph as a node in the outer graph
+outer->connect_inputs(inner);
+outer->connect_outputs(inner);
+
+outer->start();
+outer->push_data(hh::make_data<int>(42));
+auto result = outer->get_result();
+outer->stop();
+```
+
+Input edges are flattened: when connecting a sub-graph, the parent graph
+creates direct edges to the sub-graph's input nodes (no intermediate
+buffering). Output edges are deferred and connected when the parent graph is
+built.
+
+## Graph view and analysis
+
+`build_graph_view()` builds a `GraphView` — a type-erased representation of
+the graph topology. It can be used for visualization and analysis.
+
+```cpp
+auto view = graph->build_graph_view();
+```
+
+### Dot file generation
+
+`generate_dot_file` produces a Graphviz dot file. When `HH_ENABLE_PROFILING`
+is defined, the dot file includes profiling data; otherwise it shows topology
+only.
+
+```cpp
+graph->generate_dot_file("graph.dot");
+```
+
+See [profiling](profiling.md) for more details on profiling setup.
+
+### Cycle detection
+
+`ga_cycle_detection` (from `hedgehog/tool/graph_analysis.hpp`) detects and
+prints cycles in the graph topology:
+
+```cpp
+auto view = graph->build_graph_view();
+size_t num_cycles = hh::ga_cycle_detection(view);
+```
 
 ## Graph configuration
 

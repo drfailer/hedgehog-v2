@@ -1,30 +1,54 @@
 # Profiling
 
-Hedgehog node all have one or more profilers. The `TaskNode` has a main
+## Setup
+
+Profiling is gated behind compile-time defines:
+
+- **`HH_ENABLE_PROFILING`**: enables the builtin profiler (regions, strings, reports). Without this define, `profile_region` and `profile_marker` return a dummy profile that does nothing.
+- **`HH_USE_NVTX`**: enables NVIDIA NVTX integration (requires the NVTX headers). Can be used alongside `HH_ENABLE_PROFILING` or standalone for GPU tracing.
+
+```cpp
+// in your build system, e.g. CMake:
+target_compile_definitions(my_target PRIVATE HH_ENABLE_PROFILING)
+// optional:
+target_compile_definitions(my_target PRIVATE HH_USE_NVTX)
+```
+
+## Profile entries
+
+Hedgehog nodes all have one or more profilers. The `TaskNode` has a main
 profiler used internally as well as thread local profilers that are accessible
 through the execution context.
+
+There are three kinds of profile entries:
+
+- **Region**: timed regions that measure duration statistics (mean, stddev, min, max, count).
+- **Marker**: NVTX-only markers that emit a point event in the NVTX timeline.
+- **String**: key-value strings used to attach information to the profiling report.
+
+## Using profiles in tasks
+
+The `profile_region` and `profile_marker` methods perform a map lookup with a
+mutex lock. Cache the returned pointer in `initialize` to avoid paying the
+lookup cost on every `execute` call.
 
 ```cpp
 struct Task {
     using inputs  = hh::type_list<int>;
-    using outptus = hh::type_list<int>;
+    using outputs = hh::type_list<int>;
 
     hh::Profile *region = nullptr;
     hh::Profile *marker = nullptr;
 
     void initialize(auto ctx) {
-        // initialize the profile entries
         region = ctx->profiler()->profile_region("Region Name");
         marker = ctx->profiler()->profile_marker("Marker Name");
     }
 
-    void execute(auto ctx , auto data) {
+    void execute(auto ctx, auto data) {
         //
-        // Timed region (also use NVTX when enabled)
+        // Timed region (builtin profiler + NVTX when enabled)
         //
-
-        // make sure the region is created only once, thread_local creates a
-        // static thread local profile that is only created once per thread
         region->begin_region();
         // do something
         region->end_region();
@@ -32,26 +56,22 @@ struct Task {
         //
         // Markers (NVTX only)
         //
-
         marker->mark();
-
-
     }
 
     void finalize(auto ctx) {
         //
-        // String (builtin profiler only)
+        // Strings: meant to be used once per run to add information to the
+        // report. Use add_string on the profiler (not set_string on a marker).
         //
-
-        // strings are meant to be used once per run to add information to the
-        // profile.
-        Profile *string = ctx->profiler()->profile_marker("String Name");
-        marker->set_string("some value: ", value);
+        ctx->profiler()->add_string("String Name", "some value: ", value);
     }
 };
 ```
 
-For profiles that are exectued once (or if you are ready to pay the price of a
+## Profiling macros
+
+For profiles that are executed once (or if you are ready to pay the price of a
 map lookup), there are macros that can be used with the profiler:
 
 ```cpp
@@ -104,9 +124,19 @@ for (auto &entry : node_report.entries) {
 }
 ```
 
+## Text report
+
+The `report_to_text` function outputs profiling information as formatted text:
+
+```cpp
+auto view = graph->build_graph_view();
+auto profiles = graph->profile();
+hh::report_to_text(*view.root, profiles, std::cout);
+```
+
 # Generate dot file
 
-The graph is able to output profiling information to a `dot` file that can be
+The graph can output profiling information to a `dot` file that can be
 compiled into an image using `dot` (graphviz).
 
 ```cpp
@@ -115,6 +145,14 @@ graph->generate_dot_file("graph.dot");
 
 ```sh
 dot -Tpng graph.dot -o graph.png
+```
+
+The dot file can also be generated without profiling data to visualize graph
+topology only:
+
+```cpp
+auto view = graph->build_graph_view();
+hh::graph_view_to_dot(*view.root, std::cout);
 ```
 
 ![Graph with profiling information](./asserts/graph.png)

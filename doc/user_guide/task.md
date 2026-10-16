@@ -1,6 +1,6 @@
 # Task
 
-A *task* is an execution core that consumes and process input data, and
+A *task* is an execution core that consumes and processes input data, and
 produces output data.
 
 ```cpp
@@ -42,8 +42,8 @@ function from the context.
 
 ## Execution Context
 
-The execution context is passed to the task execute functions and allow to
-interact with the node.
+The execution context is passed to the task execute functions and allows
+interacting with the node.
 
 ```cpp
 struct Task {
@@ -59,11 +59,12 @@ struct Task {
         auto _ = ctx->name();
         auto _ = ctx->graph_name();
         auto _ = ctx->graph_id();
-        auto _ = ctx->number_threads();
+        auto _ = ctx->number_thread();
         auto _ = ctx->thread_index();
         auto _ = ctx->numa_id();
         auto _ = ctx->device_id();
         auto _ = ctx->rank();
+        auto _ = ctx->info();     // full RuntimeInfo struct
 
         // Direct access to the graph node
         auto node = ctx->node();
@@ -71,13 +72,50 @@ struct Task {
 };
 ```
 
-What is the type of the context?
+### `push_data` vs `push_result`
+
+- `push_data<T>(data)`: sends data to the **current task's own input queue**.
+  This is useful for recursive processing (e.g. iterative algorithms where a
+  task feeds itself until convergence).
+- `push_result<T>(data)`: sends data to the **output edges**, forwarding it to
+  all connected downstream nodes.
+
+### Context type
 
 - The full type: `hh::NodeExecutionContext<hh::TaskNode<hh::make_task_config<Task>>>`.
   - `NodeExecutionContext<NodeType>` is parametrized with the type of the graph node.
   - For a task, the node type is `TaskNode<Config>`.
-  - The configuration of a task is deduced from you `Task` type using the
+  - The configuration of a task is deduced from your `Task` type using the
     `make_task_config` function.
+
+
+## Initialize and Finalize
+
+Tasks can optionally implement `initialize` and `finalize` methods. These are
+called per-thread: each thread initializes its own copy before consuming data,
+and finalizes it before the thread is joined.
+
+Both methods accept an optional execution context parameter:
+
+```cpp
+struct Task {
+    using inputs  = hh::type_list<int>;
+    using outputs = hh::type_list<int>;
+
+    void initialize(auto ctx) {
+        // ctx provides the same API as in execute (name, thread_index, etc.)
+    }
+
+    void initialize() {
+        // or without context
+    }
+
+    void finalize(auto ctx) { /* ... */ }
+    void finalize() { /* ... */ }
+
+    void execute(auto ctx, hh::data_t<int> data) { /* ... */ }
+};
+```
 
 
 ## Task's thread local data
@@ -135,9 +173,9 @@ It is also possible to override the task node input and output ports:
   implementation of the queue and thread wake up strategy. The default input
   port type is `LockQueueNodeInput` which uses a mutex based queue and a
   condition variable.
-- **Output port**: manages the output edges of the node. The `push_result`,
+- **Output port**: manages the output edges of the node. The `push_result`
   function sends data to every output edge. Customizing the output may allow to
-  do some extra operation before transfering the data.
+  do some extra operation before transferring the data.
 
 ```cpp
 struct Task {
@@ -146,21 +184,30 @@ struct Task {
 
     // add the following to change the types of the ports
     using node_input  = CustomInputPort<int, float>;
-    using node_ouptut = CustomOutputPort<int, float>;
+    using node_output = CustomOutputPort<int, float>;
 
     // execute ...
 };
 ```
 
-Hedgehog provides the following types:
+Hedgehog provides the following input types:
 
-- Inputs:
-  - `LockQueueNodeInput`: condition variable and mutex based queue.
-  - `MoodycamelMPMCInput`: moodycamel MPMC queue and condition variable.
-  - `DakingMPSCInput`: dakingffo MPSC queue and condition variable.
-- Outputs:
-  - `EdgeSlots`: basic collections of output edges.
-  - `EdgeConnectors`: deferred connection (used by the graph).
+- `LockQueueNodeInput`: condition variable and mutex based queue (default).
+- `MoodycamelMPMCInput`: moodycamel MPMC lock-free queue with condition
+  variable trigger.
+- `MoodycamelAtomicInput`: moodycamel MPMC lock-free queue with atomic trigger
+  (avoids condition variable overhead, good for low-latency workloads).
+- `DakingMPSCInput`: daking MPSC lock-free queue with condition variable
+  trigger. MPSC means only one consumer thread, suitable for single-threaded
+  tasks.
+- `GroupNodeInput<GroupSize, InputType>`: wraps another input type and
+  partitions threads into groups of `GroupSize`, each group getting its own
+  input queue. Reduces contention when using many threads.
+
+Output types:
+
+- `EdgeSlots`: basic collection of output edges (default).
+- `EdgeConnectors`: deferred connection (used internally by the graph).
 
 
 ## Lambda interface
@@ -169,7 +216,9 @@ The lambda interface allows to create tasks using lambdas (which is convenient
 for creating small tasks on the fly when prototyping).
 
 ```cpp
-// create a lambda task node (inputs outputs work like with the graph)
+// create a lambda task node
+// Sep=2 means the first 2 types are inputs, the rest are outputs
+// So: inputs = (int, float), outputs = (int, float)
 auto node = hh::make_lambda_task<2, int, float, int, float>(2, "Lambda Task");
 
 node->set_execute<int>([](auto ctx, auto data) {
@@ -179,3 +228,7 @@ node->set_execute<float>([captured_data](auto ctx, auto data) {
     // process data...
 });
 ```
+
+The first template argument `Sep` (separator) splits the type list: the first
+`Sep` types become inputs, and the remaining types become outputs. This is the
+same convention used by `make_graph`.

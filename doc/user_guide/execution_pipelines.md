@@ -1,30 +1,26 @@
 # Execution Pipeline
 
-Execution pipelines are used to create graphs that run on multiple GPU devices
-and/or numa nodes (thread pinning). It effectively instanciate the same graph
-multiple times for each configuration (device + numa id) and use the `send_to`
-function to determin the index of the receiver graph.
+Execution pipelines instantiate the same graph multiple times, one per
+configuration entry (device + NUMA id). The `send_to` function determines which
+graph instance processes each incoming data item.
 
 ## Pipeline definition
 
 ```cpp
 struct MyPipeline {
-    // The role of the make graph function is to create a graph for
+    // called once per config entry — graph_index matches the position in the
+    // config vector (0 for the first entry, 1 for the second, etc.)
     auto make_graph(size_t graph_index) {
-        auto graph = hh::make_graph<2, int, float, int, float>();
+        auto graph = hh::make_graph<2, int, float, int, float>("Worker");
         // create nodes, draw edges, ...
         return graph;
     }
 
-    // send to must be implemented for every input type (it can also be
-    // template as shown bellow). The input types are the same as the ones of
-    // the graph returned by make_graph.
-
+    // called for every incoming data item to route it to the right graph.
+    // must be implemented for every input type (can be templated as shown below)
     template <typename T>
     size_t send_to(hh::data_t<T> data) {
-        // determine which data belongs to which graph (in this case, we attach
-        // the graph index to the data)
-        return data->graph_idex;
+        return data->graph_index;
     }
 };
 ```
@@ -32,42 +28,63 @@ struct MyPipeline {
 ## Creating a pipeline
 
 ```cpp
-// create a config in which we specify the numa id and device id
+// config vector: one entry per graph instance
 std::vector<hh::PipelineInfo> config = {
-    {.numa_id = 0, .device_id = 0},
-    {.numa_id = 0, .device_id = 1},
+    {.numa_id = 0, .device_id = 0},  // index 0
+    {.numa_id = 0, .device_id = 1},  // index 1
 };
 
-// create a pipeline (Pipeline default constructible)
+// default-construct MyPipeline
 auto node = hh::make_pipeline<MyPipeline>(config, "My Pipeline");
 
-// create a pipeline and construct MyPipeline manually
+// or construct MyPipeline manually
 auto node = hh::make_pipeline(std::make_shared<MyPipeline>(args...), config, "My Pipeline");
 ```
 
-The created node can be wired in the main graph. It can be the only node or the
-pipeline may act as a sub-graph (we can have multiple pipelines in the same
-graph).
+## Wiring a pipeline in a graph
+
+A pipeline is a node — it can be wired into a graph just like a task. Output
+edges from the pipeline's sub-graphs are automatically connected to downstream
+nodes in the parent graph.
+
+```cpp
+auto graph = hh::make_graph<2, int, float, int, float>("Main");
+auto pipeline = hh::make_pipeline<MyPipeline>(config, "Pipeline");
+auto sink = hh::make_node<MySink>("Sink");
+
+graph->inputs(pipeline);
+graph->edges(pipeline, sink);
+graph->outputs(sink);
+```
+
+When a task inside a pipeline sub-graph calls `push_result`, the data flows to
+whatever is connected downstream of the pipeline node in the parent graph. All
+sub-graphs share the same output edges, so results from any graph instance
+reach the same downstream nodes.
 
 ## Lambda interface
 
-Like with tasks, there is a lambda interface for pipelines. In this example, we
-also share a state across different graphs.
+Like tasks, pipelines have a lambda interface. This example also shares a state
+across the graph instances:
 
 ```cpp
-// We have a state that will be shared accros all the graphs instances (locked
-// by the state manager for thread safety)
 auto state = std::make_shared<MyState>(...);
 
-// create the lambda pipeline (we keep the same config as before and we capture the state)
 auto pipeline = hh::make_lambda_pipeline({{0, 0}, {0, 1}}, [state](size_t graph_index) {
-    auto graph = hh::make_graph<2, int, float, int, float>();
-    auto sm = hh::make_state_manager(state, "State"); // will manage the state
-    // create the graph...
+    auto graph = hh::make_graph<2, int, float, int, float>("Worker");
+
+    // share state across all graph instances via a state manager
+    auto sm = hh::make_state_manager(state, "State");
+
+    auto task = hh::make_node<MyTask>("Task");
+    graph->inputs(sm);
+    graph->edges(sm, task);
+    graph->outputs(task);
+
     return graph;
 });
 
-// set the send to functions
+// set send_to for each input type
 pipeline->set_send_to<int>([](auto data) -> size_t {
     return data->graph_index;
 });
