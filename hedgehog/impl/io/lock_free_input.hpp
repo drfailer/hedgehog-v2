@@ -134,7 +134,7 @@ struct DakingMPSCInputPort {
     void initialize(InitializationInfo const&) {
         // reset the queue (useful when the graph is restarted)
         data_t<T> tmp;
-        while (queue.pop(tmp)) {}
+        while (queue.try_dequeue(tmp)) {}
     }
 
     void push_data(data_t<T> data, RuntimeInfo const &) {
