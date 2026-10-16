@@ -101,9 +101,8 @@ inline void report_to_text(GraphViewNode const &view, ProfileMap const &profiles
                        << " (" << entry.region.measure.count << ")\n";
                     break;
                 case EntryKind::String:
-                    os << pad << "    ";
-                    for (auto const &str : entry.string.values) { os << str << "<BR/>"; }
-                    os << "\n";
+                    os << pad << "  " << entry.label << ": ";
+                    for (auto const &str : entry.string.values) { os << str << "\n"; }
                     break;
                 }
             }
