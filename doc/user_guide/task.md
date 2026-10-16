@@ -193,13 +193,9 @@ struct Task {
 Hedgehog provides the following input types:
 
 - `LockQueueNodeInput`: condition variable and mutex based queue (default).
-- `MoodycamelMPMCInput`: moodycamel MPMC lock-free queue with condition
-  variable trigger.
-- `MoodycamelAtomicInput`: moodycamel MPMC lock-free queue with atomic trigger
-  (avoids condition variable overhead, good for low-latency workloads).
-- `DakingMPSCInput`: daking MPSC lock-free queue with condition variable
-  trigger. MPSC means only one consumer thread, suitable for single-threaded
-  tasks.
+- `MoodycamelMPMCInput`: moodycamel MPMC lock-free queue with atomic trigger.
+- `DakingMPSCInput`: daking MPSC lock-free queue with atomic trigger. MPSC
+  means only one consumer thread, suitable for single-threaded tasks.
 - `GroupNodeInput<GroupSize, InputType>`: wraps another input type and
   partitions threads into groups of `GroupSize`, each group getting its own
   input queue. Reduces contention when using many threads.

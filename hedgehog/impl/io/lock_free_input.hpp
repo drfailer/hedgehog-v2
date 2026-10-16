@@ -76,61 +76,7 @@ struct MoodycamelMPMCInputPort {
 };
 
 template <typename ...Inputs>
-struct MoodycamelMPMCInput : CondTrigger, MoodycamelMPMCInputPort<Inputs>... {
-    void initialize(InitializationInfo const &info) {
-        (MoodycamelMPMCInputPort<Inputs>::initialize(info), ...);
-        CondTrigger::initialize();
-    }
-
-    void finalize([[maybe_unused]] InitializationInfo const &info) {
-        CondTrigger::finalize();
-        (MoodycamelMPMCInputPort<Inputs>::finalize(info), ...);
-    }
-
-    WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
-        return CondTrigger::wait([this]{
-            return ((MoodycamelMPMCInputPort<Inputs>::size() > 0) || ...);
-        });
-    }
-
-    template <typename T>
-    void push_data(data_t<T> data, RuntimeInfo const &info) {
-        MoodycamelMPMCInputPort<T>::push_data(std::move(data), info);
-        CondTrigger::signal(SignalOpts{1, 0});
-    }
-
-    template <typename Executable>
-    size_t execute_all(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
-        size_t count = 0;
-        ([&] {
-            data_t<Inputs> data;
-            while (MoodycamelMPMCInputPort<Inputs>::pop(data, info.thread_index)) [[likely]] {
-                exec->execute(std::move(data));
-                ++count;
-            }
-        }(), ...);
-        return count;
-    }
-
-    template <typename Executable>
-    bool execute_one(Executable exec, [[maybe_unused]] RuntimeInfo const &info) {
-        bool done = false;
-        ([&] {
-            if (done) return;
-            data_t<Inputs> data;
-            if (MoodycamelMPMCInputPort<Inputs>::pop(data, info.thread_index)) {
-                exec->execute(std::move(data));
-                done = true;
-            }
-        }(), ...);
-        return done;
-    }
-};
-
-// moodycamel mpmc input (atomic trigger) //////////////////////////////////////
-
-template <typename ...Inputs>
-struct MoodycamelAtomicInput : AtomicTrigger, MoodycamelMPMCInputPort<Inputs>... {
+struct MoodycamelMPMCInput : AtomicTrigger, MoodycamelMPMCInputPort<Inputs>... {
     void initialize(InitializationInfo const &info) {
         (MoodycamelMPMCInputPort<Inputs>::initialize(info), ...);
         AtomicTrigger::initialize(info.node->number_threads);
@@ -205,26 +151,24 @@ struct DakingMPSCInputPort {
 };
 
 template <typename ...Inputs>
-struct DakingMPSCInput : CondTrigger, DakingMPSCInputPort<Inputs>... {
+struct DakingMPSCInput : AtomicTrigger, DakingMPSCInputPort<Inputs>... {
     void initialize(InitializationInfo const &info) {
         (DakingMPSCInputPort<Inputs>::initialize(info), ...);
-        CondTrigger::initialize();
+        AtomicTrigger::initialize(info.node->number_threads);
     }
 
     void finalize([[maybe_unused]] InitializationInfo const &info) {
-        CondTrigger::finalize();
+        AtomicTrigger::finalize();
     }
 
     WaitResult wait([[maybe_unused]] RuntimeInfo const &info) {
-        return CondTrigger::wait([this]{
-            return ((!DakingMPSCInputPort<Inputs>::empty()) || ...);
-        });
+        return AtomicTrigger::wait(info);
     }
 
     template <typename T>
     void push_data(data_t<T> data, RuntimeInfo const &info) {
         DakingMPSCInputPort<T>::push_data(std::move(data), info);
-        CondTrigger::signal(SignalOpts{1, 0});
+        AtomicTrigger::signal(SignalOpts{1, 0});
     }
 
     template <typename Executable>

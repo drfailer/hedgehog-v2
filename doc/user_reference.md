@@ -87,9 +87,8 @@ ctx->push_result<T>(data_t<T>)  // send data to downstream nodes via output edge
 | Type                                   | Description                                   |
 |----------------------------------------|-----------------------------------------------|
 | `LockQueueNodeInput<Inputs...>`        | Mutex queue + condition variable (default)    |
-| `MoodycamelMPMCInput<Inputs...>`       | Lock-free MPMC queue + cond trigger           |
-| `MoodycamelAtomicInput<Inputs...>`     | Lock-free MPMC queue + atomic trigger         |
-| `DakingMPSCInput<Inputs...>`           | Lock-free MPSC queue + cond trigger           |
+| `MoodycamelMPMCInput<Inputs...>`       | Lock-free MPMC queue + atomic trigger         |
+| `DakingMPSCInput<Inputs...>`           | Lock-free MPSC queue + atomic trigger         |
 | `GroupNodeInput<GroupSize, InputType>` | Partitions threads into groups with own input |
 
 ---
