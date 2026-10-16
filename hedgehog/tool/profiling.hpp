@@ -53,15 +53,9 @@
 // information as needed.
 //
 
-// Region profiling macros: timing + NVTX when both are enabled ////////////////
+// Region profiling macro //////////////////////////////////////////////////////
 
 #ifdef HH_ENABLE_PROFILING
-#define HH_THREAD_PROFILE_REGION(profiler, name) \
-    thread_local static auto HH_CONCAT(_profile_, __LINE__) = (profiler).profile_region((name)); \
-    for (bool \
-         HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->begin_region(); \
-         HH_CONCAT(_prof_, __LINE__); \
-         HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->end_region())
 #define HH_PROFILE_REGION(profiler, name) \
     auto HH_CONCAT(_profile_, __LINE__) = (profiler).profile_region((name)); \
     for (bool \
@@ -69,19 +63,12 @@
          HH_CONCAT(_prof_, __LINE__); \
          HH_CONCAT(_prof_, __LINE__) = HH_CONCAT(_profile_, __LINE__)->end_region())
 #else
-#define HH_THREAD_PROFILE_REGION(profiler, name)
 #define HH_PROFILE_REGION(profiler, name)
 #endif
 
-// NVTX-only macros: for NVTX ranges without timing ///////////////////////////
+// NVTX-only macros ////////////////////////////////////////////////////////////
 
 #ifdef HH_USE_NVTX
-#define HH_THREAD_NVTX_REGION(profiler, name) \
-    thread_local static auto HH_CONCAT(_nvtx_, __LINE__) = (profiler).nvtx().make_region((name)); \
-    for (bool \
-         HH_CONCAT(_nvtxr_, __LINE__) = HH_CONCAT(_nvtx_, __LINE__).begin(); \
-         HH_CONCAT(_nvtxr_, __LINE__); \
-         HH_CONCAT(_nvtxr_, __LINE__) = HH_CONCAT(_nvtx_, __LINE__).end())
 #define HH_NVTX_REGION(profiler, name) \
     auto HH_CONCAT(_nvtx_, __LINE__) = (profiler).nvtx().make_region((name)); \
     for (bool \
@@ -89,25 +76,16 @@
          HH_CONCAT(_nvtxr_, __LINE__); \
          HH_CONCAT(_nvtxr_, __LINE__) = HH_CONCAT(_nvtx_, __LINE__).end())
 #else
-#define HH_THREAD_NVTX_REGION(profiler, name)
 #define HH_NVTX_REGION(profiler, name)
 #endif
 
-// NVTX marker macros: instant events, no timing //////////////////////////////
-
 #if defined(HH_USE_NVTX) && defined(HH_ENABLE_PROFILING)
-#define HH_THREAD_NVTX_MARKER(profiler, name) \
-    do { \
-        thread_local static auto *HH_CONCAT(_nvtx_marker_, __LINE__) = (profiler).profile_marker((name)); \
-        HH_CONCAT(_nvtx_marker_, __LINE__)->mark(); \
-    } while(0)
 #define HH_NVTX_MARKER(profiler, name) \
     do { \
-        static auto *HH_CONCAT(_nvtx_marker_, __LINE__) = (profiler).profile_marker((name)); \
+        auto *HH_CONCAT(_nvtx_marker_, __LINE__) = (profiler).profile_marker((name)); \
         HH_CONCAT(_nvtx_marker_, __LINE__)->mark(); \
     } while(0)
 #else
-#define HH_THREAD_NVTX_MARKER(profiler, name) do {} while(0)
 #define HH_NVTX_MARKER(profiler, name) do {} while(0)
 #endif
 
@@ -283,7 +261,8 @@ struct Profile {
 struct Profiler {
     #ifdef HH_ENABLE_PROFILING
     std::mutex mutex;
-    std::vector<std::unique_ptr<Profile>> profiles;
+    std::map<std::string, std::unique_ptr<Profile>> regions;
+    std::vector<std::unique_ptr<Profile>> strings;
     #endif
     #ifdef HH_USE_NVTX
     NvtxProfiler nvtx_;
@@ -293,7 +272,8 @@ struct Profiler {
     Profiler(Profiler const &) = delete;
     Profiler([[maybe_unused]] Profiler &&other) {
         #ifdef HH_ENABLE_PROFILING
-        std::swap(profiles, other.profiles);
+        std::swap(regions, other.regions);
+        std::swap(strings, other.strings);
         #endif
         #ifdef HH_USE_NVTX
         std::swap(nvtx_.domain, other.nvtx_.domain);
@@ -302,7 +282,11 @@ struct Profiler {
 
     void initialize([[maybe_unused]] std::string const &name) {
         #ifdef HH_ENABLE_PROFILING
-        profiles.clear();
+        for (auto &[label, p] : regions) {
+            p->region.measure = Measure{};
+            p->region.t0 = {};
+        }
+        strings.clear();
         #endif
         #ifdef HH_USE_NVTX
         nvtx_.initialize(name);
@@ -322,13 +306,15 @@ struct Profiler {
     Profile *profile_region([[maybe_unused]] std::string label) {
         #ifdef HH_ENABLE_PROFILING
         std::lock_guard<std::mutex> lock(mutex);
-        profiles.push_back(std::make_unique<Profile>(std::move(label), ProfileKind::Region));
-        auto *p = profiles.back().get();
-        #ifdef HH_USE_NVTX
-        p->nvtx_domain = &nvtx_.domain;
-        p->nvtx_attr = nvtx_.make_attributes(p->label);
-        #endif
-        return p;
+        auto &entry = regions[label];
+        if (!entry) {
+            entry = std::make_unique<Profile>(label, ProfileKind::Region);
+            #ifdef HH_USE_NVTX
+            entry->nvtx_domain = &nvtx_.domain;
+            entry->nvtx_attr = nvtx_.make_attributes(entry->label);
+            #endif
+        }
+        return entry.get();
         #else
         static Profile dummy("dummy", ProfileKind::Region);
         return &dummy;
@@ -338,13 +324,15 @@ struct Profiler {
     Profile *profile_marker([[maybe_unused]] std::string label) {
         #ifdef HH_ENABLE_PROFILING
         std::lock_guard<std::mutex> lock(mutex);
-        profiles.push_back(std::make_unique<Profile>(std::move(label), ProfileKind::Marker));
-        auto *p = profiles.back().get();
-        #ifdef HH_USE_NVTX
-        p->nvtx_domain = &nvtx_.domain;
-        p->nvtx_attr = nvtx_.make_attributes(p->label);
-        #endif
-        return p;
+        auto &entry = regions[label];
+        if (!entry) {
+            entry = std::make_unique<Profile>(label, ProfileKind::Marker);
+            #ifdef HH_USE_NVTX
+            entry->nvtx_domain = &nvtx_.domain;
+            entry->nvtx_attr = nvtx_.make_attributes(entry->label);
+            #endif
+        }
+        return entry.get();
         #else
         static Profile dummy("dummy", ProfileKind::Marker);
         return &dummy;
@@ -354,8 +342,8 @@ struct Profiler {
     void add_string([[maybe_unused]] std::string label, [[maybe_unused]] auto &&...args) {
         #ifdef HH_ENABLE_PROFILING
         std::lock_guard<std::mutex> lock(mutex);
-        profiles.push_back(std::make_unique<Profile>(std::move(label), ProfileKind::String));
-        profiles.back()->set_string(std::forward<decltype(args)>(args)...);
+        strings.push_back(std::make_unique<Profile>(std::move(label), ProfileKind::String));
+        strings.back()->set_string(std::forward<decltype(args)>(args)...);
         #endif
     }
 };
@@ -418,16 +406,13 @@ struct ProfileReport {
 
     void add_profiles([[maybe_unused]] Profiler const &profiler) {
         #ifdef HH_ENABLE_PROFILING
-        for (auto &profile : profiler.profiles) {
-            switch (profile->kind) {
-            case ProfileKind::Region:
+        for (auto &[label, profile] : profiler.regions) {
+            if (profile->kind == ProfileKind::Region) {
                 entries.push_back(ProfileEntry::make_region(profile->label, profile->region.measure));
-                break;
-            case ProfileKind::String:
-                entries.push_back(ProfileEntry::make_string(profile->label, profile->string.value));
-                break;
-            case ProfileKind::Marker: break;
             }
+        }
+        for (auto &profile : profiler.strings) {
+            entries.push_back(ProfileEntry::make_string(profile->label, profile->string.value));
         }
         #endif
     }
@@ -445,13 +430,18 @@ std::map<std::string, ProfileEntry> merge_profiles([[maybe_unused]] std::vector<
     for (auto &component : components) {
         auto profiler = &component.profiler;
 
-        for (auto &profile : profiler->profiles) {
+        for (auto &[label, profile] : profiler->regions) {
             if (profile->kind == ProfileKind::Marker) continue;
-
-            ProfileEntry entry = (profile->kind == ProfileKind::Region)
-                ? ProfileEntry::make_region(profile->label, profile->region.measure)
-                : ProfileEntry::make_string(profile->label, profile->string.value);
-
+            auto entry = ProfileEntry::make_region(profile->label, profile->region.measure);
+            auto entry_it = entry_map.find(profile->label);
+            if (entry_it == entry_map.end()) {
+                entry_map[profile->label] = std::move(entry);
+            } else {
+                entry_it->second.merge_data(entry);
+            }
+        }
+        for (auto &profile : profiler->strings) {
+            auto entry = ProfileEntry::make_string(profile->label, profile->string.value);
             auto entry_it = entry_map.find(profile->label);
             if (entry_it == entry_map.end()) {
                 entry_map[profile->label] = std::move(entry);

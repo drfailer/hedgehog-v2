@@ -79,9 +79,23 @@ struct TaskNode : Node, Runnable {
         std::shared_ptr<Task>                  task;
         NodeExecutionContext<TaskNode<Config>> context;
         Profiler                               profiler;
+        #ifdef HH_ENABLE_PROFILING
+        map_type_from_list<Profile*, InputTypes> execute_profiles = {};
+        Profile                                 *wait_profile = nullptr;
+        #endif
 
         void initialize(TaskNode<Config> *node, RuntimeInfo const &info) {
             profiler.initialize(node->info().name);
+            #ifdef HH_ENABLE_PROFILING
+            {
+                using namespace std::string_literals;
+                type_list_map<InputTypes>([&]<typename T>() {
+                    execute_profiles.template get<T>() =
+                        profiler.profile_region("execute<"s + type_to_string<T>() + ">"s);
+                });
+                wait_profile = profiler.profile_region("wait");
+            }
+            #endif
             context.construct(node, info);
             if constexpr (InitializableWith<Task, decltype(context)>) {
                 task->initialize(&context);
@@ -92,19 +106,21 @@ struct TaskNode : Node, Runnable {
 
         template <typename T>
         void execute(data_t<T> data) {
-            using namespace std::string_literals; // for ""s
-            HH_THREAD_PROFILE_REGION(profiler, "execute<"s + type_to_string<T>() + ">"s)
-            {
-                if constexpr (requires { Task::execute(&context, std::move(data)); }) {
-                    Task::execute(&context, std::move(data));
-                } else if constexpr (requires { Task::execute(std::move(data)); }) {
-                    Task::execute(std::move(data));
-                } else if constexpr (requires { task->execute(&context, std::move(data)); }) {
-                    task->execute(&context, std::move(data));
-                } else {
-                    task->execute(std::move(data));
-                }
+            #ifdef HH_ENABLE_PROFILING
+            execute_profiles.template get<T>()->begin_region();
+            #endif
+            if constexpr (requires { Task::execute(&context, std::move(data)); }) {
+                Task::execute(&context, std::move(data));
+            } else if constexpr (requires { Task::execute(std::move(data)); }) {
+                Task::execute(std::move(data));
+            } else if constexpr (requires { task->execute(&context, std::move(data)); }) {
+                task->execute(&context, std::move(data));
+            } else {
+                task->execute(std::move(data));
             }
+            #ifdef HH_ENABLE_PROFILING
+            execute_profiles.template get<T>()->end_region();
+            #endif
         }
 
         void finalize() {
@@ -198,11 +214,13 @@ struct TaskNode : Node, Runnable {
 
     WaitResult wait(RuntimeInfo const &info) override {
         auto &state = states_[info.thread_index];
-        WaitResult wr;
-        HH_THREAD_PROFILE_REGION(state.profiler, "wait")
-        {
-            wr = input_.wait(state.context.info());
-        }
+        #ifdef HH_ENABLE_PROFILING
+        state.wait_profile->begin_region();
+        #endif
+        auto wr = input_.wait(state.context.info());
+        #ifdef HH_ENABLE_PROFILING
+        state.wait_profile->end_region();
+        #endif
         return wr;
     }
 

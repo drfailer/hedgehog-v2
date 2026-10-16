@@ -279,6 +279,33 @@ struct io_types {
     using outputs = typename io_types_helpers::build_list<output_seq, Ts...>::type;
 };
 
+// MapType /////////////////////////////////////////////////////////////////////
+
+//
+// Type indexed map.
+//
+
+template <typename Key, typename Value>
+struct MapTypeKeyValuePair {
+    Value value;
+};
+
+template <typename Value, typename ...Keys>
+struct MapType : MapTypeKeyValuePair<Keys, Value>... {
+    template <typename K>
+    Value &get() {
+        return static_cast<MapTypeKeyValuePair<K, Value>*>(this)->value;
+    }
+
+    template <typename K>
+    Value const &get() const {
+        return static_cast<MapTypeKeyValuePair<K, Value> const *>(this)->value;
+    }
+};
+
+template <typename Value, typename KeysList>
+using map_type_from_list = type_list_dispatch<KeysList, MapType, Value>;
+
 } // end namespace hh
 
 #endif
