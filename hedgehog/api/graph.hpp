@@ -31,6 +31,14 @@
 
 namespace hh {
 
+// graph types /////////////////////////////////////////////////////////////////
+
+template <size_t Sep, typename ...Types>
+using thread_graph_t = Graph<make_thread_graph_config<Sep, Types...>>;
+
+template <size_t Sep, typename ...Types>
+using serial_graph_t = Graph<make_serial_graph_config<Sep, Types...>>;
+
 // graph ///////////////////////////////////////////////////////////////////////
 
 //
@@ -39,14 +47,7 @@ namespace hh {
 //
 template <typename Impl, size_t Sep, typename ...Types>
 auto make_graph(std::shared_ptr<Impl> runner, std::string const &name = "Graph") {
-    using io = io_types<Sep, Types...>;
-    struct Config {
-        using InputTypes = io::inputs;
-        using OutputTypes = io::outputs;
-        using Sink = type_list_dispatch<OutputTypes, GraphSink>;
-        using Runner = Impl;
-        using EdgeBuilder = DirectEdgeBuilder;
-    };
+    using Config = make_graph_config<Impl, Sep, Types...>;
     return std::make_shared<Graph<Config>>(runner, NodeInfo{name, 0});
 }
 
@@ -65,15 +66,8 @@ auto make_graph(std::string const &name = "Graph") {
 //
 template <size_t Sep, typename ...Types>
 auto make_serial_graph(std::string const &name = "Graph") {
-    using io = io_types<Sep, Types...>;
-    struct Config {
-        using InputTypes = io::outputs;
-        using OutputTypes = io::outputs;
-        using Sink = type_list_dispatch<OutputTypes, SerialSink>;
-        using Runner = SerialRunner;
-        using EdgeBuilder = DirectEdgeBuilder;
-    };
     auto runner = std::make_shared<SerialRunner>();
+    using Config = make_serial_graph_config<Sep, Types...>;
     return std::make_shared<Graph<Config>>(runner, NodeInfo{name, 0});
 }
 

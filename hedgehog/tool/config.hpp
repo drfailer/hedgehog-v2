@@ -90,6 +90,31 @@ struct make_task_config {
     using Task = Impl;
 };
 
+// graph config ////////////////////////////////////////////////////////////////
+
+template <typename RunnerType, size_t Sep, typename ...Types>
+struct make_graph_config {
+    using io = io_types<Sep, Types...>;
+    using InputTypes = io::inputs;
+    using OutputTypes = io::outputs;
+    using Sink = type_list_dispatch<OutputTypes, GraphSink>;
+    using Runner = RunnerType;
+    using EdgeBuilder = DirectEdgeBuilder;
+};
+
+template <size_t Sep, typename ...Types>
+using make_thread_graph_config = make_graph_config<ThreadRunner, Sep, Types...>;
+
+template <size_t Sep, typename ...Types>
+struct make_serial_graph_config {
+    using io = io_types<Sep, Types...>;
+    using InputTypes = io::outputs;
+    using OutputTypes = io::outputs;
+    using Sink = type_list_dispatch<OutputTypes, SerialSink>;
+    using Runner = SerialRunner;
+    using EdgeBuilder = DirectEdgeBuilder;
+};
+
 } // end namespace hh
 
 #endif
