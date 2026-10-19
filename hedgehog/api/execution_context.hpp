@@ -72,8 +72,18 @@ struct NodeExecutionContext : RuntimeContext {
     }
 
     template <typename T>
+    void push_data(auto &&...args) {
+        push_data(hh::make_data<T>(std::forward<decltype(args)>(args)...));
+    }
+
+    template <typename T>
     void push_result(data_t<T> data) {
         node_->output().push_data(std::move(data), RuntimeContext::info());
+    }
+
+    template <typename T>
+    void push_result(auto &&...args) {
+        push_result(hh::make_data<T>(std::forward<decltype(args)>(args)...));
     }
 };
 
