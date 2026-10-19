@@ -95,25 +95,68 @@ struct NodeExecutionContext : RuntimeContext {
 // minimized context that doesn't depend on the node so that it can be used
 // within lambda tasks.
 //
-template <typename T>
-struct LambdaExecutionContext : RuntimeContext {
-    using PushDataFun = void (*)(void *, data_t<T>);
-    using PushResultFun = void (*)(void *, data_t<T>);
+// CanPushData<T> / CanPushResult<T> are per-type interfaces that each hold a
+// type-erased function pointer to forward push calls to the real node context.
+//
 
-    void *ctx_;
-    PushDataFun push_data_;
-    PushResultFun push_result_;
+template <typename T>
+struct CanPushData {
+    void (*fn_)(void *, data_t<T>) = nullptr;
+    void *ctx_ = nullptr;
+
+    void push_data(data_t<T> data) { fn_(ctx_, std::move(data)); }
+
+    template <typename Ctx>
+    void init_push_data(Ctx *ctx) {
+        ctx_ = ctx;
+        fn_ = +[](void *c, data_t<T> data) {
+            reinterpret_cast<Ctx *>(c)->template push_data<T>(std::move(data));
+        };
+    }
+};
+
+template <typename T>
+struct CanPushResult {
+    void (*fn_)(void *, data_t<T>) = nullptr;
+    void *ctx_ = nullptr;
+
+    void push_result(data_t<T> data) { fn_(ctx_, std::move(data)); }
+
+    template <typename Ctx>
+    void init_push_result(Ctx *ctx) {
+        ctx_ = ctx;
+        fn_ = +[](void *c, data_t<T> data) {
+            reinterpret_cast<Ctx *>(c)->template push_result<T>(std::move(data));
+        };
+    }
+};
+
+template <typename Inputs, typename Outputs>
+struct LambdaExecutionContext;
+
+template <typename ...Ins, typename ...Outs>
+struct LambdaExecutionContext<type_list<Ins...>, type_list<Outs...>>
+    : RuntimeContext, CanPushData<Ins>..., CanPushResult<Outs>... {
+
+    using CanPushData<Ins>::push_data...;
+    using CanPushResult<Outs>::push_result...;
 
     template <typename ExecutionContext>
     LambdaExecutionContext(ExecutionContext *ctx) {
-        ctx_ = ctx;
         RuntimeContext::info_ = ctx->info();
-        push_data_ = [](void *ctx, data_t<T> data) { reinterpret_cast<ExecutionContext *>(ctx)->push_data(std::move(data)); };
-        push_result_ = [](void *ctx, data_t<T> data) { reinterpret_cast<ExecutionContext *>(ctx)->push_result(std::move(data)); };
+        (CanPushData<Ins>::init_push_data(ctx), ...);
+        (CanPushResult<Outs>::init_push_result(ctx), ...);
     }
 
-    void push_data(data_t<T> data) { push_data_(ctx_, std::move(data)); }
-    void push_result(data_t<T> data) { push_result_(ctx_, std::move(data)); }
+    template <typename T>
+    void push_data(auto &&...args) {
+        CanPushData<T>::push_data(hh::make_data<T>(std::forward<decltype(args)>(args)...));
+    }
+
+    template <typename T>
+    void push_result(auto &&...args) {
+        CanPushResult<T>::push_result(hh::make_data<T>(std::forward<decltype(args)>(args)...));
+    }
 };
 
 }

@@ -68,28 +68,31 @@ auto make_task(size_t number_threads = 1, std::string const &name = "Task") {
 // invoking the lambda will raise an exception).
 //
 
-template <typename T>
-using LambdaExecute = std::function<void(LambdaExecutionContext<T> *, data_t<T>)>;
+template <typename Inputs, typename Outputs, typename T>
+using LambdaExecute = std::function<void(LambdaExecutionContext<Inputs, Outputs> *, data_t<T>)>;
 
-template <typename ...Inputs>
+template <typename Inputs, typename Outputs, typename ...Types>
+using LambdaExecuteList = std::tuple<LambdaExecute<Inputs, Outputs, Types>...>;
+
+template <typename Inputs, typename Outputs>
 struct LambdaTask {
-    using ExecuteList = std::tuple<LambdaExecute<Inputs>...>;
+    using ExecuteList = type_list_dispatch<Inputs, LambdaExecuteList, Inputs, Outputs>;
 
     ExecuteList executes_ = {};
 
     template <typename T>
     void execute(auto ctx, data_t<T> data) {
-        LambdaExecutionContext<T> lctx(ctx);
-        std::get<LambdaExecute<T>>(executes_)(&lctx, std::move(data));
+        LambdaExecutionContext<Inputs, Outputs> lctx(ctx);
+        std::get<LambdaExecute<Inputs, Outputs, T>>(executes_)(&lctx, std::move(data));
     }
 
     template <typename T>
-    void set_execute(LambdaExecute<T> execute) {
-        std::get<LambdaExecute<T>>(executes_) = std::move(execute);
+    void set_execute(LambdaExecute<Inputs, Outputs, T> execute) {
+        std::get<LambdaExecute<Inputs, Outputs, T>>(executes_) = std::move(execute);
     }
 
     auto copy() {
-        auto cpy = std::make_shared<LambdaTask<Inputs...>>();
+        auto cpy = std::make_shared<LambdaTask<Inputs, Outputs>>();
         cpy->executes_ = this->executes_;
         return cpy;
     }
@@ -104,7 +107,7 @@ struct LambdaTaskNode : TaskNode<Config> {
         : TaskNode<Config>(std::move(task), info) {}
 
     template <typename T>
-    void set_execute(LambdaExecute<T> execute) {
+    void set_execute(LambdaExecute<typename Config::InputTypes, typename Config::OutputTypes, T> execute) {
         TaskNode<Config>::task()->template set_execute<T>(std::move(execute));
     }
 };
@@ -128,9 +131,9 @@ auto make_lambda_task(size_t number_threads = 1, std::string const &name = "Lamb
     struct Config {
         using InputTypes  = io::inputs;
         using OutputTypes = io::outputs;
-        using Input  = DefaultNodeInput<InputTypes>;
-        using Output = DefaultNodeOutput<OutputTypes>;
-        using Task = type_list_dispatch<typename io::inputs, LambdaTask>;
+        using Input       = DefaultNodeInput<InputTypes>;
+        using Output      = DefaultNodeOutput<OutputTypes>;
+        using Task        = LambdaTask<InputTypes, OutputTypes>;
     };
     return make_lambda_task<Config>(number_threads, name);
 }
