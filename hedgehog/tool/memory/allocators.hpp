@@ -16,8 +16,8 @@
 // damage to property. The software developed by NIST employees is not subject to copyright protection within the
 // United States.
 
-#ifndef HEDGEHOG_IMPL_MEMORY_ALLOCATORS_H
-#define HEDGEHOG_IMPL_MEMORY_ALLOCATORS_H
+#ifndef HEDGEHOG_TOOL_MEMORY_ALLOCATORS_H
+#define HEDGEHOG_TOOL_MEMORY_ALLOCATORS_H
 
 #include <memory>
 #include <span>

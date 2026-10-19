@@ -48,8 +48,6 @@
 #include "impl/io/lock_free_input.hpp"
 #include "impl/io/group_input.hpp"
 #include "impl/io/trigger.hpp"
-#include "impl/memory/automatic_pool.hpp"
-#include "impl/memory/pool.hpp"
 #include "impl/task/cuda_task.hpp"
 
 //
@@ -62,5 +60,7 @@
 #include "tool/type_list.hpp"
 #include "tool/helpers.hpp"
 #include "tool/numa.hpp"
+#include "tool/memory/automatic_pool.hpp"
+#include "tool/memory/pool.hpp"
 
 #endif

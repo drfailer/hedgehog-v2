@@ -25,7 +25,7 @@
 #include <set>
 
 #include "helpers.hpp"
-#include "../impl/memory/allocators.hpp"
+#include "../tool/memory/allocators.hpp"
 
 //
 // The graph view is a data structure that represents the topology of the

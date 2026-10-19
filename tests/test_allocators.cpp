@@ -17,7 +17,7 @@
 // United States.
 
 #include <gtest/gtest.h>
-#include "../hedgehog/impl/memory/allocators.hpp"
+#include "../hedgehog/tool/memory/allocators.hpp"
 #include <array>
 
 // Test struct with destructor to verify cleanup
